@@ -1,4 +1,4 @@
-﻿namespace Dotfy.Location.Contracts;
+﻿namespace Act.Location.Contracts;
 
 public readonly record struct CityIBGE
 {
