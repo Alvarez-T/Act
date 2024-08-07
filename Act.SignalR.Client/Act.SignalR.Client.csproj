@@ -6,4 +6,9 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\NavigatR\NavigatR.CommunityToolkit\NavigatR.CommunityToolkit.csproj" />
+    <ProjectReference Include="..\Act.Internals\Act.Internals.csproj" />
+  </ItemGroup>
+
 </Project>
