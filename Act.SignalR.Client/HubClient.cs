@@ -93,6 +93,9 @@ public abstract class HubClient
         }
     }
 
+    protected TMessage Send<TMessage>(TMessage message)
+        where TMessage : class => Send(message, default(Unit));
+
     protected TMessage Send<TMessage, TToken>(TMessage message, TToken token)
         where TMessage : class
         where TToken : IEquatable<TToken>
