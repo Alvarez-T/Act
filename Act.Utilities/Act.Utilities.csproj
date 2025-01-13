@@ -6,8 +6,4 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Act.Utilities\Act.Utilities.csproj" />
-  </ItemGroup>
-
 </Project>

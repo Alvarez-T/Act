@@ -7,7 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Act.Common.Types\Act.Common.Types.csproj" />
+    <ProjectReference Include="..\Act.Location.Contracts\Act.Location.Contracts.csproj" />
     <ProjectReference Include="..\Act.Utilities\Act.Utilities.csproj" />
+    <ProjectReference Include="..\Act.Xml\Act.Xml.csproj" />
   </ItemGroup>
 
 </Project>
