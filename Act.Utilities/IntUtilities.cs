@@ -1,10 +1,13 @@
-﻿namespace Act.Utilities;
+﻿using System.Runtime.Serialization;
+
+namespace Act.Utilities;
 
 public static class IntUtilities
 {
     public static bool IsBetween(this int value, int min, int max)
         => value >= min && value <= max;
 
+    public static int ToInt(this Enum enumType) => Convert.ToInt32(enumType);
 }
 
 public readonly struct Length : IEquatable<Length>

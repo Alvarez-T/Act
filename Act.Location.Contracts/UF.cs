@@ -10,7 +10,7 @@ public enum UF
     /// <summary>
     /// IBGE code for Rondônia.
     /// </summary>
-    Rondônia = 11,
+    Rondonia = 11,
 
     /// <summary>
     /// IBGE code for Acre.
@@ -30,12 +30,12 @@ public enum UF
     /// <summary>
     /// IBGE code for Pará.
     /// </summary>
-    Pará = 15,
+    Para = 15,
 
     /// <summary>
     /// IBGE code for Amapá.
     /// </summary>
-    Amapá = 16,
+    Amapa = 16,
 
     /// <summary>
     /// IBGE code for Tocantins.
@@ -45,17 +45,17 @@ public enum UF
     /// <summary>
     /// IBGE code for Maranhão.
     /// </summary>
-    Maranhão = 21,
+    Maranhao = 21,
 
     /// <summary>
     /// IBGE code for Piauí.
     /// </summary>
-    Piauí = 22,
+    Piaui = 22,
 
     /// <summary>
     /// IBGE code for Ceará.
     /// </summary>
-    Ceará = 23,
+    Ceara = 23,
 
     /// <summary>
     /// IBGE code for Rio Grande do Norte.
@@ -65,7 +65,7 @@ public enum UF
     /// <summary>
     /// IBGE code for Paraíba.
     /// </summary>
-    Paraíba = 25,
+    Paraiba = 25,
 
     /// <summary>
     /// IBGE code for Pernambuco.
@@ -105,12 +105,12 @@ public enum UF
     /// <summary>
     /// IBGE code for São Paulo.
     /// </summary>
-    SãoPaulo = 35,
+    SaoPaulo = 35,
 
     /// <summary>
     /// IBGE code for Paraná.
     /// </summary>
-    Paraná = 41,
+    Parana = 41,
 
     /// <summary>
     /// IBGE code for Santa Catarina.
@@ -125,7 +125,7 @@ public enum UF
     /// <summary>
     /// IBGE code for Goiás.
     /// </summary>
-    Goiás = 52,
+    Goias = 52,
 
     /// <summary>
     /// IBGE code for Mato Grosso.
