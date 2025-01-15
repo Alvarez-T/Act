@@ -4,6 +4,7 @@ namespace Act.Location.Contracts;
 
 public readonly struct Telefone : IEquatable<Telefone>
 {
+    private static readonly Regex TelefoneRegex = new(@"^(?:(?:\+|00)?(55)\s?)?(?:\(?([1-9][0-9])\)?\s?)?(?:((?:9\d|[2-9])\d{3})\-?(\d{4}))$", RegexOptions.Compiled);
     private readonly string _numero { get; }
     public string Numero => Regex.Replace(_numero, @"[^\d]", "");
     public bool IndicaCelular{ get; }
@@ -26,9 +27,7 @@ public readonly struct Telefone : IEquatable<Telefone>
 
     private static (bool valido, bool indicaCelular) ValidarNumeroTelefone(string numero)
     {
-        // Regex para validar números de telefone no Brasil
-        string padrao = @"^(?:(?:\+|00)?(55)\s?)?(?:\(?([1-9][0-9])\)?\s?)?(?:((?:9\d|[2-9])\d{3})\-?(\d{4}))$";
-        var match = Regex.Match(numero, padrao);
+        var match = TelefoneRegex.Match(numero);
 
         if (match.Success)
         {
