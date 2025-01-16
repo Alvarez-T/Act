@@ -9,13 +9,15 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Act.SignalR.Client", "Act.S
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Act.Internals", "Act.Internals\Act.Internals.csproj", "{2ACF5498-0045-41DC-8220-556D76646831}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Act.Common.Types", "Act.Common.Types\Act.Common.Types.csproj", "{CD7E4A7F-2326-4AAD-954B-E8A454264503}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Act.Entidade", "Act.Entidade\Act.Entidade.csproj", "{CD7E4A7F-2326-4AAD-954B-E8A454264503}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Act.Fiscal.NFe", "Act.Fiscal.NFe\Act.Fiscal.NFe.csproj", "{EA4BAC1C-5C11-4974-99C8-6735BA87F14C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Act.Utilities", "Act.Utilities\Act.Utilities.csproj", "{DBE826A0-F3E7-46F8-9E12-76A38DD13A13}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Act.Xml", "Act.Xml\Act.Xml.csproj", "{E22CC72B-9A26-4195-B211-9A7F977C738D}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Act.Product.Metadata", "Act.Product.Metadata\Act.Product.Metadata.csproj", "{12D78DBE-C367-4935-AE6C-B03C6C20D4F6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -51,6 +53,10 @@ Global
 		{E22CC72B-9A26-4195-B211-9A7F977C738D}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{E22CC72B-9A26-4195-B211-9A7F977C738D}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{E22CC72B-9A26-4195-B211-9A7F977C738D}.Release|Any CPU.Build.0 = Release|Any CPU
+		{12D78DBE-C367-4935-AE6C-B03C6C20D4F6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{12D78DBE-C367-4935-AE6C-B03C6C20D4F6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{12D78DBE-C367-4935-AE6C-B03C6C20D4F6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{12D78DBE-C367-4935-AE6C-B03C6C20D4F6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
