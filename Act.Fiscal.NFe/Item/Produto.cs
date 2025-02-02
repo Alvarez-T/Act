@@ -1,4 +1,4 @@
-﻿using Act.Entidade;
+﻿ using Act.Entidade;
 using Act.Fiscal.NFe.Exterior;
 using Act.Product.Metadata;
 

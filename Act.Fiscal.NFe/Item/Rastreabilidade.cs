@@ -1,5 +1,4 @@
-﻿using System.Xml.Serialization;
-
+﻿
 namespace Act.Fiscal.NFe.Item;
 
 public class Rastreabilidade
