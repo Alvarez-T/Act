@@ -12,7 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\NavigatR\NavigatR.CommunityToolkit\NavigatR.CommunityToolkit.csproj" />
-    <ProjectReference Include="..\Act.Internals\Act.Internals.csproj" />
+    <ProjectReference Include="..\Act.Internals\Act.Utils.csproj" />
   </ItemGroup>
 
 </Project>

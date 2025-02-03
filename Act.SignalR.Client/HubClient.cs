@@ -1,9 +1,9 @@
 ﻿using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using Act.Internals;
-using Act.Internals.Exceptions;
+using Act.Utils;
 using CommunityToolkit.Mvvm.Messaging;
+using ArgumentNullException = Act.Utils.Exceptions.ArgumentNullException;
 
 namespace Act.SignalR.Client;
 
@@ -17,9 +17,9 @@ public abstract class HubClient
         where TMessage : class
         where TToken : IEquatable<TToken>
     {
-        Internals.Exceptions.ArgumentNullException.ThrowIfNull(recipient);
-        Internals.Exceptions.ArgumentNullException.For<TToken>.ThrowIfNull(token);
-        Internals.Exceptions.ArgumentNullException.ThrowIfNull(handler);
+        ArgumentNullException.ThrowIfNull(recipient);
+        ArgumentNullException.For<TToken>.ThrowIfNull(token);
+        ArgumentNullException.ThrowIfNull(handler);
 
         Register<TMessage, TToken>(recipient, token, new HubMessageHandlerDispatcher.For<TRecipient, TMessage>(handler));
     }
@@ -100,8 +100,8 @@ public abstract class HubClient
         where TMessage : class
         where TToken : IEquatable<TToken>
     {
-        Internals.Exceptions.ArgumentNullException.ThrowIfNull(message);
-        Internals.Exceptions.ArgumentNullException.For<TToken>.ThrowIfNull(token);
+        ArgumentNullException.ThrowIfNull(message);
+        ArgumentNullException.For<TToken>.ThrowIfNull(token);
 
         RefArrayPoolBufferWriter<object?> bufferWriter;
         int i = 0;

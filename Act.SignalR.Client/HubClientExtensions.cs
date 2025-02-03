@@ -1,4 +1,4 @@
-﻿using Act.Internals;
+﻿using Act.Utils;
 using CommunityToolkit.Mvvm.Messaging;
 
 namespace Act.SignalR.Client;
