@@ -7,12 +7,17 @@ namespace Act.Fiscal.NFe.Tributo;
 /// </summary>
 public enum MotivoDesoneracaoIcms
 {
-    [XmlEnum("3")]
+    Taxi = 1,
     UsoAgropecuaria = 3,
-
-    [XmlEnum("9")]
+    FrotistaOuLocadora = 4,
+    DiplomaticoOuConsular = 5,
+    Utilitarios = 6,
+    SUFRAMA = 7,
+    VendaOrgaoPublico = 8,
     Outros = 9,
-
-    [XmlEnum("12")]
-    FomentoAgropecuario = 12
+    DeficienteCondutor = 10,
+    DeficienteNaoCondutor = 11,
+    FomentoAgropecuario = 12,
+    Olimpiadas = 16,
+    SolicitadoFisco = 90
 }

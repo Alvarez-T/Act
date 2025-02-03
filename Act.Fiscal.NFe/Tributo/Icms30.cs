@@ -2,37 +2,13 @@
 
 namespace Act.Fiscal.NFe.Tributo;
 
-/// <summary>
-/// Tributação pelo ICMS 10 - Tributada e com cobrança do ICMS por substituição tributária
-/// </summary>
-public class Icms10
+public class Icms30
 {
-    [XmlElement("orig")] public OrigemMercadoria OrigemMercadoria { get; set; }
+    [XmlElement("orig")] public OrigemMercadoria Origem { get; set; }
 
-    [XmlElement("CST")] public Cst Cst { get; set; }
-
-    [XmlElement("modBC")] public ModalidadeBaseCalculoIcms ModalidadeBaseCalculo { get; set; }
-
-    [XmlElement("vBC")] public decimal BaseCalculo { get; set; }
-
-    [XmlElement("pICMS")] public decimal Aliquota { get; set; }
-
-    [XmlElement("vICMS")] public decimal ValorIcms { get; set; }
-
-    [XmlElement("vBC")] public decimal? BaseCalculoFcp { get; set; }
-
-    /// <summary>
-    /// Percentual de ICMS relativo ao Fundo de Combate à Pobreza (FCP).
-    /// </summary>
-    [XmlElement("pFCP")] public decimal? PercentualFcp { get; set; }
-
-    /// <summary>
-    /// Valor do ICMS relativo ao Fundo de Combate à Pobreza (FCP).
-    /// </summary>
-    [XmlElement("vFCP")] public decimal? ValorFcp { get; set; }
+    [XmlElement("CST")] public Cst Cst => "30";
 
     [XmlElement("modBCST")] public ModalidadeBaseCalculoIcmsST ModalidadeBaseCalculoST { get; set; }
-
     /// <summary>
     /// Percentual da margem de valor Adicionado do ICMS ST
     /// </summary>
@@ -48,7 +24,7 @@ public class Icms10
     /// <summary>
     /// Alíquota do ICMS ST
     /// </summary>
-    [XmlElement("pICMSST")] public decimal? AliquotaIcmsST { get; set; }
+    [XmlElement("pICMSST")] public Percentual? AliquotaIcmsST { get; set; }
 
     [XmlElement("vICMSST")] public decimal? ValorIcmsST { get; set; }
 
@@ -67,8 +43,13 @@ public class Icms10
     /// </summary>
     [XmlElement("vFCPST")] public decimal? ValorFcpPorST { get; set; }
 
-    [XmlElement("vICMSSTDeson")] public decimal? ValorIcmsSTDesonerado { get; set; }
+    [XmlElement("vICMSDeson")] public decimal? ValorIcmsDesonerado { get; set; }
 
-    [XmlElement("motDesICMSST")] public MotivoDesoneracaoIcmsST? MotivoDesoneracaoIcmsST { get; set; }
+    [XmlElement("motDesICMS")] public MotivoDesoneracaoIcms MotivoDesoneracaoIcms { get; set; }
+
+    /// <summary>
+    /// Indica se o valor do ICMS desonerado (vICMSDeson) deduz do valor do item (vProd).
+    /// </summary>
+    [XmlElement("indDeduzDeson")] public bool DeduzDesoneracao { get; set; }
 
 }
