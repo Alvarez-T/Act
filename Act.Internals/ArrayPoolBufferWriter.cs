@@ -4,7 +4,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace Act.Internals;
+namespace Act.Utils;
 
 /// <summary>
 /// Represents a heap-based, array-backed output sink into which <typeparamref name="T"/> data can be written.

@@ -1,9 +1,9 @@
 ﻿using System.Collections;
 using System.Diagnostics.CodeAnalysis;
-using global::System.Runtime.CompilerServices;
-using global::System.Runtime;
+using System.Runtime;
+using System.Runtime.CompilerServices;
 
-namespace Act.Internals;
+namespace Act.Utils;
 
 // Source link:
 // https://github.com/CommunityToolkit/dotnet/blob/7b53ae23dfc6a7fb12d0fc058b89b6e948f48448/src/CommunityToolkit.Mvvm/Messaging/Internals/System/Runtime.CompilerServices/ConditionalWeakTable2%7BTKey%2CTValue%7D.ZeroAlloc.cs

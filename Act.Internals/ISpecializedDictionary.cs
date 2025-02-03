@@ -1,4 +1,4 @@
-﻿namespace Act.Internals;
+﻿namespace Act.Utils;
 
 /// <summary>
 /// A base interface masking <see cref="SpecializedDictionary{TKey,TValue}"/> instances and exposing non-generic functionalities.

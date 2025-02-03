@@ -1,6 +1,6 @@
 ﻿using System.Buffers;
 
-namespace Act.Internals;
+namespace Act.Utils;
 
 /// <summary>
 /// An interface that expands <see cref="IBufferWriter{T}"/> with the ability to also inspect

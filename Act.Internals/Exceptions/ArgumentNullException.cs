@@ -1,7 +1,7 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-namespace Act.Internals.Exceptions;
+namespace Act.Utils.Exceptions;
 
 /// <summary>
 /// Internal polyfill for <see cref="System.ArgumentNullException"/>.

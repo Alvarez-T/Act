@@ -1,7 +1,7 @@
 ﻿using System.Buffers;
 using System.Runtime.CompilerServices;
 
-namespace Act.Internals;
+namespace Act.Utils;
 
 /// <summary>
 /// A simple buffer writer implementation using pooled arrays.

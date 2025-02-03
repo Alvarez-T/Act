@@ -1,7 +1,7 @@
 ﻿using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 
-namespace Act.Internals;
+namespace Act.Utils;
 
 /// <summary>
 /// Helpers for working with the <see cref="ArrayPool{T}"/> type.

@@ -1,8 +1,8 @@
-﻿using System.Diagnostics.CodeAnalysis;
-using System.Diagnostics;
+﻿using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 
-namespace Act.Internals;
+namespace Act.Utils;
 
 //Source: https://github.com/CommunityToolkit/dotnet/blob/7b53ae23dfc6a7fb12d0fc058b89b6e948f48448/src/CommunityToolkit.Mvvm/Messaging/Internals/System/Collections.Generic/Dictionary2.cs
 
