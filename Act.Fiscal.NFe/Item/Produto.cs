@@ -31,7 +31,7 @@ public class Produto
 
     /// <summary>
     /// Codigo especificador da Substuicao Tributaria - CEST,
-    /// que identifica a mercadoria sujeita aos regimes de  substituicao tributária e de antecipação do recolhimento  do imposto
+    /// que identifica a mercadoria sujeita aos regimes de substituicao tributária e de antecipação do recolhimento  do imposto
     /// </summary>
     [XmlElement("CEST")] public Cest Cest { get; set; }
 

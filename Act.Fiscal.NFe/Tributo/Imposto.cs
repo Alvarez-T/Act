@@ -7,3 +7,4 @@ public class Imposto
     [XmlElement("vTotTrib")] public decimal ValorTotalTributos { get; set; }
 
 }
+
