@@ -1,1 +1,1 @@
-﻿global using XmlElement = Act.Xml.XmlElementAttribute;
+﻿//global using XmlElement = Act.Xml.XmlElementAttribute;

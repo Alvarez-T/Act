@@ -1,8 +1,9 @@
-﻿using Act.Utils;
+﻿using System.Xml.Serialization;
+using Act.Utils;
 
 namespace Act.Fiscal.NFe.Tributo;
 
-public class IcmsSn201
+internal sealed record IcmsSn201
 {
     [XmlElement("orig")] public OrigemMercadoria Origem { get; set; }
 

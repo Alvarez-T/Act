@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using Act.Utilities;
+using Act.Utils;
 
 namespace Act.Fiscal.NFe.Documento;
 

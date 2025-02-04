@@ -1,7 +1,6 @@
 ﻿using System.Xml.Serialization;
 using Act.Location.Contracts;
 using Act.Utils;
-using Act.Xml;
 
 namespace Act.Fiscal.NFe.Tributo;
 
@@ -10,7 +9,7 @@ namespace Act.Fiscal.NFe.Tributo;
 /// Operação interestadual para consumidor final com partilha do ICMS devido na operação entre a UF de origem e a UF do destinatário ou ou a UF definida na legislação. (Ex.UF da concessionária de entrega de veículos)
 /// </summary>
 [XmlRoot("ICMSPart")]
-public class IcmsPartilhado
+internal sealed record IcmsPartilhado
 {
     [XmlElement("orig")] public OrigemMercadoria Origem { get; set; }
 

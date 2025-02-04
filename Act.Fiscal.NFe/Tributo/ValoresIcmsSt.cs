@@ -3,12 +3,8 @@ using Act.Utils;
 
 namespace Act.Fiscal.NFe.Tributo;
 
-internal sealed record IcmsSn202
+public class ValoresIcmsSt
 {
-    [XmlElement("orig")] public OrigemMercadoria Origem { get; set; }
-
-    [XmlElement("CSOSN")] public Csosn Csosn { get; set; }
-
     [XmlElement("modBCST")] public ModalidadeBaseCalculoIcmsST ModalidadeBaseCalculoST { get; set; }
 
     /// <summary>
@@ -30,16 +26,5 @@ internal sealed record IcmsSn202
 
     [XmlElement("vICMSST")] public decimal? ValorIcmsST { get; set; }
 
-    /// <summary>
-    /// Valor da Base de cálculo do FCP retido por substituição tributária.
-    /// </summary>
-    [XmlElement("vBCFCPST")] public decimal? BaseCalculoFcpPorST { get; set; }
-
-    /// <summary>
-    /// Percentual de FCP retido por substituição tributária.
-    /// </summary>
-    [XmlElement("pFCPST")] public decimal? PercentualFcpPorST { get; set; }
-
-    [XmlElement("vFCPST")] public decimal? ValorFcpPorST { get; set; }
-
+    public FundoCombatePobrezaSt? FundoCombatePobrezaSt { get; set; }
 }

@@ -1,5 +1,4 @@
 ﻿using System.Xml.Serialization;
-using Act.Xml;
 
 namespace Act.Fiscal.NFe.Tributo;
 

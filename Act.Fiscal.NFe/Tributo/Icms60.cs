@@ -1,11 +1,12 @@
-﻿using Act.Utils;
+﻿using System.Xml.Serialization;
+using Act.Utils;
 
 namespace Act.Fiscal.NFe.Tributo;
 
 /// <summary>
 /// Tributação pelo ICMS 60 - ICMS cobrado anteriormente por substituição tributária
 /// </summary>
-public class Icms60
+internal sealed record Icms60
 {
     [XmlElement("orig")] public OrigemMercadoria Origem { get; set; }
 

@@ -1,6 +1,8 @@
-﻿namespace Act.Fiscal.NFe.Tributo;
+﻿using System.Xml.Serialization;
 
-public class Icms15
+namespace Act.Fiscal.NFe.Tributo;
+
+internal sealed class Icms15
 {
     [XmlElement("orig")] public OrigemMercadoria OrigemMercadoria { get; set; }
 

@@ -10,6 +10,11 @@ public class Local
 
     [XmlElement("CPF")] public CPF? Cpf { get; set; }
 
+    /// <summary>
+    /// Razão Social ou nome do Destinatário.
+    /// </summary>
+    [XmlElement("xNome")] public string? Nome { get; set; }
+
     [XmlElement("xLgr")] public string Logradouro { get; set; }
 
     [XmlElement("nro")] public string Numero { get; set; }
@@ -34,11 +39,6 @@ public class Local
     [XmlElement("xPais")] public string? Pais { get; set; }
 
     [XmlElement("fone")] public Telefone? Telefone { get; set; }
-
-    /// <summary>
-    /// Razão Social ou nome do Destinatário.
-    /// </summary>
-    [XmlElement("xNome")] public string? Nome { get; set; }
 
     [XmlElement("email")] public Email Email { get; set; }
 

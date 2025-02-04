@@ -1,11 +1,12 @@
-﻿using Act.Utils;
+﻿using System.Xml.Serialization;
+using Act.Utils;
 
 namespace Act.Fiscal.NFe.Tributo;
 
 /// <summary>
 /// Tributação pelo ICMS 70 - Com redução de base de cálculo e cobrança do ICMS por substituição tributária
 /// </summary>
-public class Icms70
+internal sealed record Icms70
 {
     [XmlElement("orig")] public OrigemMercadoria Origem { get; set; }
 

@@ -1,11 +1,12 @@
-﻿using Act.Utils;
+﻿using System.Xml.Serialization;
+using Act.Utils;
 
 namespace Act.Fiscal.NFe.Tributo;
 
 /// <summary>
 /// Tributação pelo ICMS 90 - Outras
 /// </summary>
-public class Icms90
+internal sealed record Icms90
 {
     [XmlElement("orig")] public OrigemMercadoria Origem { get; set; }
 

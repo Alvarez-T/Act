@@ -1,11 +1,12 @@
-﻿using Act.Utils;
+﻿using System.Xml.Serialization;
+using Act.Utils;
 
 namespace Act.Fiscal.NFe.Tributo;
 
 /// <summary>
 /// Tributação monofásica sobre combustíveis cobrada anteriormente
 /// </summary>
-public class Icms61
+internal sealed record Icms61
 {
     [XmlElement("orig")] public OrigemMercadoria Origem { get; set; }
 

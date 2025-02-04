@@ -1,4 +1,5 @@
-﻿ using Act.Entidade;
+﻿ using System.Xml.Serialization;
+ using Act.Entidade;
 using Act.Fiscal.NFe.Exterior;
 using Act.Product.Metadata;
 

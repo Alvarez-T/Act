@@ -9,6 +9,7 @@
   <ItemGroup>
     <PackageReference Include="System.Text.RegularExpressions" Version="4.3.1" />
     <PackageReference Include="System.Xml.XmlSerializer" Version="4.3.0" />
+    <PackageReference Include="YAXLib" Version="4.3.0" />
   </ItemGroup>
 
 </Project>

@@ -1,4 +1,5 @@
-﻿using Act.Fiscal.NFe.Documento;
+﻿using System.Xml.Serialization;
+using Act.Fiscal.NFe.Documento;
 
 namespace Act.Fiscal.NFe.Exterior;
 

@@ -1,4 +1,6 @@
-﻿namespace Act.Fiscal.NFe.Documento;
+﻿using System.Xml.Serialization;
+
+namespace Act.Fiscal.NFe.Documento;
 
 public class DocumentoFiscalReferenciado
 {

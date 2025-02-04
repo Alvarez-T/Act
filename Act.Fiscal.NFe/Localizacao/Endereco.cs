@@ -1,4 +1,5 @@
-﻿using Act.Entidade;
+﻿using System.Xml.Serialization;
+using Act.Entidade;
 using Act.Location.Contracts;
 
 namespace Act.Fiscal.NFe.Localizacao;
