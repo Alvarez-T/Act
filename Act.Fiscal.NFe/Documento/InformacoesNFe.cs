@@ -1,12 +1,11 @@
 ﻿using Act.Fiscal.NFe.Entidade;
-using Act.Fiscal.NFe.Item;
 using Act.Fiscal.NFe.Localizacao;
 using System.Xml.Serialization;
 
 namespace Act.Fiscal.NFe.Documento;
 
 [XmlRoot("infNFe")]
-public class InformacoesNFe
+internal sealed class InformacoesNFe
 {
     [XmlAttribute("versao")] internal string Versao => "4.00";
 
@@ -32,12 +31,5 @@ public class InformacoesNFe
 
     //Todo: [XmlElement("autXML")] public object CNPJ { get; set; }
 
-    [XmlElement("det")] public string Cnpj { get; set; }
-}
-
-public class DetalhesNFe
-{
-    [XmlAttribute("nItem")] public string NumeroItem { get; set; }
-
-    [XmlElement("prod")] public Produto Produto { get; set; }
+    [XmlElement("det")] public DetalhesNFe DetalhesNFe { get; set; }
 }

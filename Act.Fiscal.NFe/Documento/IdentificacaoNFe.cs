@@ -30,7 +30,7 @@ public class IdentificacaoNFe
 
     [XmlElement("idDest")] public IdentificadorDestino IdentificadorDestino { get; set; }
 
-    [XmlElement("cMunFG")] public CidadeIBGE Municipio { get; set; }
+    [XmlElement("cMunFG")] public MunicipioIBGE Municipio { get; set; }
 
     [XmlElement("tpImp")] public TipoImpressao TipoImpressao { get; set; }
 

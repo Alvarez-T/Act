@@ -26,7 +26,7 @@ public class Local
     /// <summary>
     /// Código município IBGE
     /// </summary>
-    [XmlElement("cMun")] public CidadeIBGE CodigoMunicipio { get; set; }
+    [XmlElement("cMun")] public MunicipioIBGE CodigoMunicipio { get; set; }
 
     [XmlElement("xMun")] public string Municipio { get; set; }
 
