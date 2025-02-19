@@ -9,7 +9,7 @@ public class Emitente
 {
     [XmlAttribute("CNPJ")] public Cnpj CNPJ { get; set; }
 
-    [XmlAttribute("CPF")] public CPF CPF { get; set; }
+    [XmlAttribute("Cpf")] public Cpf CPF { get; set; }
 
     /// <summary>
     /// Razão social ou Nome do emitente.

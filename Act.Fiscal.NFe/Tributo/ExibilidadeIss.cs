@@ -1,6 +1,6 @@
 ﻿namespace Act.Fiscal.NFe.Tributo;
 
-public enum ExibilidadeIss
+internal enum ExibilidadeIss
 {
     Exigivel = 1,
     NaoIncidente = 2,

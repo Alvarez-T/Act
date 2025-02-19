@@ -8,7 +8,7 @@ public class Local
 {
     [XmlElement("CNPJ")] public Cnpj? Cnpj { get; set; }
 
-    [XmlElement("CPF")] public CPF? Cpf { get; set; }
+    [XmlElement("Cpf")] public Cpf? Cpf { get; set; }
 
     /// <summary>
     /// Razão Social ou nome do Destinatário.

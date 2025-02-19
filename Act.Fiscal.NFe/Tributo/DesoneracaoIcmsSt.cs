@@ -2,7 +2,7 @@
 
 namespace Act.Fiscal.NFe.Tributo;
 
-public class DesoneracaoIcmsSt
+internal sealed class DesoneracaoIcmsSt
 {
     [XmlElement("vICMSSTDeson")] public decimal ValorIcmsSTDesonerado { get; set; }
 

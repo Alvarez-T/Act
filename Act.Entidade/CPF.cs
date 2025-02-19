@@ -1,13 +1,13 @@
 ﻿namespace Act.Entidade;
 
-public readonly struct CPF : IEquatable<CPF>, IComparable<CPF>
+public readonly struct Cpf : IEquatable<Cpf>, IComparable<Cpf>
 {
     private readonly byte[] _digits;
 
-    public CPF(string value)
+    public Cpf(string value)
     {
         if (string.IsNullOrEmpty(value))
-            ArgumentException.ThrowIfNullOrEmpty("CPF cannot be null or empty");
+            ArgumentException.ThrowIfNullOrEmpty("Cpf cannot be null or empty");
 
         Span<char> buffer = stackalloc char[value.Length];
         int count = 0;
@@ -21,7 +21,7 @@ public readonly struct CPF : IEquatable<CPF>, IComparable<CPF>
         }
 
         if (count != 11)
-            throw new ArgumentException("Invalid CPF format. CPF must be 11 digits.", nameof(value));
+            throw new ArgumentException("Invalid Cpf format. Cpf must be 11 digits.", nameof(value));
 
         _digits = new byte[11];
 
@@ -31,7 +31,7 @@ public readonly struct CPF : IEquatable<CPF>, IComparable<CPF>
         }
 
         if (!IsValidCPF(_digits))
-            throw new ArgumentException("Invalid CPF number");
+            throw new ArgumentException("Invalid Cpf number");
     }
 
     public static bool Validate(string value)
@@ -99,14 +99,14 @@ public readonly struct CPF : IEquatable<CPF>, IComparable<CPF>
         return remainder == digits[10];
     }
 
-    public static implicit operator string(CPF cpf) => cpf.ToFormattedString();
-    public static explicit operator CPF(string value) => new CPF(value);
+    public static implicit operator string(Cpf cpf) => cpf.ToFormattedString();
+    public static explicit operator Cpf(string value) => new Cpf(value);
 
-    public static bool operator ==(CPF left, CPF right) => left.Equals(right);
-    public static bool operator !=(CPF left, CPF right) => !(left == right);
-    public override bool Equals(object? obj) => obj is CPF cpf && Equals(cpf);
+    public static bool operator ==(Cpf left, Cpf right) => left.Equals(right);
+    public static bool operator !=(Cpf left, Cpf right) => !(left == right);
+    public override bool Equals(object? obj) => obj is Cpf cpf && Equals(cpf);
 
-    public bool Equals(CPF other)
+    public bool Equals(Cpf other)
     {
         for (int i = 0; i < 11; i++)
         {
@@ -129,7 +129,7 @@ public readonly struct CPF : IEquatable<CPF>, IComparable<CPF>
         return hash;
     }
 
-    public int CompareTo(CPF other)
+    public int CompareTo(Cpf other)
     {
         for (int i = 0; i < 11; i++)
         {

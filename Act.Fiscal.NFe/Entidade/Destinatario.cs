@@ -9,7 +9,7 @@ public class Destinatario
 {
     [XmlElement("CNPJ")] public Cnpj? Cnpj { get; set; }
 
-    [XmlElement("CPF")] public CPF? Cpf { get; set; }
+    [XmlElement("Cpf")] public Cpf? Cpf { get; set; }
 
     [XmlElement("idEstrangeiro")] public string? Estrangeiro { get; set; }
 
