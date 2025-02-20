@@ -2,7 +2,7 @@
 
 namespace Act.Fiscal.NFe.Tributo;
 
-internal sealed class IcmsTotais
+internal sealed class TotaisIcms
 {
     [XmlElement("vBC")] public decimal BaseCalculo { get; set; }
 

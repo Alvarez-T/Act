@@ -4,7 +4,7 @@ using Act.Location.Contracts;
 
 namespace Act.Fiscal.NFe.Transporte;
 
-internal sealed class DadosTransportador
+internal sealed class Transportador
 {
     [XmlElement("CNPJ")] public Cnpj CNPJ { get; set; }
     [XmlElement("Cpf")] public Cpf CPF { get; set; }
