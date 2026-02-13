@@ -1,4 +1,4 @@
-﻿namespace Act.Product.Metadata;
+﻿namespace YFex.Product.Metadata;
 
 /// <summary>
 /// Nomenclatura Comum do Mercosul

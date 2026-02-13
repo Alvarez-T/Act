@@ -1,4 +1,4 @@
-﻿namespace Act.Product.Metadata;
+﻿namespace YFex.Product.Metadata;
 
 public readonly struct Ean
 {

@@ -1,6 +1,6 @@
-﻿namespace Act.Product.Metadata;
+﻿namespace YFex.Product.Metadata;
 
-public readonly struct Sku
+public readonly record struct Sku
 {
     private readonly string _id;
 
