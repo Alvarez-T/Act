@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 17
-VisualStudioVersion = 17.11.35103.136
+# Visual Studio Version 18
+VisualStudioVersion = 18.3.11312.210 d18.3
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Act.Location.Contracts", "Act.Location.Contracts\Act.Location.Contracts.csproj", "{94996E08-CB53-4DE1-8CD0-703508C2808E}"
 EndProject
@@ -15,7 +15,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Act.Fiscal.NFe", "Act.Fisca
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Act.Xml", "Act.Xml\Act.Xml.csproj", "{E22CC72B-9A26-4195-B211-9A7F977C738D}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Act.Product.Metadata", "Act.Product.Metadata\Act.Product.Metadata.csproj", "{12D78DBE-C367-4935-AE6C-B03C6C20D4F6}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "YFex.Product.Metadata", "Act.Product.Metadata\YFex.Product.Metadata.csproj", "{12D78DBE-C367-4935-AE6C-B03C6C20D4F6}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Act.Fiscal", "Act.Fiscal\Act.Fiscal.csproj", "{270DA845-4CB8-445B-9C2C-4CE29EB52187}"
 EndProject
