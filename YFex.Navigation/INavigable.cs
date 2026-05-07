@@ -1,54 +1,52 @@
 ﻿namespace YFex.NavigatR;
 
 /// <summary>
-/// Base interface for any page or view model that participates in navigation.
+/// Base interface for all navigable ViewModels.
+/// Use when the screen requires no parameter and produces no result.
 /// </summary>
 public interface INavigable : IDisposable
 {
     /// <summary>
-    /// Async guard. Return false to cancel navigation and trigger OnNavigationDenied on INavigation.
+    /// Called once when the screen is first navigated to.
+    /// Call <see cref="NavigationContext.Deny"/> to block navigation.
+    /// When a <c>Parameter</c> is declared on <c>[Route]</c>, the source generator
+    /// implements this explicitly and enforces a typed
+    /// <c>OnNavigation(TParameter, CancellationToken)</c> partial method instead.
     /// </summary>
-    Task<bool> CanNavigate(CancellationToken ct = default);
+    Task OnNavigation(NavigationContext context, CancellationToken ct = default);
 
     /// <summary>
-    /// Called when entering this page for the first time, or after reconstruction from a dead weak reference.
-    /// </summary>
-    Task OnNavigation(CancellationToken ct = default);
-
-    /// <summary>
-    /// Called when returning to an already-alive instance (back navigation or context switch back).
+    /// Called when the screen comes back into focus after being suspended.
+    /// Never called when returning from an awaited NavigateTo — the ViewModel
+    /// was Pinned and never truly left.
     /// </summary>
     Task OnResume(CancellationToken ct = default);
 
     /// <summary>
-    /// Called when leaving this page due to forward navigation or a context switch away.
+    /// Called when the screen loses focus without being closed.
+    /// Never called when the ViewModel is Pinned awaiting a child NavigateTo result.
     /// </summary>
     Task OnSuspend(CancellationToken ct = default);
 }
 
 /// <summary>
-/// Opt-in interface for navigables that return a value to their caller.
+/// A navigable ViewModel that produces a typed result.
+/// The source generator implements <c>Returns(TResult)</c>, <c>Cancel()</c>,
+/// and <c>Deny(string?)</c> automatically on the partial class.
 /// </summary>
-/// <typeparam name="TResult">The type of value returned to the caller.</typeparam>
 public interface INavigable<TResult> : INavigable
 {
     /// <summary>
-    /// Called by the navigable itself before navigating back.
-    /// Completes the awaited Task&lt;NavigationResult&lt;TResult&gt;&gt; on the caller side.
+    /// Awaited by the Navigator to receive the result.
+    /// Generated automatically — do not call directly.
     /// </summary>
-    void Returns(TResult result);
+    Task<NavigationResult<TResult>> WaitForResultAsync();
 }
 
 /// <summary>
-/// Opt-in interface for navigables that receive a typed parameter and return a typed value.
+/// Internal interface used by the generator to wire parameterized navigation.
+/// Not part of the developer-facing API.
 /// </summary>
-/// <typeparam name="TParameter">The type of parameter received on navigation.</typeparam>
-/// <typeparam name="TResult">The type of value returned to the caller.</typeparam>
-public interface INavigable<TParameter, TResult> : INavigable<TResult>
+internal interface INavigableAccepts<TParameter> : INavigable
 {
-    /// <summary>
-    /// Called when entering this page with a typed parameter.
-    /// The base OnNavigation() is not called by the navigator when this interface is implemented.
-    /// </summary>
-    Task OnNavigation(TParameter parameter, CancellationToken ct = default);
 }

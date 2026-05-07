@@ -1,65 +1,41 @@
 ﻿namespace YFex.NavigatR;
 
-/// <summary>
-/// Represents a single entry in the navigation history stack.
-/// </summary>
-public sealed class NavigationEntry
+public abstract class NavigationEntry
 {
-    /// <summary>
-    /// The route that identifies this navigation destination.
-    /// Used as the primary identity for breadcrumb display and history traversal.
-    /// </summary>
     public IRoute Route { get; }
-
-    /// <summary>
-    /// The optional parameter passed to the ViewModel when navigation occurred.
-    /// </summary>
-    public object? Parameter { get; }
-
-    /// <summary>
-    /// Whether this entry's ViewModel instance is kept alive after navigating away
-    /// (i.e. <see cref="INavigable.OnSuspend"/> is called instead of disposal).
-    /// </summary>
-    public bool KeepAlive { get; }
-
-    /// <summary>
-    /// The UTC timestamp of when this entry was created.
-    /// </summary>
     public DateTimeOffset NavigatedAt { get; } = DateTimeOffset.UtcNow;
+    public NavigationEntryState State { get; internal set; } = NavigationEntryState.Active;
+    public bool IsKeepAlive { get; }
 
-    /// <summary>
-    /// The live ViewModel instance for this entry, or <c>null</c> when not yet resolved
-    /// or after the instance has been released.
-    /// </summary>
     internal INavigable? NavigableInstance { get; set; }
-
-    /// <summary>
-    /// Cached ViewModel <see cref="Type"/> resolved from <see cref="Route"/> via
-    /// <see cref="RouteRegistry.ResolveViewModel"/>. Populated on first resolve and
-    /// reused for reconstruction during replay.
-    /// </summary>
     internal Type? ResolvedViewModelType { get; set; }
+    internal abstract object? BoxedParameter { get; }
 
-    /// <summary>
-    /// Creates a new <see cref="NavigationEntry"/>.
-    /// </summary>
-    public NavigationEntry(IRoute route, object? parameter, bool keepAlive)
+    private protected NavigationEntry(IRoute route)
     {
         Route = route;
-        Parameter = parameter;
-        KeepAlive = keepAlive;
+        IsKeepAlive = route is IKeepAlive;
     }
 
-    /// <summary>
-    /// Disposes the live ViewModel instance (if disposable) and clears the reference.
-    /// The <see cref="Route"/> and <see cref="Parameter"/> are retained for potential
-    /// future reconstruction.
-    /// </summary>
     internal void Release()
     {
-        if (NavigableInstance is IDisposable disposable)
-            disposable.Dispose();
+        if (State == NavigationEntryState.Pinned)
+            throw new InvalidOperationException(
+                $"Cannot release Pinned entry '{Route.GetType().Name}' — it is mid-await.");
+
+        if (NavigableInstance is IDisposable d) d.Dispose();
         NavigableInstance = null;
-        // Route and Parameter kept for reconstruction via ReplayEntryAsync
+        State = NavigationEntryState.Released;
     }
+}
+
+public sealed class NavigationEntry<TRoute> : NavigationEntry
+    where TRoute : IRoute
+{
+    public new TRoute Route => (TRoute)base.Route;
+    public object? Parameter { get; }
+    internal override object? BoxedParameter => Parameter;
+
+    public NavigationEntry(TRoute route, object? parameter)
+        : base(route) => Parameter = parameter;
 }

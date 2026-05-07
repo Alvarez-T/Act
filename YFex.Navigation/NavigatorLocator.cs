@@ -1,20 +1,40 @@
-﻿namespace YFex.MVVM.Providers;
+﻿namespace YFex.NavigatR;
 
+/// <summary>
+/// Ambient locator for the current <see cref="Navigator"/>.
+/// Uses <see cref="AsyncLocal{T}"/> so each async context (UI thread, test, tab)
+/// has its own isolated Navigator without any static global state bleeding across.
+/// </summary>
 public static class NavigatorLocator
 {
-    private static INavigatorProvider? _navigatorProvider;
+    private static readonly AsyncLocal<Navigator?> _current = new();
 
-    public static void CreateLocator(INavigatorProvider navigatorProvider)
+    /// <summary>
+    /// Sets the Navigator for the current async context.
+    /// Call this once per context (tab, window, test) before any navigation occurs.
+    /// </summary>
+    internal static void Set(Navigator navigator)
     {
-        if (_navigatorProvider is not null)
-            throw new LocatorAlreadyRegisteredException(nameof(ViewModelLocator));
-
-        _navigatorProvider = navigatorProvider;
+        ArgumentNullException.ThrowIfNull(navigator);
+        _current.Value = navigator;
     }
 
-    public static TNavigator GetNavigator<TNavigator>() where TNavigator : class, INavigator
-        => _navigatorProvider?.GetNavigator<TNavigator>() ?? throw new LocatorNotRegisteredException(nameof(ViewModelLocator));
+    /// <summary>
+    /// Clears the Navigator for the current async context.
+    /// Useful in tests to ensure isolation between test runs.
+    /// </summary>
+    internal static void Clear() => _current.Value = null;
 
-    public static INavigator GetDefaultNavigator()
-        => _navigatorProvider?.GetDefaultNavigator() ?? throw new LocatorNotRegisteredException(nameof(ViewModelLocator));
+    /// <summary>
+    /// Returns the Navigator for the current async context.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// Thrown when no Navigator has been set for the current async context.
+    /// Call <see cref="Set"/> before navigating.
+    /// </exception>
+    public static Navigator GetNavigator()
+        => _current.Value
+            ?? throw new InvalidOperationException(
+                "No Navigator has been set for the current async context. " +
+                "Call NavigatorLocator.Set(navigator) before navigating.");
 }

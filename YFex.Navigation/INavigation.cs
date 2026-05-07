@@ -1,6 +1,4 @@
-﻿using YFex.MVVM;
-
-namespace YFex.NavigatR;
+﻿namespace YFex.NavigatR;
 
 /// <summary>
 /// Platform hook. Implemented once per platform adapter.
@@ -13,7 +11,7 @@ public interface INavigation
     /// The navigator that owns this navigation pane.
     /// Set by the factory during wiring.
     /// </summary>
-    INavigator Navigator { get; set; }
+    //INavigator Navigator { get; set; }
 
     /// <summary>
     /// Called when navigating within the current context.
