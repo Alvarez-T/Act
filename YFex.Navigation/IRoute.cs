@@ -2,7 +2,9 @@
 
 /// <summary>
 /// Marker interface for all route types.
-/// Implement <see cref="IKeepAlive"/> on the route to prevent pool eviction.
+/// A route is a value object that identifies a navigation destination.
+/// When a parameter is declared via [Route(Parameter = typeof(T))], the generated
+/// route record carries it in the constructor.
 /// </summary>
 public interface IRoute
 {
@@ -11,26 +13,17 @@ public interface IRoute
 
 /// <summary>
 /// A route whose destination ViewModel produces a typed result.
-/// Enables compiler inference: <c>await navigator.NavigateTo(new PickerRoute())</c>
-/// returns <c>NavigationResult&lt;TResult&gt;</c>.
+/// Enables: await navigator.NavigateTo(new PickerRoute()).UntilReturns&lt;PickerResult&gt;()
 /// </summary>
 public interface IRouteProduces<TResult> : IRoute
 {
 }
 
 /// <summary>
-/// Internal — used by the generator to wire parameter inference on NavigateTo.
-/// Not part of the developer-facing API.
+/// Internal — shorthand for a route that produces a result.
+/// Used by generator only.
 /// </summary>
-public interface IRouteAccepts<TParameter> : IRoute
-{
-}
-
-/// <summary>
-/// Internal — shorthand for parameter + result route.
-/// </summary>
-public interface IRoute<TParameter, TResult>
-    : IRouteAccepts<TParameter>, IRouteProduces<TResult>
+internal interface IRoute<TParameter, TResult> : IRouteProduces<TResult>
 {
 }
 

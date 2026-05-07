@@ -22,11 +22,11 @@ public sealed class NavigatorNavigationTests : IDisposable
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task NavigateTo_Simple_CallsOnNavigation()
+    public async Task NavigateTo_Simple_ReturnsSuccess()
     {
         var result = await _navigator.NavigateTo(new HomeRoute());
 
-        Assert.IsType<NavigationSuccess>(result);
+        Assert.IsType<NavigationSuccess>(result.Value);
         Assert.Single(_navigator.Breadcrumb);
         Assert.IsType<HomeRoute>(_navigator.Breadcrumb[0].Route);
     }
@@ -43,9 +43,8 @@ public sealed class NavigatorNavigationTests : IDisposable
     [Fact]
     public async Task NavigateTo_Simple_DirectionIsInitialOnFirstNav()
     {
-        HomeViewModel? vm = null;
         await _navigator.NavigateTo(new HomeRoute());
-        vm = (HomeViewModel)_navigator.Breadcrumb[0].NavigableInstance!;
+        var vm = (HomeViewModel)_navigator.Breadcrumb[0].NavigableInstance!;
 
         Assert.Contains("OnNavigation:Initial", vm.Calls);
     }
@@ -61,7 +60,7 @@ public sealed class NavigatorNavigationTests : IDisposable
     }
 
     [Fact]
-    public async Task NavigateTo_Simple_SuspendsCurrentBeforeNavigating()
+    public async Task NavigateTo_Simple_SuspendsCallerAfterOnNavigationConfirms()
     {
         await _navigator.NavigateTo(new HomeRoute());
         var homeVm = (HomeViewModel)_navigator.Breadcrumb[0].NavigableInstance!;
@@ -71,138 +70,175 @@ public sealed class NavigatorNavigationTests : IDisposable
         Assert.Contains("OnSuspend", homeVm.Calls);
     }
 
+    [Fact]
+    public async Task NavigateTo_WhenDenied_CallerNeverReceivesOnSuspend()
+    {
+        await _navigator.NavigateTo(new HomeRoute());
+        var homeVm = (HomeViewModel)_navigator.Breadcrumb[0].NavigableInstance!;
+
+        await _navigator.NavigateTo(new AdminRoute());
+
+        Assert.DoesNotContain("OnSuspend", homeVm.Calls);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
-    // NavigateTo — parameter only
+    // NavigateTo — route carries parameter
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
     public async Task NavigateTo_WithParameter_DeliverParameterToViewModel()
     {
-        var param = new OrderParams(OrderId: 42);
-        await _navigator.NavigateTo(new OrderRoute(), param);
+        await _navigator.NavigateTo(new OrderRoute(new OrderParams(OrderId: 42)));
 
         var vm = (OrderViewModel)_navigator.Breadcrumb[0].NavigableInstance!;
         Assert.Equal(42, vm.ReceivedParams?.OrderId);
     }
 
     [Fact]
-    public async Task NavigateTo_WithParameter_EntryStoresParameter()
+    public async Task NavigateTo_WithParameter_RouteOnEntryCarriesParameter()
     {
-        var param = new OrderParams(OrderId: 99);
-        await _navigator.NavigateTo(new OrderRoute(), param);
+        var route = new OrderRoute(new OrderParams(OrderId: 99));
+        await _navigator.NavigateTo(route);
 
-        var entry = (NavigationEntry<OrderRoute>)_navigator.Breadcrumb[0];
-        Assert.Equal(param, entry.Parameter);
+        var entry = (NavigationEntry<IRoute>)_navigator.Breadcrumb[0];
+        Assert.Equal(99, ((OrderRoute)entry.Route).Params.OrderId);
     }
 
     [Fact]
     public async Task NavigateTo_WithParameter_ReturnsSuccess()
     {
-        var result = await _navigator.NavigateTo(new OrderRoute(), new OrderParams(1));
+        var result = await _navigator.NavigateTo(new OrderRoute(new OrderParams(1)));
 
-        Assert.IsType<NavigationSuccess>(result);
+        Assert.IsType<NavigationSuccess>(result.Value);
     }
 
-    [Fact]
-    public async Task NavigateTo_WithResult_ReturnsSuccessWhenViewModelCallsReturns()
-    {
-        var resultTask = _navigator.NavigateTo(new PickerRoute());
-
-        var vm = GetCurrentVm<PickerViewModel>();
-        vm.Returns(new PickerResult("Apple"));
-
-        var result = await resultTask.WithResult<PickerResult>();
-
-        Assert.IsType<NavigationSuccess<PickerResult>>(result); 
-        var success = (NavigationSuccess<PickerResult>)result.Value!;
-        Assert.Equal("Apple", success.Value.SelectedItem);
-    }
+    // ─────────────────────────────────────────────────────────────────────────
+    // UntilReturns<TResult>
+    // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task NavigateTo_WithResult_ReturnsCancelledWhenViewModelCallsCancel()
+    public async Task UntilReturns_ReturnsSuccessWhenViewModelCallsReturns()
     {
-        var resultTask = _navigator.NavigateTo(new PickerRoute());
+        var resultTask = _navigator.NavigateTo(new PickerRoute()).UntilReturns<PickerResult>();
 
-        var vm = GetCurrentVm<PickerViewModel>();
-        vm.Cancel();
-
-        var result = await resultTask;
-        Assert.IsType<NavigationCancelled>(result);
-    }
-
-    [Fact]
-    public async Task NavigateTo_WithResult_ReturnsDeniedWhenViewModelCallsDeny()
-    {
-        var resultTask = _navigator.NavigateTo(new PickerRoute());
-
-        var vm = GetCurrentVm<PickerViewModel>();
-        vm.Deny("Not allowed");
+        GetCurrentVm<PickerViewModel>().Returns(new PickerResult("Apple"));
 
         var result = await resultTask;
 
-        Assert.IsType<NavigationDenied>(result);
-        var denied = (NavigationDenied)result.Value!;
+        Assert.IsType<NavigationSuccess<PickerResult>>(result.Value);
+        Assert.Equal("Apple", ((NavigationSuccess<PickerResult>)result.Value!).Value.SelectedItem);
+    }
+
+    [Fact]
+    public async Task UntilReturns_ReturnsCancelledWhenViewModelCallsCancel()
+    {
+        var resultTask = _navigator.NavigateTo(new PickerRoute()).UntilReturns<PickerResult>();
+
+        GetCurrentVm<PickerViewModel>().Cancel();
+
+        var result = await resultTask;
+        Assert.IsType<NavigationCancelled>(result.Value);
+    }
+
+    [Fact]
+    public async Task UntilReturns_ReturnsDeniedWhenViewModelCallsDeny()
+    {
+        var resultTask = _navigator.NavigateTo(new PickerRoute()).UntilReturns<PickerResult>();
+
+        GetCurrentVm<PickerViewModel>().Deny("Not allowed");
+
+        var result = await resultTask;
+        var denied = Assert.IsType<NavigationDenied>(result.Value);
         Assert.Equal("Not allowed", denied.Reason);
     }
 
     [Fact]
-    public async Task NavigateTo_WithResult_NavigatesBackAfterCompletion()
+    public async Task UntilReturns_NavigatesBackAfterCompletion()
     {
         await _navigator.NavigateTo(new HomeRoute());
-        var resultTask = _navigator.NavigateTo(new PickerRoute());
+        var resultTask = _navigator.NavigateTo(new PickerRoute()).UntilReturns<PickerResult>();
 
         GetCurrentVm<PickerViewModel>().Returns(new PickerResult("Apple"));
         await resultTask;
 
-        // Should be back at Home
         Assert.Single(_navigator.Breadcrumb);
         Assert.IsType<HomeRoute>(_navigator.Breadcrumb[0].Route);
     }
 
     [Fact]
-    public async Task NavigateTo_WithResult_CancelledViaCancellationToken()
+    public async Task UntilReturns_CancelledViaCancellationToken()
     {
         var cts = new CancellationTokenSource();
-        var resultTask = _navigator.NavigateTo(new PickerRoute(), cts.Token);
+        var resultTask = _navigator.NavigateTo(new PickerRoute(), cts.Token).UntilReturns<PickerResult>();
 
         cts.Cancel();
 
         var result = await resultTask;
-        Assert.IsType<NavigationCancelled>(result);
+        Assert.IsType<NavigationCancelled>(result.Value);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // NavigateTo — parameter + result
+    // UntilReturns() — no typed result
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task NavigateTo_WithParameterAndResult_DeliversParameterAndReturnsResult()
+    public async Task UntilReturnsNoResult_CompletesWhenUserNavigatesBack()
     {
-        var param = new CheckoutParams(CartId: 5);
-        NavigationTask<CheckoutRoute, CheckoutParams> resultTask = _navigator.NavigateTo(new CheckoutRoute(), param);
+        await _navigator.NavigateTo(new HomeRoute());
+        var closedTask = _navigator.NavigateTo(new SettingsRoute()).UntilReturns();
+
+        await _navigator.NavigateBackward();
+
+        var result = await closedTask;
+        Assert.IsType<NavigationSuccess>(result.Value);
+    }
+
+    [Fact]
+    public async Task UntilReturnsNoResult_CallerIsPinnedWhileWaiting()
+    {
+        await _navigator.NavigateTo(new HomeRoute());
+        var homeEntry = _navigator.Breadcrumb[0];
+
+        var closedTask = _navigator.NavigateTo(new SettingsRoute()).UntilReturns();
+
+        Assert.Equal(NavigationEntryState.Pinned, homeEntry.State);
+
+        await _navigator.NavigateBackward();
+        await closedTask;
+
+        Assert.Equal(NavigationEntryState.Active, homeEntry.State);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Parameter + result
+    // ─────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task UntilReturns_WithParameterOnRoute_DeliversParameterAndReturnsResult()
+    {
+        var route = new CheckoutRoute(new CheckoutParams(CartId: 5));
+        var resultTask = _navigator.NavigateTo(route).UntilReturns<CheckoutResult>();
 
         var vm = GetCurrentVm<CheckoutViewModel>();
         Assert.Equal(5, vm.ReceivedParams?.CartId);
 
         vm.Returns(new CheckoutResult("TXN-001"));
-        var result = await resultTask.WithResult<CheckoutResult>();
+        var result = await resultTask;
 
-        Assert.IsType<NavigationSuccess<CheckoutResult>>(result);
-        var success = (NavigationSuccess<CheckoutResult>)result.Value!;
+        var success = Assert.IsType<NavigationSuccess<CheckoutResult>>(result.Value);
         Assert.Equal("TXN-001", success.Value.TransactionId);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // NavigateTo — Denied from OnNavigation
+    // Denied from OnNavigation
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task NavigateTo_WhenDeniedFromOnNavigation_ReturnsNavigationDenied()
+    public async Task NavigateTo_WhenDenied_ReturnsNavigationDenied()
     {
         var result = await _navigator.NavigateTo(new AdminRoute());
 
-        Assert.IsType<NavigationDenied>(result);
-        var denied = (NavigationDenied)result.Value!;
+        var denied = Assert.IsType<NavigationDenied>(result.Value);
         Assert.Equal("Access denied", denied.Reason);
     }
 
@@ -225,21 +261,19 @@ public sealed class NavigatorNavigationTests : IDisposable
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Pinned state — mid-await behavior
+    // Pinned state
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task NavigateTo_WithResult_CallerIsPinnedWhileAwaiting()
+    public async Task UntilReturns_CallerIsPinnedAfterOnNavigationConfirms()
     {
         await _navigator.NavigateTo(new HomeRoute());
         var homeEntry = _navigator.Breadcrumb[0];
 
-        // Start awaiting but don't complete yet
-        var resultTask = _navigator.NavigateTo(new PickerRoute());
+        var resultTask = _navigator.NavigateTo(new PickerRoute()).UntilReturns<PickerResult>();
 
         Assert.Equal(NavigationEntryState.Pinned, homeEntry.State);
 
-        // Complete
         GetCurrentVm<PickerViewModel>().Returns(new PickerResult("x"));
         await resultTask;
 
@@ -247,35 +281,47 @@ public sealed class NavigatorNavigationTests : IDisposable
     }
 
     [Fact]
-    public async Task NavigateTo_WithResult_PinnedCallerDoesNotReceiveOnSuspend()
+    public async Task UntilReturns_PinnedCallerDoesNotReceiveOnSuspend()
     {
         await _navigator.NavigateTo(new HomeRoute());
         var homeVm = (HomeViewModel)_navigator.Breadcrumb[0].NavigableInstance!;
 
-        var resultTask = _navigator.NavigateTo(new PickerRoute());
+        var resultTask = _navigator.NavigateTo(new PickerRoute()).UntilReturns<PickerResult>();
+
         GetCurrentVm<PickerViewModel>().Returns(new PickerResult("x"));
         await resultTask;
 
-        // OnSuspend must NOT have been called on HomeViewModel while it was Pinned
         Assert.DoesNotContain("OnSuspend", homeVm.Calls);
     }
 
     [Fact]
-    public async Task NavigateTo_WithResult_PinnedCallerDoesNotReceiveOnResume()
+    public async Task UntilReturns_PinnedCallerDoesNotReceiveOnResume()
     {
         await _navigator.NavigateTo(new HomeRoute());
         var homeVm = (HomeViewModel)_navigator.Breadcrumb[0].NavigableInstance!;
 
-        var resultTask = _navigator.NavigateTo(new PickerRoute());
+        var resultTask = _navigator.NavigateTo(new PickerRoute()).UntilReturns<PickerResult>();
+
         GetCurrentVm<PickerViewModel>().Returns(new PickerResult("x"));
         await resultTask;
 
-        // OnResume must NOT have been called — caller was Pinned, never truly left
         Assert.DoesNotContain("OnResume", homeVm.Calls);
     }
 
+    [Fact]
+    public async Task UntilReturns_WhenDenied_CallerNeverPinned()
+    {
+        await _navigator.NavigateTo(new HomeRoute());
+        var homeEntry = _navigator.Breadcrumb[0];
+
+        var result = await _navigator.NavigateTo(new AdminRoute()).UntilReturns();
+
+        Assert.Equal(NavigationEntryState.Active, homeEntry.State);
+        Assert.IsType<NavigationDenied>(result.Value);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
-    // NavigateBackward / NavigateForward
+    // Backward / Forward
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -284,8 +330,7 @@ public sealed class NavigatorNavigationTests : IDisposable
         await _navigator.NavigateTo(new HomeRoute());
         await _navigator.NavigateTo(new SearchRoute());
 
-        _navigator.NavigateBackward();
-        await Task.Delay(50); // allow async to settle
+        await _navigator.NavigateBackward();
 
         Assert.IsType<HomeRoute>(_navigator.Breadcrumb.Last().Route);
     }
@@ -295,11 +340,9 @@ public sealed class NavigatorNavigationTests : IDisposable
     {
         await _navigator.NavigateTo(new HomeRoute());
         await _navigator.NavigateTo(new SearchRoute());
-        _navigator.NavigateBackward();
-        await Task.Delay(50);
+        await _navigator.NavigateBackward();
 
-        _navigator.NavigateForward();
-        await Task.Delay(50);
+        await _navigator.NavigateForward();
 
         Assert.IsType<SearchRoute>(_navigator.Breadcrumb.Last().Route);
     }
@@ -309,10 +352,9 @@ public sealed class NavigatorNavigationTests : IDisposable
     {
         await _navigator.NavigateTo(new HomeRoute());
         await _navigator.NavigateTo(new SearchRoute());
-        await _navigator.NavigateTo(new OrderRoute(), new OrderParams(1));
+        await _navigator.NavigateTo(new OrderRoute(new OrderParams(1)));
 
-        _navigator.NavigateBackwardTo<HomeRoute>();
-        await Task.Delay(50);
+        await _navigator.NavigateBackwardTo<HomeRoute>();
 
         Assert.IsType<HomeRoute>(_navigator.Breadcrumb.Last().Route);
     }
@@ -322,13 +364,11 @@ public sealed class NavigatorNavigationTests : IDisposable
     {
         await _navigator.NavigateTo(new HomeRoute());
         await _navigator.NavigateTo(new SearchRoute());
-        await _navigator.NavigateTo(new OrderRoute(), new OrderParams(1));
+        await _navigator.NavigateTo(new OrderRoute(new OrderParams(1)));
 
-        _navigator.NavigateBackwardTo<HomeRoute>();
-        await Task.Delay(50);
+        await _navigator.NavigateBackwardTo<HomeRoute>();
 
-        _navigator.NavigateForwardTo<OrderRoute>();
-        await Task.Delay(50);
+        await _navigator.NavigateForwardTo<OrderRoute>();
 
         Assert.IsType<OrderRoute>(_navigator.Breadcrumb.Last().Route);
     }
@@ -338,10 +378,9 @@ public sealed class NavigatorNavigationTests : IDisposable
     {
         await _navigator.NavigateTo(new HomeRoute());
         await _navigator.NavigateTo(new SearchRoute());
-        await _navigator.NavigateTo(new OrderRoute(), new OrderParams(1));
+        await _navigator.NavigateTo(new OrderRoute(new OrderParams(1)));
 
-        _navigator.NavigateToIndex(0);
-        await Task.Delay(50);
+        await _navigator.NavigateToIndex(0);
 
         Assert.IsType<HomeRoute>(_navigator.Breadcrumb.Last().Route);
     }
@@ -355,12 +394,21 @@ public sealed class NavigatorNavigationTests : IDisposable
     {
         await _navigator.NavigateTo(new HomeRoute());
         await _navigator.NavigateTo(new SearchRoute());
-        await _navigator.NavigateTo(new OrderRoute(), new OrderParams(1));
+        await _navigator.NavigateTo(new OrderRoute(new OrderParams(1)));
 
         Assert.Equal(3, _navigator.Breadcrumb.Count);
         Assert.IsType<HomeRoute>(_navigator.Breadcrumb[0].Route);
         Assert.IsType<SearchRoute>(_navigator.Breadcrumb[1].Route);
         Assert.IsType<OrderRoute>(_navigator.Breadcrumb[2].Route);
+    }
+
+    [Fact]
+    public async Task Breadcrumb_RouteCarriesParameter()
+    {
+        await _navigator.NavigateTo(new OrderRoute(new OrderParams(42)));
+
+        var route = (OrderRoute)_navigator.Breadcrumb[0].Route;
+        Assert.Equal(42, route.Params.OrderId);
     }
 
     [Fact]
@@ -382,7 +430,7 @@ public sealed class NavigatorNavigationTests : IDisposable
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // History policy — PruneForwardOnBranch
+    // History policy
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -392,11 +440,9 @@ public sealed class NavigatorNavigationTests : IDisposable
 
         await _navigator.NavigateTo(new HomeRoute());
         await _navigator.NavigateTo(new SearchRoute());
-        _navigator.NavigateBackward();
-        await Task.Delay(50);
+        await _navigator.NavigateBackward();
 
-        // Navigate forward to a different route — should prune Search
-        await _navigator.NavigateTo(new OrderRoute(), new OrderParams(1));
+        await _navigator.NavigateTo(new OrderRoute(new OrderParams(1)));
 
         Assert.Equal(2, _navigator.Breadcrumb.Count);
         Assert.IsType<HomeRoute>(_navigator.Breadcrumb[0].Route);
@@ -439,13 +485,10 @@ public sealed class NavigatorNavigationTests : IDisposable
         await _navigator.NavigateTo(new HomeRoute());
         var homeVm = (HomeViewModel)_navigator.Breadcrumb[0].NavigableInstance!;
 
-        // Navigate forward keeping home alive
         _navigator.HistoryPolicy = NavigationHistoryPolicy.PreserveForwardOnBranch;
         await _navigator.NavigateTo(new SearchRoute());
 
-        // Navigate back
-        _navigator.NavigateBackward();
-        await Task.Delay(50);
+        await _navigator.NavigateBackward();
 
         Assert.Contains("OnResume", homeVm.Calls);
     }
@@ -453,45 +496,36 @@ public sealed class NavigatorNavigationTests : IDisposable
     [Fact]
     public async Task NavigateBack_CallsOnNavigationAgain_WhenInstanceWasEvicted()
     {
-        // Pool capacity 1 — Home will be evicted when Search is navigated to
         var (navigator, _, _) = NavigatorFactory.Create(poolCapacity: 1);
 
-        await navigator.NavigateTo(new HomeRoute());
-        await navigator.NavigateTo(new SearchRoute()); // Home evicted from pool
+        await navigator.NavigateTo(new SearchRoute()); // fills pool slot 1
+        await navigator.NavigateTo(new OrderRoute(new OrderParams(1))); // evicts Search
 
-        navigator.NavigateBackward();
-        await Task.Delay(50);
+        await navigator.NavigateBackward(); // Search reconstructed — new instance
 
-        // Home was reconstructed — OnNavigation called again on new instance
-        var homeEntry = navigator.Breadcrumb[0];
-        var homeVm = (HomeViewModel)homeEntry.NavigableInstance!;
-        Assert.Contains("OnNavigation:Backward", homeVm.Calls);
+        // Capture AFTER navigate back — this is the new reconstructed instance
+        var searchVm = (HomeViewModel)navigator.Breadcrumb[0].NavigableInstance!;
+        Assert.Contains("OnNavigation:Backward", searchVm.Calls);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Chained awaits — Home → Order → Checkout
+    // Chained awaits
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task ChainedAwaits_AllCallersPinnedUntilEachResolves()
+    public async Task ChainedAwaits_CallerPinnedAfterOnNavigationConfirms()
     {
-        // Navigate to Home normally — caller suspended
         await _navigator.NavigateTo(new HomeRoute());
         var homeEntry = _navigator.Breadcrumb[0];
 
-        // Home awaits Picker — pins Home
-        var pickerResultTask = _navigator.NavigateTo(new PickerRoute())
-            .UntilReturns<PickerResult>();
+        var resultTask = _navigator.NavigateTo(new PickerRoute()).UntilReturns<PickerResult>();
 
-        // Home should be Pinned now — navigation confirmed, awaiting result
         Assert.Equal(NavigationEntryState.Pinned, homeEntry.State);
 
-        // Picker resolves
         GetCurrentVm<PickerViewModel>().Returns(new PickerResult("Apple"));
-        var result = await pickerResultTask;
+        var result = await resultTask;
 
-        // Home unpinned after result delivered
-        Assert.IsType<NavigationSuccess<PickerResult>>(result);
+        Assert.IsType<NavigationSuccess<PickerResult>>(result.Value);
         Assert.Equal(NavigationEntryState.Active, homeEntry.State);
     }
 
@@ -501,9 +535,7 @@ public sealed class NavigatorNavigationTests : IDisposable
 
     [Fact]
     public void NavigatorLocator_ReturnsSetNavigator()
-    {
-        Assert.Same(_navigator, NavigatorLocator.GetNavigator());
-    }
+        => Assert.Same(_navigator, NavigatorLocator.GetNavigator());
 
     [Fact]
     public void NavigatorLocator_ThrowsWhenNotSet()
@@ -513,7 +545,7 @@ public sealed class NavigatorNavigationTests : IDisposable
     }
 
     [Fact]
-    public async Task NavigatorLocator_AsyncLocalIsolation_EachContextHasOwnNavigator()
+    public async Task NavigatorLocator_AsyncLocalIsolation()
     {
         var (navA, _, _) = NavigatorFactory.Create();
         var (navB, _, _) = NavigatorFactory.Create();
@@ -535,17 +567,13 @@ public sealed class NavigatorNavigationTests : IDisposable
     // ─────────────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task Dispose_ClearsHistoryAndDisposesScope()
+    public async Task Dispose_ClearsHistory()
     {
         await _navigator.NavigateTo(new HomeRoute());
         _navigator.Dispose();
 
         Assert.Empty(_navigator.Breadcrumb);
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ─────────────────────────────────────────────────────────────────────────
 
     private T GetCurrentVm<T>() where T : class
         => (T)_navigator.Breadcrumb.Last().NavigableInstance!;

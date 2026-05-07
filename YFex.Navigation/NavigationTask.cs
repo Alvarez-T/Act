@@ -3,95 +3,91 @@
 namespace YFex.NavigatR;
 
 /// <summary>
-/// Shared awaitable returned by <see cref="NavigationTask.WithResult{TResult}"/>
-/// and <see cref="NavigationTask{TRoute,TParameter}.WithResult{TResult}"/>.
+/// Awaitable returned by <see cref="NavigationTask.UntilReturns{TResult}"/>.
+/// Execution starts eagerly when UntilReturns is called — not when awaited.
 /// The caller is pinned until the ViewModel calls Returns(), Cancel(), or Deny().
 /// </summary>
 public sealed class NavigationTask<TResult>
 {
-    private readonly Func<Task<NavigationResult<TResult>>> _execute;
+    private readonly Task<NavigationResult<TResult>> _task;
 
-    internal NavigationTask(Func<Task<NavigationResult<TResult>>> execute)
-        => _execute = execute;
+    // Eager — task already running
+    internal NavigationTask(Task<NavigationResult<TResult>> task)
+        => _task = task;
 
     public TaskAwaiter<NavigationResult<TResult>> GetAwaiter()
-        => _execute().GetAwaiter();
+        => _task.GetAwaiter();
 }
 
 /// <summary>
-/// Returned by <see cref="Navigator.NavigateTo(IRoute,CancellationToken)"/>
-/// and <see cref="Navigator.NavigateTo(string,CancellationToken)"/>.
-/// Await directly to suspend caller normally, or chain WithResult to pin caller.
+/// Returned by all <see cref="Navigator.NavigateTo"/> overloads.
+/// <para>
+/// <b>Await directly</b> — lazy execution. Fires navigation when awaited.
+/// Caller suspended normally after <see cref="INavigable.OnNavigation"/> confirms.
+/// Resumes immediately after OnNavigation completes. Result discarded.
+/// </para>
+/// <para>
+/// <b><see cref="UntilReturns()"/></b> — eager execution. Starts immediately when called.
+/// Pins caller after OnNavigation confirms. Waits until screen closes via back navigation.
+/// Returns <see cref="NavigationResult"/>.
+/// </para>
+/// <para>
+/// <b><see cref="UntilReturns{TResult}"/></b> — eager execution. Starts immediately when called.
+/// Pins caller after OnNavigation confirms. Waits until ViewModel calls Returns(), Cancel(), or Deny().
+/// Returns <see cref="NavigationResult{TResult}"/>.
+/// </para>
 /// </summary>
 public sealed class NavigationTask
 {
     private readonly Navigator _navigator;
     private readonly IRoute _route;
-    private readonly object? _parameter;
     private readonly CancellationToken _ct;
 
-    internal NavigationTask(Navigator navigator, IRoute route, object? parameter, CancellationToken ct)
+    // Eager task — set when UntilReturns() is called
+    private readonly Task<NavigationResult>? _eagerTask;
+
+    // Lazy constructor — used by Navigator.NavigateTo(), runs on await
+    internal NavigationTask(Navigator navigator, IRoute route, CancellationToken ct)
     {
         _navigator = navigator;
         _route = route;
-        _parameter = parameter;
         _ct = ct;
     }
 
-    /// <summary>
-    /// Fires the navigation. Caller suspended normally. Result discarded.
-    /// </summary>
-    public TaskAwaiter<NavigationResult> GetAwaiter()
-        => _navigator.ExecuteNavigationAsync(_route, _parameter, _ct).GetAwaiter();
+    // Eager constructor — used internally by UntilReturns()
+    private NavigationTask(Navigator navigator, IRoute route, CancellationToken ct,
+        Task<NavigationResult> eagerTask)
+    {
+        _navigator = navigator;
+        _route = route;
+        _ct = ct;
+        _eagerTask = eagerTask;
+    }
 
     /// <summary>
-    /// Opts into result awaiting. Caller pinned.
+    /// Lazy — fires navigation when awaited.
+    /// Caller suspended normally. Result discarded.
+    /// </summary>
+    public TaskAwaiter<NavigationResult> GetAwaiter()
+        => (_eagerTask ?? _navigator.ExecuteNavigationAsync(_route, _ct)).GetAwaiter();
+
+    /// <summary>
+    /// Eager — starts execution immediately.
+    /// Pins caller after OnNavigation confirms.
+    /// Waits until screen closes via back navigation.
+    /// </summary>
+    public NavigationTask UntilReturns()
+    {
+        var task = _navigator.ExecuteNavigationUntilClosedAsync(_route, _ct);
+        return new NavigationTask(_navigator, _route, _ct, task);
+    }
+
+    /// <summary>
+    /// Eager — starts execution immediately.
+    /// Pins caller after OnNavigation confirms.
+    /// Waits until ViewModel calls Returns(), Cancel(), or Deny().
     /// Runtime error if ViewModel does not implement INavigable&lt;TResult&gt;.
     /// </summary>
-    public NavigationTask<TResult> WithResult<TResult>()
-        => new(() => _navigator.ExecuteNavigationWithResultAsync<TResult>(_route, _parameter, _ct));
-
-    /// <summary>
-    /// Pins caller and waits until ViewModel calls Returns(), Cancel(), or Deny().
-    /// Compile error if TRoute does not implement IRoute&lt;TParameter, TResult&gt;.
-    /// </summary>
     public NavigationTask<TResult> UntilReturns<TResult>()
-        => new(() => _navigator.ExecuteNavigationWithResultAsync<TResult>(_route, _parameter, _ct));
-
-    public NavigationTask<NavigationResult> UntilReturns()
-        => new(() => _navigator.ExecuteNavigationUntilClosedAsync(_route, _parameter, _ct));
-}
-
-/// <summary>
-/// Returned by <see cref="Navigator.NavigateTo{TRoute,TParameter}"/>.
-/// Await directly to suspend caller normally, or chain WithResult to pin caller.
-/// </summary>
-public sealed class NavigationTask<TRoute, TParameter>
-    where TRoute : IRouteAccepts<TParameter>
-{
-    private readonly Navigator _navigator;
-    private readonly TRoute _route;
-    private readonly TParameter _parameter;
-    private readonly CancellationToken _ct;
-
-    internal NavigationTask(Navigator navigator, TRoute route, TParameter parameter, CancellationToken ct)
-    {
-        _navigator = navigator;
-        _route = route;
-        _parameter = parameter;
-        _ct = ct;
-    }
-
-    /// <summary>
-    /// Fires the navigation. Caller suspended normally. Result discarded.
-    /// </summary>
-    public TaskAwaiter<NavigationResult> GetAwaiter()
-        => _navigator.ExecuteNavigationAsync(_route, _parameter, _ct).GetAwaiter();
-
-    /// <summary>
-    /// Opts into result awaiting. Caller pinned.
-    /// Compile error if TRoute does not implement IRoute&lt;TParameter, TResult&gt;.
-    /// </summary>
-    public NavigationTask<TResult> WithResult<TResult>()
-        => new(() => _navigator.ExecuteNavigationWithResultAsync<TParameter, TResult>(_route, _parameter, _ct));
+        => new(_navigator.ExecuteNavigationWithResultAsync<TResult>(_route, _ct));
 }

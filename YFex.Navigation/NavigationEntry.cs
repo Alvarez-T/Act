@@ -1,5 +1,9 @@
 ﻿namespace YFex.NavigatR;
 
+/// <summary>
+/// Base navigation history entry.
+/// The parameter is stored on the route itself — no separate boxing needed.
+/// </summary>
 public abstract class NavigationEntry
 {
     public IRoute Route { get; }
@@ -9,7 +13,12 @@ public abstract class NavigationEntry
 
     internal INavigable? NavigableInstance { get; set; }
     internal Type? ResolvedViewModelType { get; set; }
-    internal abstract object? BoxedParameter { get; }
+
+    /// <summary>
+    /// Optional callback fired when this entry is closed via back navigation.
+    /// Used by UntilReturns() to complete the caller's awaitable.
+    /// </summary>
+    internal Action? OnClosed { get; set; }
 
     private protected NavigationEntry(IRoute route)
     {
@@ -29,13 +38,15 @@ public abstract class NavigationEntry
     }
 }
 
+/// <summary>
+/// Strongly-typed navigation entry.
+/// The typed route is accessible without casting via <see cref="Route"/>.
+/// </summary>
 public sealed class NavigationEntry<TRoute> : NavigationEntry
     where TRoute : IRoute
 {
     public new TRoute Route => (TRoute)base.Route;
-    public object? Parameter { get; }
-    internal override object? BoxedParameter => Parameter;
 
-    public NavigationEntry(TRoute route, object? parameter)
-        : base(route) => Parameter = parameter;
+    public NavigationEntry(TRoute route)
+        : base(route) { }
 }

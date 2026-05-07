@@ -4,16 +4,13 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Text;
+using YFex.NavigatR.SourceGenerator;
 
-namespace YFex.NavigatR.SourceGenerator;
+namespace YFex.NavigatR.Generator;
 
 [Generator]
 public sealed class NavigatRGenerator : IIncrementalGenerator
 {
-    // -----------------------------------------------------------------------
-    // Diagnostics
-    // -----------------------------------------------------------------------
-
     private static readonly DiagnosticDescriptor s_nav001 = new(
         "NAV001", "[Route] requires partial",
         "[Route] requires '{0}' to be declared as partial.",
@@ -34,10 +31,6 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
         "Route name '{0}' would generate '{1}Route' which conflicts with an existing type.",
         "YFex.NavigatR", DiagnosticSeverity.Warning, true);
 
-    // -----------------------------------------------------------------------
-    // Initialize
-    // -----------------------------------------------------------------------
-
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var pipeline = context.SyntaxProvider
@@ -48,18 +41,12 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
             .Where(static m => m is not null)
             .Select(static (m, _) => m!.Value);
 
-        // 1. Diagnostics + generated Route class
         context.RegisterSourceOutput(pipeline,
             static (spc, model) => EmitDiagnosticsAndRoute(spc, model));
 
-        // 2. ViewModel partial:
-        //    - When Parameter declared: explicit INavigable.OnNavigation bridge
-        //      + file-scoped GetParameter() extension + enforced partial OnNavigation(TParam, ct)
-        //    - When INavigable<TResult>: Returns(), Cancel(), Deny(), WaitForResultAsync()
         context.RegisterSourceOutput(pipeline,
             static (spc, model) => EmitViewModelPartial(spc, model));
 
-        // 3. NavigatRRegistration.g.cs
         var registrationPipeline = pipeline
             .Collect()
             .Select(static (models, _) =>
@@ -89,22 +76,16 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
             static (spc, model) => EmitRegistration(spc, model));
     }
 
-    // -----------------------------------------------------------------------
-    // Transform
-    // -----------------------------------------------------------------------
-
     private static RouteViewModel? ExtractModel(
         GeneratorAttributeSyntaxContext ctx,
         System.Threading.CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-
         if (ctx.TargetNode is not ClassDeclarationSyntax classDecl) return null;
         if (ctx.TargetSymbol is not INamedTypeSymbol symbol) return null;
 
         string ns = symbol.ContainingNamespace is { IsGlobalNamespace: false } nsSymbol
-            ? nsSymbol.ToDisplayString()
-            : string.Empty;
+            ? nsSymbol.ToDisplayString() : string.Empty;
 
         bool isPartial = false;
         foreach (var mod in classDecl.Modifiers)
@@ -125,7 +106,6 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
             break;
         }
 
-        // Parse [Route] attribute
         var attr = ctx.Attributes[0];
         if (attr.ConstructorArguments.Length == 0) return null;
 
@@ -134,6 +114,7 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
         bool manualRouteTypeIsValid = true;
         string? displayName = null;
         string? paramsTypeName = null;
+        bool parameterRequired = true;
         RouteMode mode;
 
         var arg = attr.ConstructorArguments[0];
@@ -150,27 +131,37 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
                     typeQualificationStyle: SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces));
             manualRouteTypeIsValid = HasInterface(routeTypeSymbol, "YFex.NavigatR", "IRoute")
                 || IsInterface(routeTypeSymbol, "YFex.NavigatR", "IRoute");
+
+            // For manual routes — try to read parameter type from constructor
+            foreach (var ctor in routeTypeSymbol.Constructors)
+            {
+                if (ctor.Parameters.Length == 1)
+                {
+                    paramsTypeName = ctor.Parameters[0].Type
+                        .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    // Check nullability for ParameterRequired
+                    parameterRequired = ctor.Parameters[0].Type.NullableAnnotation
+                        != NullableAnnotation.Annotated;
+                    break;
+                }
+            }
+
             mode = RouteMode.Manual;
         }
         else return null;
 
-        // Named args: DisplayName, Parameter, ParameterRequired
-        bool parameterRequired = true; // default required
         foreach (var named in attr.NamedArguments)
         {
             if (named.Key == "DisplayName" && named.Value.Value is string dn)
                 displayName = dn;
-
             if (named.Key == "Parameter" && named.Value.Value is INamedTypeSymbol paramTypeSymbol)
                 paramsTypeName = paramTypeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-
             if (named.Key == "ParameterRequired" && named.Value.Value is bool req)
                 parameterRequired = req;
         }
 
         string? generatedRouteClassName = mode == RouteMode.AutoGenerate && routeName is not null
-            ? DeriveRouteClassName(routeName)
-            : null;
+            ? DeriveRouteClassName(routeName) : null;
 
         return new RouteViewModel(
             Namespace: ns,
@@ -188,10 +179,6 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
             ProducesResult: producesResult,
             DisplayName: displayName);
     }
-
-    // -----------------------------------------------------------------------
-    // Emit — Route class + diagnostics
-    // -----------------------------------------------------------------------
 
     private static void EmitDiagnosticsAndRoute(SourceProductionContext spc, RouteViewModel model)
     {
@@ -213,19 +200,9 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
 
         if (model.Mode != RouteMode.AutoGenerate || model.GeneratedRouteClassName is null) return;
 
-        // Route interface mirrors ViewModel's contracts
-        // Required parameter → IRouteAccepts<T> enforces parameter at NavigateTo call site
-        // Optional parameter → IRoute (no constraint, NavigateTo without parameter is valid)
+        // Route interface
         string interfaceClause;
-        if (model.ParamsTypeName is not null && model.ResultTypeName is not null)
-            interfaceClause = model.ParameterRequired
-                ? $"global::YFex.NavigatR.IRoute<{model.ParamsTypeName}, {model.ResultTypeName}>"
-                : $"global::YFex.NavigatR.IRouteProduces<{model.ResultTypeName}>";
-        else if (model.ParamsTypeName is not null)
-            interfaceClause = model.ParameterRequired
-                ? $"global::YFex.NavigatR.IRouteAccepts<{model.ParamsTypeName}>"
-                : "global::YFex.NavigatR.IRoute";
-        else if (model.ResultTypeName is not null)
+        if (model.ResultTypeName is not null)
             interfaceClause = $"global::YFex.NavigatR.IRouteProduces<{model.ResultTypeName}>";
         else
             interfaceClause = "global::YFex.NavigatR.IRoute";
@@ -233,6 +210,15 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
         string displayNameLiteral = model.DisplayName is not null
             ? "\"" + model.DisplayName.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""
             : "null";
+
+        // Constructor parameter — required = T, optional = T? = null
+        string? ctorParam = null;
+        if (model.ParamsTypeName is not null)
+        {
+            ctorParam = model.ParameterRequired
+                ? $"{model.ParamsTypeName} Params"
+                : $"{model.ParamsTypeName}? Params = null";
+        }
 
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
@@ -245,8 +231,19 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
-        sb.Append("public sealed record "); sb.Append(model.GeneratedRouteClassName);
-        sb.Append(" : "); sb.AppendLine(interfaceClause);
+        // Record with optional constructor param
+        if (ctorParam is not null)
+        {
+            sb.Append("public sealed record "); sb.Append(model.GeneratedRouteClassName);
+            sb.Append("("); sb.Append(ctorParam); sb.Append(") : ");
+            sb.AppendLine(interfaceClause);
+        }
+        else
+        {
+            sb.Append("public sealed record "); sb.Append(model.GeneratedRouteClassName);
+            sb.Append(" : "); sb.AppendLine(interfaceClause);
+        }
+
         sb.AppendLine("{");
         sb.Append("    public string? DisplayName => "); sb.Append(displayNameLiteral); sb.AppendLine(";");
         sb.AppendLine("}");
@@ -257,24 +254,6 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
 
         spc.AddSource(hintName, sb.ToString());
     }
-
-    // -----------------------------------------------------------------------
-    // Emit — ViewModel partial
-    //
-    // Generates up to three concerns in a single file:
-    //
-    // A) Parameter declared ([Route(Parameter = typeof(T))]):
-    //    - Explicit INavigable.OnNavigation bridge (invisible in IntelliSense)
-    //    - file-scoped GetParameter() extension (visible only in this file)
-    //    - public partial Task OnNavigation(TParam, ct) declaration (enforces implementation)
-    //
-    // B) INavigable<TResult> implemented:
-    //    - Private TCS
-    //    - Returns(TResult) — auto-wraps to Success
-    //    - Cancel() — produces Cancelled
-    //    - Deny(string?) — produces Denied
-    //    - Explicit INavigable<TResult>.WaitForResultAsync() (invisible in IntelliSense)
-    // -----------------------------------------------------------------------
 
     private static void EmitViewModelPartial(SourceProductionContext spc, RouteViewModel model)
     {
@@ -291,9 +270,6 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
         var tcsType = hasResult
             ? $"global::System.Threading.Tasks.TaskCompletionSource<{resultUnion}>"
             : null;
-        var taskResult = hasResult
-            ? $"global::System.Threading.Tasks.Task<{resultUnion}>"
-            : null;
 
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
@@ -309,109 +285,84 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
         sb.AppendLine($"partial class {model.ViewModelName}");
         sb.AppendLine("{");
 
-        // ── A) Parameter wiring ──────────────────────────────────────────────
-
         if (hasParam)
         {
-            // Parameter type — nullable when optional
             string paramType = model.ParameterRequired ? p! : $"{p}?";
 
-            // Explicit interface implementation — invisible in IntelliSense
-            // When required: calls GetParameter<T>() which throws if missing
-            // When optional: calls TryGetParameter<T>() and passes null if missing
+            // Explicit interface bridge — reads Params property from route
             sb.AppendLine("    // Parameter bridge — not visible in IntelliSense");
             sb.AppendLine($"    global::System.Threading.Tasks.Task global::YFex.NavigatR.INavigable.OnNavigation(");
             sb.AppendLine($"        global::YFex.NavigatR.NavigationContext context,");
             sb.AppendLine($"        global::System.Threading.CancellationToken ct)");
 
+            // Determine the fully-qualified route type for the direct cast
+            string routeTypeFqn = model.Mode == RouteMode.AutoGenerate
+                ? (string.IsNullOrEmpty(model.Namespace)
+                    ? $"global::{model.GeneratedRouteClassName}"
+                    : $"global::{model.Namespace}.{model.GeneratedRouteClassName}")
+                : $"global::{model.ManualRouteTypeName}";
+
             if (model.ParameterRequired)
             {
-                sb.AppendLine($"        => OnNavigation(context.GetParameter<{p}>(), ct);");
+                // Direct cast — no reflection, no GetParameter<T>()
+                sb.AppendLine($"        => OnNavigation((({routeTypeFqn})context.Route).Params, ct);");
             }
             else
             {
                 sb.AppendLine($"    {{");
-                sb.AppendLine($"        context.TryGetParameter<{p}>(out var __param);");
-                sb.AppendLine($"        return OnNavigation(__param, ct);");
+                sb.AppendLine($"        return OnNavigation((({routeTypeFqn})context.Route).Params, ct);");
                 sb.AppendLine($"    }}");
             }
 
             sb.AppendLine();
-
-            // Enforced partial — compiler error if developer does not implement this
-            sb.AppendLine("    /// <summary>Called when the screen is navigated to with the typed parameter.</summary>");
+            sb.AppendLine($"    /// <summary>Called when the screen is navigated to.</summary>");
             sb.AppendLine($"    public partial global::System.Threading.Tasks.Task OnNavigation(");
             sb.AppendLine($"        {paramType} parameter,");
             sb.AppendLine($"        global::System.Threading.CancellationToken ct = default);");
             sb.AppendLine();
         }
 
-        // ── B) Result wiring ─────────────────────────────────────────────────
-
         if (hasResult)
         {
-            // Private TCS — invisible to developer
             sb.AppendLine($"    private readonly {tcsType} _navigationResultTcs");
-            sb.AppendLine($"        = new {tcsType}(");
-            sb.AppendLine($"            global::System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);");
+            sb.AppendLine($"        = new {tcsType}(global::System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);");
             sb.AppendLine();
 
-            // Returns(TResult) — auto-wraps into Success
-            sb.AppendLine($"    /// <summary>Signal completion with a result. Closes this screen and resumes the caller.</summary>");
             sb.AppendLine($"    public void Returns({r} result)");
             sb.AppendLine($"        => _navigationResultTcs.TrySetResult(new {resultUnion}.Success(result));");
             sb.AppendLine();
 
-            // Cancel()
-            sb.AppendLine($"    /// <summary>Signal that the user cancelled. Closes this screen.</summary>");
             sb.AppendLine($"    public void Cancel()");
             sb.AppendLine($"        => _navigationResultTcs.TrySetResult(new {resultUnion}.Cancelled());");
             sb.AppendLine();
 
-            // Deny(string?)
-            sb.AppendLine($"    /// <summary>Signal denial with an optional reason. Closes this screen.</summary>");
             sb.AppendLine($"    public void Deny(string? reason = null)");
             sb.AppendLine($"        => _navigationResultTcs.TrySetResult(new {resultUnion}.Denied(reason));");
             sb.AppendLine();
 
-            // WaitForResultAsync() — explicit interface impl, invisible in IntelliSense
-            sb.AppendLine($"    // Navigator-internal — not visible in IntelliSense");
-            sb.AppendLine($"    {taskResult}");
+            sb.AppendLine($"    {$"global::System.Threading.Tasks.Task<{resultUnion}>"}");
             sb.AppendLine($"        global::YFex.NavigatR.INavigable<{r}>.WaitForResultAsync()");
             sb.AppendLine($"        => _navigationResultTcs.Task;");
-            sb.AppendLine();
         }
 
         sb.AppendLine("}");
 
-        // ── file-scoped GetParameter() extension ─────────────────────────────
-        // 'file' keyword makes this visible ONLY within this generated file.
-        // The developer's partial implementation is in a separate file and cannot see this,
-        // but since the bridge calls context.GetParameter<T>() directly, the extension
-        // is available where it is used (inside this generated file only).
-
+        // File-scoped GetParameter() extension — direct cast, no reflection
         if (hasParam)
         {
             string paramType = model.ParameterRequired ? p! : $"{p}?";
+            string routeTypeFqn2 = model.Mode == RouteMode.AutoGenerate
+                ? (string.IsNullOrEmpty(model.Namespace)
+                    ? $"global::{model.GeneratedRouteClassName}"
+                    : $"global::{model.Namespace}.{model.GeneratedRouteClassName}")
+                : $"global::{model.ManualRouteTypeName}";
+
             sb.AppendLine();
-            sb.AppendLine("// File-scoped — only visible within this generated file");
             sb.AppendLine($"file static class NavigationContextExtensions_{model.ViewModelName}");
             sb.AppendLine("{");
-            if (model.ParameterRequired)
-            {
-                sb.AppendLine($"    internal static {p} GetParameter(");
-                sb.AppendLine($"        this global::YFex.NavigatR.NavigationContext context)");
-                sb.AppendLine($"        => context.GetParameter<{p}>();");
-            }
-            else
-            {
-                sb.AppendLine($"    internal static {paramType} GetParameter(");
-                sb.AppendLine($"        this global::YFex.NavigatR.NavigationContext context)");
-                sb.AppendLine($"    {{");
-                sb.AppendLine($"        context.TryGetParameter<{p}>(out var value);");
-                sb.AppendLine($"        return value;");
-                sb.AppendLine($"    }}");
-            }
+            sb.AppendLine($"    internal static {paramType} GetParameter(");
+            sb.AppendLine($"        this global::YFex.NavigatR.NavigationContext context)");
+            sb.AppendLine($"        => (({routeTypeFqn2})context.Route).Params;");
             sb.AppendLine("}");
         }
 
@@ -421,10 +372,6 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
 
         spc.AddSource(hintName, sb.ToString());
     }
-
-    // -----------------------------------------------------------------------
-    // Emit — NavigatRRegistration.g.cs
-    // -----------------------------------------------------------------------
 
     private static void EmitRegistration(SourceProductionContext spc, RegistrationModel model)
     {
@@ -453,10 +400,6 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
 
         spc.AddSource("NavigatRRegistration.g.cs", sb.ToString());
     }
-
-    // -----------------------------------------------------------------------
-    // Helpers
-    // -----------------------------------------------------------------------
 
     private static bool HasInterface(INamedTypeSymbol symbol, string ns, string name)
     {
