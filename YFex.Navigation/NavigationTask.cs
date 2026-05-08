@@ -46,12 +46,16 @@ public sealed class NavigationTask
     // Eager task — set when UntilReturns() is called
     private readonly Task<NavigationResult>? _eagerTask;
 
+    private readonly NavigationEntry? _prefetchedEntry;
+
     // Lazy constructor — used by Navigator.NavigateTo(), runs on await
-    internal NavigationTask(Navigator navigator, IRoute route, CancellationToken ct)
+    internal NavigationTask(Navigator navigator, IRoute route, CancellationToken ct,
+        NavigationEntry? prefetchedEntry = null)
     {
         _navigator = navigator;
         _route = route;
         _ct = ct;
+        _prefetchedEntry = prefetchedEntry;
     }
 
     // Eager constructor — used internally by UntilReturns()
@@ -69,7 +73,7 @@ public sealed class NavigationTask
     /// Caller suspended normally. Result discarded.
     /// </summary>
     public TaskAwaiter<NavigationResult> GetAwaiter()
-        => (_eagerTask ?? _navigator.ExecuteNavigationAsync(_route, _ct)).GetAwaiter();
+        => (_eagerTask ?? _navigator.ExecuteNavigationAsync(_route, _ct, _prefetchedEntry)).GetAwaiter();
 
     /// <summary>
     /// Eager — starts execution immediately.

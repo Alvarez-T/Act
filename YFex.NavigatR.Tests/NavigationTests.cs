@@ -1,5 +1,4 @@
-﻿using YFex.NavigatR;
-using Xunit;
+﻿using Xunit;
 
 namespace YFex.NavigatR.Tests;
 

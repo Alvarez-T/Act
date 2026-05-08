@@ -1,8 +1,22 @@
 ﻿using System;
+using YFex.NavigatR.SourceGenerator;
 
-namespace YFex.NavigatR.SourceGenerator
+namespace YFex.NavigatR.Generator
 {
+
     internal enum RouteMode { AutoGenerate, Manual }
+
+    /// <summary>
+    /// Describes a single [Prefetch]-marked method on a ViewModel.
+    /// </summary>
+    internal readonly record struct PrefetchMethod(
+        /// <summary>Original method name e.g. "FetchOrder"</summary>
+        string MethodName,
+        /// <summary>Fully qualified return type if Task&lt;T&gt;, null if Task (warm-only)</summary>
+        string? ReturnTypeName,
+        /// <summary>Whether this method produces a value to inject into OnNavigation</summary>
+        bool ProducesValue
+    ) : IEquatable<PrefetchMethod>;
 
     internal readonly record struct RouteViewModel(
         string Namespace,
@@ -14,14 +28,12 @@ namespace YFex.NavigatR.SourceGenerator
         string? GeneratedRouteClassName,
         string? ManualRouteTypeName,
         bool ManualRouteTypeIsValid,
-        /// <summary>From [Route(Parameter = typeof(T))] — null if not declared.</summary>
         string? ParamsTypeName,
-        /// <summary>Whether the parameter is required at the NavigateTo call site. Default true.</summary>
         bool ParameterRequired,
-        /// <summary>TResult from INavigable&lt;TResult&gt; — null if not implemented.</summary>
         string? ResultTypeName,
         bool ProducesResult,
-        string? DisplayName
+        string? DisplayName,
+        EquatableArray<PrefetchMethod> PrefetchMethods
     ) : IEquatable<RouteViewModel>;
 
     internal readonly record struct RegistrationModel(

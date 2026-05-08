@@ -12,24 +12,179 @@ public sealed class Navigator : IDisposable
 
     internal Guid Id { get; } = Guid.NewGuid();
     public NavigationHistoryPolicy HistoryPolicy { get; internal set; } = NavigationHistoryPolicy.PruneForwardOnBranch;
-    internal INavigation? NavPane { get; set; }
+
+    private INavigation? _navPane;
+    internal INavigation? NavPane
+    {
+        get => _navPane;
+        set
+        {
+            // Unsubscribe from old navPane AFK events
+            if (_navPane is not null)
+            {
+                _navPane.UserBecameInactive -= OnUserBecameInactive;
+                _navPane.UserBecameActive -= OnUserBecameActive;
+            }
+            _navPane = value;
+            // Subscribe to new navPane AFK events
+            if (_navPane is not null)
+            {
+                _navPane.UserBecameInactive += OnUserBecameInactive;
+                _navPane.UserBecameActive += OnUserBecameActive;
+            }
+        }
+    }
+
+    private readonly PrefetchPolicy _prefetchPolicy;
+    private readonly TimeSpan _prefetchTimeout;
+    private readonly List<PrefetchToken> _activePrefetches = new();
 
     public IReadOnlyList<NavigationEntry> Breadcrumb =>
         _history.Take(_cursor + 1).ToList().AsReadOnly();
 
-    public Navigator(IServiceScope scope, RouteRegistry routeRegistry, int poolCapacity = 10)
+    public Navigator(
+        IServiceScope scope,
+        RouteRegistry routeRegistry,
+        int poolCapacity = 10,
+        PrefetchPolicy prefetchPolicy = PrefetchPolicy.CancelPrevious,
+        TimeSpan? prefetchTimeout = null,
+        TimeSpan? suspendedTimeout = null)
     {
         _scope = scope;
         _routeRegistry = routeRegistry;
-        _pool = new NavigablePool(poolCapacity);
+        _pool = new NavigablePool(poolCapacity, suspendedTimeout);
+        _prefetchPolicy = prefetchPolicy;
+        _prefetchTimeout = prefetchTimeout ?? TimeSpan.FromSeconds(30);
     }
 
     // -----------------------------------------------------------------------
     // Public API
     // -----------------------------------------------------------------------
-
     public NavigationTask NavigateTo(IRoute route, CancellationToken ct = default)
         => new(this, route, ct);
+
+    /// <summary>
+    /// Navigates using a <see cref="PrefetchToken"/> — promotes the prefetched entry
+    /// to active navigation without re-resolving the ViewModel.
+    /// Falls back to fresh navigation if token is expired or cancelled.
+    /// </summary>
+    public NavigationTask NavigateTo(PrefetchToken token, CancellationToken ct = default)
+    {
+        if (token.IsExpired || token.PrefetchedEntry is null)
+            return new NavigationTask(this, token.Route, ct);
+
+        return new NavigationTask(this, token.Route, ct, token.PrefetchedEntry);
+    }
+
+    /// <summary>
+    /// Starts prefetching the ViewModel for the given route.
+    /// Returns a <see cref="PrefetchToken"/> to pass to
+    /// <see cref="NavigateTo(PrefetchToken, CancellationToken)"/> when navigation is confirmed.
+    /// </summary>
+    /// <param name="route">The route to prefetch. Carries the parameter in its constructor.</param>
+    /// <param name="timeout">
+    /// How long to keep the prefetched entry alive. Defaults to the context's prefetchTimeout.
+    /// </param>
+    /// <param name="cancelPrevious">
+    /// Overrides the context's <see cref="PrefetchPolicy"/> for this call.
+    /// </param>
+    public PrefetchToken Prefetch(
+        IRoute route,
+        TimeSpan? timeout = null,
+        bool? cancelPrevious = null)
+    {
+        // Same route + same params → reuse existing token
+        var existing = _activePrefetches.Find(t => t.IsSameRoute(route));
+        if (existing is not null && !existing.IsExpired)
+            return existing;
+
+        // Different route — cancel previous if policy demands
+        bool shouldCancel = cancelPrevious ?? (_prefetchPolicy == PrefetchPolicy.CancelPrevious);
+        if (shouldCancel)
+        {
+            foreach (var t in _activePrefetches.ToList())
+            {
+                t.Cancel();
+                _activePrefetches.Remove(t);
+            }
+        }
+
+        var token = new PrefetchToken(route, timeout ?? _prefetchTimeout);
+        _activePrefetches.Add(token);
+
+        // Resolve ViewModel and start OnPrefetch off UI thread
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                var vmType = ResolveViewModelType(route);
+                var navigable = ResolveNavigable(vmType);
+                var ctx = BuildContext(route, NavigationDirection.Forward);
+
+                var entry = new NavigationEntry<IRoute>(route)
+                {
+                    NavigableInstance = navigable,
+                    ResolvedViewModelType = vmType,
+                    State = NavigationEntryState.Prefetching
+                };
+
+                token.PrefetchedEntry = entry;
+
+                await navigable.OnPrefetch(ctx, token.CancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) { }
+            catch
+            {
+                token.Cancel();
+                _activePrefetches.Remove(token);
+            }
+        });
+
+        // Auto-expire token when timeout reached
+        _ = Task.Delay(timeout ?? _prefetchTimeout).ContinueWith(_ =>
+        {
+            token.Cancel();
+            _activePrefetches.Remove(token);
+        });
+
+        return token;
+    }
+
+    /// <summary>
+    /// Called by the platform (via <see cref="INavigation.UserBecameInactive"/>) when
+    /// the user goes AFK. Calls <see cref="INavigable.OnSuspend"/> on the active
+    /// ViewModel without changing its state.
+    /// </summary>
+    public async void NotifyInactive(CancellationToken ct = default)
+    {
+        if (_cursor < 0 || _cursor >= _history.Count) return;
+        var entry = _history[_cursor];
+        if (entry.State != NavigationEntryState.Active) return;
+        if (entry.NavigableInstance is null) return;
+
+        await entry.NavigableInstance.OnSuspend(ct);
+        // State intentionally NOT changed — screen is still showing
+    }
+
+    /// <summary>
+    /// Called by the platform (via <see cref="INavigation.UserBecameActive"/>) when
+    /// the user returns from AFK. Calls <see cref="INavigable.OnActive"/> on the
+    /// active ViewModel without changing its state.
+    /// </summary>
+    public async void NotifyActive(CancellationToken ct = default)
+    {
+        if (_cursor < 0 || _cursor >= _history.Count) return;
+        var entry = _history[_cursor];
+        if (entry.State != NavigationEntryState.Active) return;
+        if (entry.NavigableInstance is null) return;
+
+        await entry.NavigableInstance.OnActive(ct);
+        // State intentionally NOT changed
+    }
+
+    private void OnUserBecameInactive() => NotifyInactive();
+    private void OnUserBecameActive() => NotifyActive();
 
     public NavigationTask NavigateTo(string route, CancellationToken ct = default)
     {
@@ -242,7 +397,7 @@ public sealed class Navigator : IDisposable
                 ??= (entry.Route is AnonymousRoute anon
                     ? anon.ViewModelType
                     : _routeRegistry.ResolveViewModel(entry.Route));
-            NavPane?.PerformNavigation(_scope.Resolve(vmType));
+            _navPane?.PerformNavigation(_scope.Resolve(vmType));
             return;
         }
 
@@ -254,65 +409,78 @@ public sealed class Navigator : IDisposable
     // Internal — called by NavigationTask
     // -----------------------------------------------------------------------
 
-    internal Task<NavigationResult> ExecuteNavigationAsync(IRoute route, CancellationToken ct)
-        => ExecuteNavigationCoreAsync(route, ct);
+    internal Task<NavigationResult> ExecuteNavigationAsync(
+        IRoute route, CancellationToken ct, NavigationEntry? prefetchedEntry = null)
+        => ExecuteNavigationCoreAsync(route, ct, prefetchedEntry);
 
-    internal Task<NavigationResult> ExecuteNavigationUntilClosedAsync(IRoute route, CancellationToken ct)
-        => ExecuteUntilClosedCoreAsync(route, ct);
+    internal Task<NavigationResult> ExecuteNavigationUntilClosedAsync(
+        IRoute route, CancellationToken ct, NavigationEntry? prefetchedEntry = null)
+        => ExecuteUntilClosedCoreAsync(route, ct, prefetchedEntry);
 
     internal Task<NavigationResult<TResult>> ExecuteNavigationWithResultAsync<TResult>(
-        IRoute route, CancellationToken ct)
-        => ExecuteWithResultCoreAsync<TResult>(route, ct);
+        IRoute route, CancellationToken ct, NavigationEntry? prefetchedEntry = null)
+        => ExecuteWithResultCoreAsync<TResult>(route, ct, prefetchedEntry);
 
     // -----------------------------------------------------------------------
     // Private — core execution
     // -----------------------------------------------------------------------
 
-    private async Task<NavigationResult> ExecuteNavigationCoreAsync(IRoute route, CancellationToken ct)
+    private async Task<NavigationResult> ExecuteNavigationCoreAsync(
+        IRoute route, CancellationToken ct, NavigationEntry? prefetchedEntry = null)
     {
-        var vmType = ResolveViewModelType(route);
-        var navigable = ResolveNavigable(vmType);
-        var ctx = BuildContext(route);
+        var vmType = prefetchedEntry?.ResolvedViewModelType ?? ResolveViewModelType(route);
+        var navigable = prefetchedEntry?.NavigableInstance ?? ResolveNavigable(vmType);
 
-        // OnNavigation first — caller untouched until navigation confirmed
+        var ctx = BuildContext(route, NavigationDirection.Forward);
+
+        // Always call OnNavigation — when prefetched, data is already ready
+        // ViewModel's bridge awaits the prefetch task internally (already done = instant)
         await navigable.OnNavigation(ctx, ct);
 
         if (ctx.IsDenied)
         {
             if (navigable is IDisposable d) d.Dispose();
-            NavPane?.OnNavigationDenied();
+            _navPane?.OnNavigationDenied();
             return NavigationResult.Deny(ctx.DeniedReason);
         }
 
         // Navigation confirmed — NOW suspend caller
         await SuspendCurrentAsync(ct);
 
-        var entry = new NavigationEntry<IRoute>(route)
+        var entry = prefetchedEntry ?? new NavigationEntry<IRoute>(route)
         {
             NavigableInstance = navigable,
-            ResolvedViewModelType = vmType,
-            State = NavigationEntryState.Active
+            ResolvedViewModelType = vmType
         };
+
+        entry.State = NavigationEntryState.Active;
+
+        _activePrefetches.RemoveAll(t => t.IsSameRoute(route));
 
         PruneForwardStack();
         InsertEntry(entry);
-        NavPane?.PerformNavigation(_scope.Resolve(vmType));
+        _navPane?.PerformNavigation(_scope.Resolve(vmType));
         return NavigationResult.Ok();
     }
 
-    private async Task<NavigationResult> ExecuteUntilClosedCoreAsync(IRoute route, CancellationToken ct)
+    private async Task<NavigationResult> ExecuteUntilClosedCoreAsync(
+        IRoute route, CancellationToken ct, NavigationEntry? prefetchedEntry = null)
     {
-        var vmType = ResolveViewModelType(route);
-        var navigable = ResolveNavigable(vmType);
-        var ctx = BuildContext(route);
+        var vmType = prefetchedEntry?.ResolvedViewModelType ?? ResolveViewModelType(route);
+        var navigable = prefetchedEntry?.NavigableInstance ?? ResolveNavigable(vmType);
 
-        await navigable.OnNavigation(ctx, ct);
-
-        if (ctx.IsDenied)
+        // Skip OnNavigation if already called during prefetch
+        if (prefetchedEntry is null)
         {
-            if (navigable is IDisposable d) d.Dispose();
-            NavPane?.OnNavigationDenied();
-            return NavigationResult.Deny(ctx.DeniedReason);
+            var ctx = BuildContext(route, NavigationDirection.Forward);
+            await navigable.OnNavigation(ctx, ct);
+
+            if (ctx.IsDenied)
+            {
+                if (navigable is IDisposable d) d.Dispose();
+                _navPane?.OnNavigationDenied();
+                return NavigationResult.Deny(ctx.DeniedReason);
+            }
         }
 
         // Navigation confirmed — pin caller
@@ -320,12 +488,16 @@ public sealed class Navigator : IDisposable
         if (callerEntry is not null)
             callerEntry.State = NavigationEntryState.Pinned;
 
-        var entry = new NavigationEntry<IRoute>(route)
+        var entry = prefetchedEntry ?? new NavigationEntry<IRoute>(route)
         {
             NavigableInstance = navigable,
-            ResolvedViewModelType = vmType,
-            State = NavigationEntryState.Active
+            ResolvedViewModelType = vmType
         };
+
+        entry.State = NavigationEntryState.Active;
+
+        // Clean up consumed prefetch token
+        _activePrefetches.RemoveAll(t => t.IsSameRoute(route));
 
         var tcs = new TaskCompletionSource<NavigationResult>(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -334,7 +506,7 @@ public sealed class Navigator : IDisposable
 
         PruneForwardStack();
         InsertEntry(entry);
-        NavPane?.PerformNavigation(_scope.Resolve(vmType));
+        _navPane?.PerformNavigation(_scope.Resolve(vmType));
 
         try
         {
@@ -344,7 +516,7 @@ public sealed class Navigator : IDisposable
             {
                 callerEntry.State = NavigationEntryState.Active;
                 _pool.OnActivated(callerEntry);
-                NavPane?.PerformNavigation(_scope.Resolve(
+                _navPane?.PerformNavigation(_scope.Resolve(
                     callerEntry.ResolvedViewModelType ?? ResolveViewModelType(callerEntry.Route)));
             }
 
@@ -358,10 +530,10 @@ public sealed class Navigator : IDisposable
     }
 
     private async Task<NavigationResult<TResult>> ExecuteWithResultCoreAsync<TResult>(
-        IRoute route, CancellationToken ct)
+        IRoute route, CancellationToken ct, NavigationEntry? prefetchedEntry = null)
     {
-        var vmType = ResolveViewModelType(route);
-        var navigable = ResolveNavigable(vmType);
+        var vmType = prefetchedEntry?.ResolvedViewModelType ?? ResolveViewModelType(route);
+        var navigable = prefetchedEntry?.NavigableInstance ?? ResolveNavigable(vmType);
 
         if (navigable is not INavigable<TResult> producer)
         {
@@ -370,16 +542,18 @@ public sealed class Navigator : IDisposable
                 $"ViewModel '{vmType.Name}' does not implement INavigable<{typeof(TResult).Name}>.");
         }
 
-        var ctx = BuildContext(route);
-
-        // OnNavigation first — caller untouched until navigation confirmed
-        await navigable.OnNavigation(ctx, ct);
-
-        if (ctx.IsDenied)
+        // Skip OnNavigation if already called during prefetch
+        if (prefetchedEntry is null)
         {
-            if (navigable is IDisposable d) d.Dispose();
-            NavPane?.OnNavigationDenied();
-            return new NavigationDenied(ctx.DeniedReason);
+            var ctx = BuildContext(route, NavigationDirection.Forward);
+            await navigable.OnNavigation(ctx, ct);
+
+            if (ctx.IsDenied)
+            {
+                if (navigable is IDisposable d) d.Dispose();
+                _navPane?.OnNavigationDenied();
+                return new NavigationDenied(ctx.DeniedReason);
+            }
         }
 
         // Navigation confirmed — pin caller
@@ -387,16 +561,20 @@ public sealed class Navigator : IDisposable
         if (callerEntry is not null)
             callerEntry.State = NavigationEntryState.Pinned;
 
-        var entry = new NavigationEntry<IRoute>(route)
+        var entry = prefetchedEntry ?? new NavigationEntry<IRoute>(route)
         {
             NavigableInstance = navigable,
-            ResolvedViewModelType = vmType,
-            State = NavigationEntryState.Active
+            ResolvedViewModelType = vmType
         };
+
+        entry.State = NavigationEntryState.Active;
+
+        // Clean up consumed prefetch token
+        _activePrefetches.RemoveAll(t => t.IsSameRoute(route));
 
         PruneForwardStack();
         InsertEntry(entry);
-        NavPane?.PerformNavigation(_scope.Resolve(vmType));
+        _navPane?.PerformNavigation(_scope.Resolve(vmType));
 
         try
         {
@@ -411,7 +589,7 @@ public sealed class Navigator : IDisposable
             {
                 callerEntry.State = NavigationEntryState.Active;
                 _pool.OnActivated(callerEntry);
-                NavPane?.PerformNavigation(_scope.Resolve(
+                _navPane?.PerformNavigation(_scope.Resolve(
                     callerEntry.ResolvedViewModelType ?? ResolveViewModelType(callerEntry.Route)));
             }
 
@@ -478,7 +656,7 @@ public sealed class Navigator : IDisposable
                 break;
         }
 
-        NavPane?.PerformNavigation(_scope.Resolve(vmType));
+        _navPane?.PerformNavigation(_scope.Resolve(vmType));
     }
 
     private async Task SuspendCurrentAsync(CancellationToken ct)

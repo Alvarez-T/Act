@@ -3,6 +3,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using YFex.NavigatR.SourceGenerator;
 
@@ -30,6 +31,16 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
         "NAV004", "Route name conflict",
         "Route name '{0}' would generate '{1}Route' which conflicts with an existing type.",
         "YFex.NavigatR", DiagnosticSeverity.Warning, true);
+
+    private static readonly DiagnosticDescriptor s_nav005 = new(
+        "NAV005", "[Prefetch] must return Task or Task<T>",
+        "[Prefetch] method '{0}' must return Task or Task<T>.",
+        "YFex.NavigatR", DiagnosticSeverity.Error, true);
+
+    private static readonly DiagnosticDescriptor s_nav007 = new(
+        "NAV007", "Duplicate [Prefetch] return type",
+        "Multiple [Prefetch] methods on '{0}' return Task<{1}>. Each return type must be unique.",
+        "YFex.NavigatR", DiagnosticSeverity.Error, true);
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -75,6 +86,10 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(registrationPipeline,
             static (spc, model) => EmitRegistration(spc, model));
     }
+
+    // -------------------------------------------------------------------------
+    // ExtractModel
+    // -------------------------------------------------------------------------
 
     private static RouteViewModel? ExtractModel(
         GeneratorAttributeSyntaxContext ctx,
@@ -132,20 +147,16 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
             manualRouteTypeIsValid = HasInterface(routeTypeSymbol, "YFex.NavigatR", "IRoute")
                 || IsInterface(routeTypeSymbol, "YFex.NavigatR", "IRoute");
 
-            // For manual routes — try to read parameter type from constructor
             foreach (var ctor in routeTypeSymbol.Constructors)
             {
                 if (ctor.Parameters.Length == 1)
                 {
                     paramsTypeName = ctor.Parameters[0].Type
                         .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-                    // Check nullability for ParameterRequired
-                    parameterRequired = ctor.Parameters[0].Type.NullableAnnotation
-                        != NullableAnnotation.Annotated;
+                    parameterRequired = ctor.Parameters[0].Type.NullableAnnotation != NullableAnnotation.Annotated;
                     break;
                 }
             }
-
             mode = RouteMode.Manual;
         }
         else return null;
@@ -163,6 +174,43 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
         string? generatedRouteClassName = mode == RouteMode.AutoGenerate && routeName is not null
             ? DeriveRouteClassName(routeName) : null;
 
+        // Scan [Prefetch]-marked methods
+        var prefetchList = new List<PrefetchMethod>();
+        foreach (var member in symbol.GetMembers())
+        {
+            if (member is not IMethodSymbol method) continue;
+
+            bool hasPrefetchAttr = false;
+            foreach (var a in method.GetAttributes())
+            {
+                if (a.AttributeClass?.ToDisplayString() == "YFex.NavigatR.PrefetchAttribute")
+                {
+                    hasPrefetchAttr = true;
+                    break;
+                }
+            }
+            if (!hasPrefetchAttr) continue;
+
+            var returnType = method.ReturnType;
+            bool isTaskVoid = returnType.ToDisplayString() == "System.Threading.Tasks.Task";
+            bool isTaskT = returnType is INamedTypeSymbol rn
+                && rn.IsGenericType
+                && rn.ConstructedFrom.ToDisplayString() == "System.Threading.Tasks.Task<TResult>";
+
+            if (!isTaskVoid && !isTaskT) continue;
+
+            string? retTypeName = null;
+            bool producesValue = false;
+            if (isTaskT && returnType is INamedTypeSymbol taskT)
+            {
+                retTypeName = taskT.TypeArguments[0]
+                    .ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                producesValue = true;
+            }
+
+            prefetchList.Add(new PrefetchMethod(method.Name, retTypeName, producesValue));
+        }
+
         return new RouteViewModel(
             Namespace: ns,
             ViewModelName: symbol.Name,
@@ -177,8 +225,13 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
             ParameterRequired: parameterRequired,
             ResultTypeName: resultTypeName,
             ProducesResult: producesResult,
-            DisplayName: displayName);
+            DisplayName: displayName,
+            PrefetchMethods: new EquatableArray<PrefetchMethod>(prefetchList));
     }
+
+    // -------------------------------------------------------------------------
+    // EmitDiagnosticsAndRoute
+    // -------------------------------------------------------------------------
 
     private static void EmitDiagnosticsAndRoute(SourceProductionContext spc, RouteViewModel model)
     {
@@ -200,24 +253,20 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
 
         if (model.Mode != RouteMode.AutoGenerate || model.GeneratedRouteClassName is null) return;
 
-        // Route interface
-        string interfaceClause;
-        if (model.ResultTypeName is not null)
-            interfaceClause = $"global::YFex.NavigatR.IRouteProduces<{model.ResultTypeName}>";
-        else
-            interfaceClause = "global::YFex.NavigatR.IRoute";
+        string interfaceClause = model.ResultTypeName is not null
+            ? "global::YFex.NavigatR.IRouteProduces<" + model.ResultTypeName + ">"
+            : "global::YFex.NavigatR.IRoute";
 
         string displayNameLiteral = model.DisplayName is not null
             ? "\"" + model.DisplayName.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""
             : "null";
 
-        // Constructor parameter — required = T, optional = T? = null
         string? ctorParam = null;
         if (model.ParamsTypeName is not null)
         {
             ctorParam = model.ParameterRequired
-                ? $"{model.ParamsTypeName} Params"
-                : $"{model.ParamsTypeName}? Params = null";
+                ? model.ParamsTypeName + " Params"
+                : model.ParamsTypeName + "? Params = null";
         }
 
         var sb = new StringBuilder();
@@ -231,29 +280,25 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
-        // Record with optional constructor param
         if (ctorParam is not null)
-        {
-            sb.Append("public sealed record "); sb.Append(model.GeneratedRouteClassName);
-            sb.Append("("); sb.Append(ctorParam); sb.Append(") : ");
-            sb.AppendLine(interfaceClause);
-        }
+            sb.AppendLine("public sealed record " + model.GeneratedRouteClassName + "(" + ctorParam + ") : " + interfaceClause);
         else
-        {
-            sb.Append("public sealed record "); sb.Append(model.GeneratedRouteClassName);
-            sb.Append(" : "); sb.AppendLine(interfaceClause);
-        }
+            sb.AppendLine("public sealed record " + model.GeneratedRouteClassName + " : " + interfaceClause);
 
         sb.AppendLine("{");
-        sb.Append("    public string? DisplayName => "); sb.Append(displayNameLiteral); sb.AppendLine(";");
+        sb.AppendLine("    public string? DisplayName => " + displayNameLiteral + ";");
         sb.AppendLine("}");
 
         string hintName = string.IsNullOrEmpty(model.Namespace)
-            ? $"{model.GeneratedRouteClassName}.g.cs"
-            : $"{model.Namespace}.{model.GeneratedRouteClassName}.g.cs";
+            ? model.GeneratedRouteClassName + ".g.cs"
+            : model.Namespace + "." + model.GeneratedRouteClassName + ".g.cs";
 
         spc.AddSource(hintName, sb.ToString());
     }
+
+    // -------------------------------------------------------------------------
+    // EmitViewModelPartial
+    // -------------------------------------------------------------------------
 
     private static void EmitViewModelPartial(SourceProductionContext spc, RouteViewModel model)
     {
@@ -262,14 +307,35 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
         bool hasParam = model.ParamsTypeName is not null;
         bool hasResult = model.ProducesResult && model.ResultTypeName is not null;
 
-        if (!hasParam && !hasResult) return;
+        // Collect prefetch methods into plain lists
+        var allPrefetches = new List<PrefetchMethod>();
+        foreach (var pm in model.PrefetchMethods)
+            allPrefetches.Add(pm);
+
+        var valuePrefetches = new List<PrefetchMethod>();
+        var warmPrefetches = new List<PrefetchMethod>();
+        foreach (var pm in allPrefetches)
+        {
+            if (pm.ProducesValue) valuePrefetches.Add(pm);
+            else warmPrefetches.Add(pm);
+        }
+
+        bool hasPrefetch = allPrefetches.Count > 0;
+
+        if (!hasParam && !hasResult && !hasPrefetch) return;
 
         var p = model.ParamsTypeName;
         var r = model.ResultTypeName;
-        var resultUnion = hasResult ? $"global::YFex.NavigatR.NavigationResult<{r}>" : null;
-        var tcsType = hasResult
-            ? $"global::System.Threading.Tasks.TaskCompletionSource<{resultUnion}>"
+        string? resultUnion = hasResult ? "global::YFex.NavigatR.NavigationResult<" + r + ">" : null;
+        string? tcsType = hasResult
+            ? "global::System.Threading.Tasks.TaskCompletionSource<" + resultUnion + ">"
             : null;
+
+        string routeTypeFqn = model.Mode == RouteMode.AutoGenerate
+            ? (string.IsNullOrEmpty(model.Namespace)
+                ? "global::" + model.GeneratedRouteClassName
+                : "global::" + model.Namespace + "." + model.GeneratedRouteClassName)
+            : "global::" + model.ManualRouteTypeName;
 
         var sb = new StringBuilder();
         sb.AppendLine("// <auto-generated/>");
@@ -282,96 +348,183 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
             sb.AppendLine();
         }
 
-        sb.AppendLine($"partial class {model.ViewModelName}");
+        sb.AppendLine("partial class " + model.ViewModelName);
         sb.AppendLine("{");
 
-        if (hasParam)
+        // ── Prefetch backing Task fields ─────────────────────────────────
+        foreach (var pm in valuePrefetches)
         {
-            string paramType = model.ParameterRequired ? p! : $"{p}?";
+            sb.AppendLine("    private global::System.Threading.Tasks.Task<" + pm.ReturnTypeName + ">? _" + ToCamelCase(pm.MethodName) + "Task;");
+        }
+        if (valuePrefetches.Count > 0) sb.AppendLine();
 
-            // Explicit interface bridge — reads Params property from route
-            sb.AppendLine("    // Parameter bridge — not visible in IntelliSense");
-            sb.AppendLine($"    global::System.Threading.Tasks.Task global::YFex.NavigatR.INavigable.OnNavigation(");
-            sb.AppendLine($"        global::YFex.NavigatR.NavigationContext context,");
-            sb.AppendLine($"        global::System.Threading.CancellationToken ct)");
+        // ── INavigable.OnPrefetch bridge ─────────────────────────────────
+        if (hasPrefetch)
+        {
+            sb.AppendLine("    global::System.Threading.Tasks.Task global::YFex.NavigatR.INavigable.OnPrefetch(");
+            sb.AppendLine("        global::YFex.NavigatR.NavigationContext context,");
+            sb.AppendLine("        global::System.Threading.CancellationToken ct)");
+            sb.AppendLine("    {");
 
-            // Determine the fully-qualified route type for the direct cast
-            string routeTypeFqn = model.Mode == RouteMode.AutoGenerate
-                ? (string.IsNullOrEmpty(model.Namespace)
-                    ? $"global::{model.GeneratedRouteClassName}"
-                    : $"global::{model.Namespace}.{model.GeneratedRouteClassName}")
-                : $"global::{model.ManualRouteTypeName}";
+            if (hasParam)
+                sb.AppendLine("        var __p = ((" + routeTypeFqn + ")context.Route).Params;");
+
+            foreach (var pm in valuePrefetches)
+            {
+                string pArg = hasParam ? "__p, ct" : "ct";
+                sb.AppendLine("        _" + ToCamelCase(pm.MethodName) + "Task = global::System.Threading.Tasks.Task.Run(() => " + pm.MethodName + "Core(" + pArg + "));");
+            }
+
+            foreach (var pm in warmPrefetches)
+            {
+                string pArg = hasParam ? "__p, ct" : "ct";
+                sb.AppendLine("        var __" + pm.MethodName + "Warm = global::System.Threading.Tasks.Task.Run(() => " + pm.MethodName + "(" + pArg + "));");
+            }
+
+            // Return statement
+            var allTaskRefs = new List<string>();
+            foreach (var pm in valuePrefetches)
+                allTaskRefs.Add("_" + ToCamelCase(pm.MethodName) + "Task!");
+            foreach (var pm in warmPrefetches)
+                allTaskRefs.Add("__" + pm.MethodName + "Warm");
+
+            if (allTaskRefs.Count == 1)
+                sb.AppendLine("        return " + allTaskRefs[0] + ";");
+            else
+                sb.AppendLine("        return global::System.Threading.Tasks.Task.WhenAll(" + string.Join(", ", allTaskRefs) + ");");
+
+            sb.AppendLine("    }");
+            sb.AppendLine();
+
+            // Rename original [Prefetch] Task<T> methods to {Name}Core
+            foreach (var pm in valuePrefetches)
+            {
+                string pSig = hasParam ? p + " parameter, " : "";
+                sb.AppendLine("    private partial global::System.Threading.Tasks.Task<" + pm.ReturnTypeName + "> " + pm.MethodName + "Core(" + pSig + "global::System.Threading.CancellationToken ct);");
+                sb.AppendLine();
+            }
+        }
+
+        // ── INavigable.OnNavigation bridge ───────────────────────────────
+        if (hasParam || hasPrefetch)
+        {
+            sb.AppendLine("    async global::System.Threading.Tasks.Task global::YFex.NavigatR.INavigable.OnNavigation(");
+            sb.AppendLine("        global::YFex.NavigatR.NavigationContext context,");
+            sb.AppendLine("        global::System.Threading.CancellationToken ct)");
+            sb.AppendLine("    {");
+
+            if (hasParam)
+                sb.AppendLine("        var __p = ((" + routeTypeFqn + ")context.Route).Params;");
+
+            // Resolve each prefetch task
+            foreach (var pm in valuePrefetches)
+            {
+                string pArg = hasParam ? "__p, ct" : "ct";
+                string fieldName = "_" + ToCamelCase(pm.MethodName) + "Task";
+                string localName = "__" + ToCamelCase(pm.MethodName);
+                sb.AppendLine("        var " + localName + " = " + fieldName + " is not null");
+                sb.AppendLine("            ? await " + fieldName + ".ConfigureAwait(false)");
+                sb.AppendLine("            : await " + pm.MethodName + "Core(" + pArg + ").ConfigureAwait(false);");
+                sb.AppendLine("        " + fieldName + " = null;");
+            }
+
+            // Build call args
+            var callArgs = new List<string>();
+            if (hasParam) callArgs.Add("__p");
+            foreach (var pm in valuePrefetches) callArgs.Add("__" + ToCamelCase(pm.MethodName));
+            callArgs.Add("ct");
+
+            sb.AppendLine("        await OnNavigation(" + string.Join(", ", callArgs) + ");");
+            sb.AppendLine("    }");
+            sb.AppendLine();
+
+            // Enforced partial signature
+            var sigArgs = new List<string>();
+            if (hasParam)
+            {
+                string paramType = model.ParameterRequired ? p! : p + "?";
+                sigArgs.Add(paramType + " parameter");
+            }
+            foreach (var pm in valuePrefetches)
+                sigArgs.Add(pm.ReturnTypeName + " " + ToCamelCase(pm.MethodName));
+            sigArgs.Add("global::System.Threading.CancellationToken ct = default");
+
+            sb.AppendLine("    /// <summary>Called when the screen is navigated to. All prefetch data is ready.</summary>");
+            sb.AppendLine("    public partial global::System.Threading.Tasks.Task OnNavigation(");
+            for (int i = 0; i < sigArgs.Count; i++)
+            {
+                bool last = i == sigArgs.Count - 1;
+                sb.AppendLine("        " + sigArgs[i] + (last ? ");" : ","));
+            }
+            sb.AppendLine();
+        }
+        else if (hasParam)
+        {
+            string paramType = model.ParameterRequired ? p! : p + "?";
+            sb.AppendLine("    global::System.Threading.Tasks.Task global::YFex.NavigatR.INavigable.OnNavigation(");
+            sb.AppendLine("        global::YFex.NavigatR.NavigationContext context,");
+            sb.AppendLine("        global::System.Threading.CancellationToken ct)");
 
             if (model.ParameterRequired)
-            {
-                // Direct cast — no reflection, no GetParameter<T>()
-                sb.AppendLine($"        => OnNavigation((({routeTypeFqn})context.Route).Params, ct);");
-            }
+                sb.AppendLine("        => OnNavigation(((" + routeTypeFqn + ")context.Route).Params, ct);");
             else
             {
-                sb.AppendLine($"    {{");
-                sb.AppendLine($"        return OnNavigation((({routeTypeFqn})context.Route).Params, ct);");
-                sb.AppendLine($"    }}");
+                sb.AppendLine("    {");
+                sb.AppendLine("        return OnNavigation(((" + routeTypeFqn + ")context.Route).Params, ct);");
+                sb.AppendLine("    }");
             }
-
             sb.AppendLine();
-            sb.AppendLine($"    /// <summary>Called when the screen is navigated to.</summary>");
-            sb.AppendLine($"    public partial global::System.Threading.Tasks.Task OnNavigation(");
-            sb.AppendLine($"        {paramType} parameter,");
-            sb.AppendLine($"        global::System.Threading.CancellationToken ct = default);");
+            sb.AppendLine("    public partial global::System.Threading.Tasks.Task OnNavigation(");
+            sb.AppendLine("        " + paramType + " parameter,");
+            sb.AppendLine("        global::System.Threading.CancellationToken ct = default);");
             sb.AppendLine();
         }
 
+        // ── Result plumbing ──────────────────────────────────────────────
         if (hasResult)
         {
-            sb.AppendLine($"    private readonly {tcsType} _navigationResultTcs");
-            sb.AppendLine($"        = new {tcsType}(global::System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);");
+            sb.AppendLine("    private readonly " + tcsType + " _navigationResultTcs");
+            sb.AppendLine("        = new " + tcsType + "(global::System.Threading.Tasks.TaskCreationOptions.RunContinuationsAsynchronously);");
             sb.AppendLine();
-
-            sb.AppendLine($"    public void Returns({r} result)");
-            sb.AppendLine($"        => _navigationResultTcs.TrySetResult(new {resultUnion}.Success(result));");
+            sb.AppendLine("    public void Returns(" + r + " result)");
+            sb.AppendLine("        => _navigationResultTcs.TrySetResult(new " + resultUnion + ".Success(result));");
             sb.AppendLine();
-
-            sb.AppendLine($"    public void Cancel()");
-            sb.AppendLine($"        => _navigationResultTcs.TrySetResult(new {resultUnion}.Cancelled());");
+            sb.AppendLine("    public void Cancel()");
+            sb.AppendLine("        => _navigationResultTcs.TrySetResult(new " + resultUnion + ".Cancelled());");
             sb.AppendLine();
-
-            sb.AppendLine($"    public void Deny(string? reason = null)");
-            sb.AppendLine($"        => _navigationResultTcs.TrySetResult(new {resultUnion}.Denied(reason));");
+            sb.AppendLine("    public void Deny(string? reason = null)");
+            sb.AppendLine("        => _navigationResultTcs.TrySetResult(new " + resultUnion + ".Denied(reason));");
             sb.AppendLine();
-
-            sb.AppendLine($"    {$"global::System.Threading.Tasks.Task<{resultUnion}>"}");
-            sb.AppendLine($"        global::YFex.NavigatR.INavigable<{r}>.WaitForResultAsync()");
-            sb.AppendLine($"        => _navigationResultTcs.Task;");
+            sb.AppendLine("    global::System.Threading.Tasks.Task<" + resultUnion + ">");
+            sb.AppendLine("        global::YFex.NavigatR.INavigable<" + r + ">.WaitForResultAsync()");
+            sb.AppendLine("        => _navigationResultTcs.Task;");
         }
 
         sb.AppendLine("}");
 
-        // File-scoped GetParameter() extension — direct cast, no reflection
+        // ── File-scoped GetParameter extension ───────────────────────────
         if (hasParam)
         {
-            string paramType = model.ParameterRequired ? p! : $"{p}?";
-            string routeTypeFqn2 = model.Mode == RouteMode.AutoGenerate
-                ? (string.IsNullOrEmpty(model.Namespace)
-                    ? $"global::{model.GeneratedRouteClassName}"
-                    : $"global::{model.Namespace}.{model.GeneratedRouteClassName}")
-                : $"global::{model.ManualRouteTypeName}";
-
+            string paramType = model.ParameterRequired ? p! : p + "?";
             sb.AppendLine();
-            sb.AppendLine($"file static class NavigationContextExtensions_{model.ViewModelName}");
+            sb.AppendLine("file static class NavigationContextExtensions_" + model.ViewModelName);
             sb.AppendLine("{");
-            sb.AppendLine($"    internal static {paramType} GetParameter(");
-            sb.AppendLine($"        this global::YFex.NavigatR.NavigationContext context)");
-            sb.AppendLine($"        => (({routeTypeFqn2})context.Route).Params;");
+            sb.AppendLine("    internal static " + paramType + " GetParameter(");
+            sb.AppendLine("        this global::YFex.NavigatR.NavigationContext context)");
+            sb.AppendLine("        => ((" + routeTypeFqn + ")context.Route).Params;");
             sb.AppendLine("}");
         }
 
-        string hintName = string.IsNullOrEmpty(model.Namespace)
-            ? $"{model.ViewModelName}.NavigatR.g.cs"
-            : $"{model.Namespace}.{model.ViewModelName}.NavigatR.g.cs";
+        string hintName2 = string.IsNullOrEmpty(model.Namespace)
+            ? model.ViewModelName + ".NavigatR.g.cs"
+            : model.Namespace + "." + model.ViewModelName + ".NavigatR.g.cs";
 
-        spc.AddSource(hintName, sb.ToString());
+        spc.AddSource(hintName2, sb.ToString());
     }
+
+    // -------------------------------------------------------------------------
+    // EmitRegistration
+    // -------------------------------------------------------------------------
 
     private static void EmitRegistration(SourceProductionContext spc, RegistrationModel model)
     {
@@ -385,7 +538,6 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
         sb.AppendLine("{");
         sb.AppendLine("    static partial void RegisterGenerated(global::YFex.NavigatR.RouteRegistry registry)");
         sb.AppendLine("    {");
-
         foreach (var entry in model.Entries)
         {
             sb.Append("        registry.Register<global::");
@@ -394,11 +546,19 @@ public sealed class NavigatRGenerator : IIncrementalGenerator
             sb.Append(entry.ViewModelFullName);
             sb.AppendLine(">();");
         }
-
         sb.AppendLine("    }");
         sb.AppendLine("}");
-
         spc.AddSource("NavigatRRegistration.g.cs", sb.ToString());
+    }
+
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
+
+    private static string ToCamelCase(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+        return char.ToLowerInvariant(name[0]) + name.Substring(1);
     }
 
     private static bool HasInterface(INamedTypeSymbol symbol, string ns, string name)

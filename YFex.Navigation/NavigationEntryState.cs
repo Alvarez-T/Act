@@ -1,33 +1,32 @@
 ﻿namespace YFex.NavigatR;
 
+
 /// <summary>
-/// Represents the lifecycle state of a single navigation history entry.
+/// Lifecycle state of a navigation history entry.
 /// </summary>
 public enum NavigationEntryState
 {
-    /// <summary>
-    /// The screen is currently visible and active.
-    /// </summary>
+    /// <summary>Currently on screen.</summary>
     Active,
 
     /// <summary>
-    /// The screen is alive in memory but not visible.
-    /// <see cref="INavigable.OnSuspend"/> has been called.
-    /// Subject to pool eviction if not <see cref="IKeepAlive"/>.
+    /// Alive in memory, not visible. Subject to pool eviction unless <see cref="IKeepAlive"/>.
     /// </summary>
     Suspended,
 
     /// <summary>
-    /// The screen is mid-execution awaiting a child NavigateTo result.
-    /// Instance is always alive, never evictable, never closeable.
-    /// <see cref="INavigable.OnSuspend"/> and <see cref="INavigable.OnResume"/>
-    /// are never called while pinned.
+    /// Mid-execution awaiting a child NavigateTo result.
+    /// Never evictable. OnSuspend/OnResume never called.
     /// </summary>
     Pinned,
 
+    /// <summary>Disposed. History entry still exists but instance is gone.</summary>
+    Released,
+
     /// <summary>
-    /// The screen has been disposed and its history entry removed.
-    /// Can only transition here from <see cref="Suspended"/>.
+    /// ViewModel is resolved and OnPrefetch is running or completed.
+    /// Not yet navigated to. Subject to prefetch timeout.
+    /// Never counts toward pool capacity.
     /// </summary>
-    Released
+    Prefetching
 }

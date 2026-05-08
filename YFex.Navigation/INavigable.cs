@@ -25,8 +25,24 @@ public interface INavigable : IDisposable
     /// <summary>
     /// Called when the screen loses focus without being closed.
     /// Never called when the ViewModel is Pinned awaiting a child NavigateTo result.
+    /// Also called by the Navigator when AFK is detected — state does not change.
     /// </summary>
     Task OnSuspend(CancellationToken ct = default);
+
+    /// <summary>
+    /// Called by the Navigator when prefetching this ViewModel before navigation.
+    /// Runs off the UI thread. Developer never implements this directly —
+    /// the source generator bridges it from <c>[Prefetch]</c>-marked methods.
+    /// Default implementation is a no-op.
+    /// </summary>
+    Task OnPrefetch(NavigationContext context, CancellationToken ct) => Task.CompletedTask;
+
+    /// <summary>
+    /// Called by the Navigator when the user returns from AFK.
+    /// State does not change — the ViewModel remains Active.
+    /// Default implementation is a no-op.
+    /// </summary>
+    Task OnActive(CancellationToken ct = default) => Task.CompletedTask;
 }
 
 /// <summary>

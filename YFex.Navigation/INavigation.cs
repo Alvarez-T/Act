@@ -1,35 +1,42 @@
 ﻿namespace YFex.NavigatR;
 
 /// <summary>
-/// Platform hook. Implemented once per platform adapter.
-/// Each navigation context gets its own instance.
-/// The core never calls platform APIs directly — all rendering goes through here.
+/// Platform-specific navigation hook. Implement this to connect NavigatR to your
+/// platform's navigation host (WPF Frame, MAUI Shell, Avalonia, etc.).
+/// <para>
+/// Assign to <c>navigator.NavPane</c> after creating a context.
+/// </para>
 /// </summary>
 public interface INavigation
 {
     /// <summary>
-    /// The navigator that owns this navigation pane.
-    /// Set by the factory during wiring.
+    /// Called by the Navigator when a new screen should be shown.
+    /// The <paramref name="view"/> is the resolved ViewModel instance.
+    /// Map it to your platform's page/view and display it.
     /// </summary>
-    //INavigator Navigator { get; set; }
-
-    /// <summary>
-    /// Called when navigating within the current context.
-    /// The platform decides how to render (push frame, swap content, etc.).
-    /// </summary>
-    /// <param name="view">The resolved view object for the target navigable.</param>
     void PerformNavigation(object view);
 
     /// <summary>
-    /// Called when switching to a different navigation context.
-    /// The platform decides the visual transition.
-    /// </summary>
-    /// <param name="view">The resolved view object for the top of the target context.</param>
-    void PerformContextSwitch(object view);
-
-    /// <summary>
-    /// Called when CanNavigate() returns false.
-    /// The platform decides how to communicate the denial to the user.
+    /// Called by the Navigator when a navigation was denied in
+    /// <see cref="INavigable.OnNavigation"/> via <see cref="NavigationContext.Deny"/>.
     /// </summary>
     void OnNavigationDenied();
+
+    /// <summary>
+    /// Called by the platform when the user becomes inactive (mouse idle, no touch,
+    /// screen lock, etc.). The Navigator calls <see cref="INavigable.OnSuspend"/>
+    /// on the active ViewModel without changing its state.
+    /// Platform implementations should call <see cref="Navigator.NotifyInactive"/>
+    /// when inactivity is detected.
+    /// </summary>
+    event Action? UserBecameInactive;
+
+    /// <summary>
+    /// Called by the platform when the user returns from inactivity.
+    /// The Navigator calls <see cref="INavigable.OnActive"/>
+    /// on the active ViewModel without changing its state.
+    /// Platform implementations should call <see cref="Navigator.NotifyActive"/>
+    /// when activity resumes.
+    /// </summary>
+    event Action? UserBecameActive;
 }
