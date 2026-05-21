@@ -1,0 +1,22 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net11.0;net10.0;net8.0</TargetFrameworks>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>YFex.State</RootNamespace>
+    <AssemblyName>YFex.State</AssemblyName>
+  </PropertyGroup>
+
+  <!-- Bundle generator: consumers get runtime + codegen from one package reference -->
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.State.Generator\YFex.State.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

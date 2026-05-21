@@ -1,0 +1,28 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.State\YFex.State.csproj" />
+    <ProjectReference Include="..\YFex.State.Mvvm\YFex.State.Mvvm.csproj" />
+    <ProjectReference Include="..\YFex.State.Testing\YFex.State.Testing.csproj" />
+    <!-- Generator must be added as an analyzer to each consumer project.
+         In NuGet packaging this happens automatically via the analyzers/ folder. -->
+    <ProjectReference Include="..\YFex.State.Generator\YFex.State.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <ReportAnalyzer>true</ReportAnalyzer>
+  </PropertyGroup>
+
+</Project>

@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.NavigatR\YFex.Navigation\YFex.NavigatR.csproj" />
+    <ProjectReference Include="..\YFex.State.Mvvm\YFex.State.Mvvm.csproj" />
+    <ProjectReference Include="..\YFex.UI.Abstractions\YFex.UI.Abstractions.csproj" />
+    <!-- [Subscribe<T>] and [Live] on any ViewModel subclass -->
+    <ProjectReference Include="..\YFex.Messaging\YFex.Messaging.csproj" />
+    <!-- [Persist] snapshot generation on ViewModel / Model subclasses -->
+    <ProjectReference Include="..\YFex.Persistence\YFex.Persistence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Generators referenced explicitly — project-to-project Analyzer propagation is not transitive -->
+    <ProjectReference Include="..\YFex.State.Generator\YFex.State.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\YFex.Messaging.Generator\YFex.Messaging.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\YFex.Persistence.Generator\YFex.Persistence.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

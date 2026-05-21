@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net11.0;net10.0;net8.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>YFex.State.History.Persistence</PackageId>
+    <Description>Snapshot provider for YFex.State.History undo/redo contexts. Captures and restores UndoContext stacks across process restarts using MemoryPack + System.Text.Json value serialization.</Description>
+    <PackageTags>yfex;persistence;undo;history;snapshot</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MemoryPack" Version="1.21.3" />
+    <PackageReference Include="System.Text.Json" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Persistence\YFex.Persistence.csproj" />
+    <ProjectReference Include="..\YFex.State.History\YFex.State.History.csproj" />
+  </ItemGroup>
+
+</Project>

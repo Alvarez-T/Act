@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net11.0;net10.0;net8.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>YFex.Persistence</PackageId>
+    <Description>Snapshot persistence layer for YFex: ISnapshotStore, ISnapshotProvider, PersistenceService orchestrator, and IPersistableStateObject code-generation for [Observable, Persist] properties.</Description>
+    <PackageTags>yfex;persistence;snapshot;stateobject;memorypack</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MemoryPack" Version="1.21.3" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Generator referenced as Analyzer so it runs on consuming projects -->
+    <ProjectReference Include="..\YFex.Persistence.Generator\YFex.Persistence.Generator.csproj">
+      <OutputItemType>Analyzer</OutputItemType>
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

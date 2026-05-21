@@ -1,0 +1,41 @@
+<Solution>
+  <Folder Name="/Cqrs/">
+    <Project Path="src/Cqrs/YFex.Cqrs.SourceGenerator.Test/YFex.Cqrs.SourceGenerator.Test.csproj" />
+    <Project Path="src/Cqrs/YFex.Cqrs.SourceGenerator/YFex.Cqrs.SourceGenerator.csproj" />
+    <Project Path="src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj" />
+  </Folder>
+  <Folder Name="/Database/">
+    <Project Path="src/Database/YFex.Data/YFex.Data.csproj" />
+  </Folder>
+  <Folder Name="/Messaging/">
+    <Project Path="src/Messaging/YFex.Messaging.Fusion/YFex.Messaging.Fusion.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Generator/YFex.Messaging.Generator.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Tests/YFex.Messaging.Tests.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging/YFex.Messaging.csproj" />
+  </Folder>
+  <Folder Name="/Navigation/">
+    <Project Path="src/Navigation/YFex.NavigatR.SourceGenerator/YFex.NavigatR.SourceGenerator.csproj" />
+    <Project Path="src/Navigation/YFex.NavigatR.Tests/YFex.NavigatR.Tests.csproj" />
+    <Project Path="src/Navigation/YFex.NavigatR/YFex.NavigatR.csproj" />
+  </Folder>
+  <Folder Name="/State/">
+    <Project Path="src/State/YFex.State.Blazor/YFex.State.Blazor.csproj" />
+    <Project Path="src/State/YFex.State.Collections/YFex.State.Collections.csproj" />
+    <Project Path="src/State/YFex.State.Generator/YFex.State.Generator.csproj" />
+    <Project Path="src/State/YFex.State.History.Generator/YFex.State.History.Generator.csproj" />
+    <Project Path="src/State/YFex.State.History.Persistence/YFex.State.History.Persistence.csproj" />
+    <Project Path="src/State/YFex.State.History.Testing/YFex.State.History.Testing.csproj" />
+    <Project Path="src/State/YFex.State.History.Tests/YFex.State.History.Tests.csproj" />
+    <Project Path="src/State/YFex.State.History/YFex.State.History.csproj" />
+    <Project Path="src/State/YFex.State.Mvvm/YFex.State.Mvvm.csproj" />
+    <Project Path="src/State/YFex.State.Smoke/YFex.State.Smoke.csproj" />
+    <Project Path="src/State/YFex.State.Tests/YFex.State.Tests.csproj" />
+    <Project Path="src/State/YFex.State/YFex.State.csproj" />
+  </Folder>
+  <Folder Name="/UI/">
+    <Project Path="src/UI/YFex.Mvvm/YFex.Mvvm.csproj" />
+    <Project Path="src/UI/YFex.UI.Abstractions/YFex.UI.Abstractions.csproj" />
+  </Folder>
+  <Project Path="src/YFex/YFex.csproj" />
+</Solution>

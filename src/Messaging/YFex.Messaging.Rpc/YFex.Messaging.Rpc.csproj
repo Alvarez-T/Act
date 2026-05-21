@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net11.0;net10.0;net8.0</TargetFrameworks>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>YFex.Messaging.Rpc</PackageId>
+    <Description>Cross-process event routing for YFex.Messaging via IRemoteEventBus (Stl.Rpc / ActualLab.Rpc). Includes RpcEventBus with AOT-safe pre-registration and MemoryPack wire serialization.</Description>
+    <PackageTags>yfex;messaging;rpc;signalr;cross-process;memorypack</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ActualLab.Fusion is a transitive dep via YFex.Messaging.Fusion;
+         reference it explicitly for RPC service interfaces and extensions. -->
+    <PackageReference Include="ActualLab.Fusion" Version="12.5.2" />
+    <PackageReference Include="MemoryPack" Version="1.21.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Messaging\YFex.Messaging.csproj" />
+    <ProjectReference Include="..\YFex.Messaging.Fusion\YFex.Messaging.Fusion.csproj" />
+  </ItemGroup>
+
+</Project>

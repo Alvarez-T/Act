@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>YFex.State.History.Tests</RootNamespace>
+    <AssemblyName>YFex.State.History.Tests</AssemblyName>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+    <NoWarn>$(NoWarn);CS1591;xUnit1031</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="FluentAssertions" Version="6.12.2" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.State.History\YFex.State.History.csproj" />
+    <ProjectReference Include="..\YFex.State.History.Testing\YFex.State.History.Testing.csproj" />
+    <ProjectReference Include="..\YFex.State\YFex.State.csproj" />
+    <ProjectReference Include="..\YFex.State.Collections\YFex.State.Collections.csproj" />
+    <ProjectReference Include="..\YFex.State.Mvvm\YFex.State.Mvvm.csproj" />
+    <!-- Generator as Analyzer so [Undoable] attributes are processed during test compilation -->
+    <ProjectReference Include="..\YFex.State.History.Generator\YFex.State.History.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\YFex.State.Generator\YFex.State.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+    <Using Include="YFex.State.History.Testing" />
+  </ItemGroup>
+
+</Project>

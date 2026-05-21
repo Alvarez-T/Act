@@ -1,0 +1,11 @@
+<Project>
+  <!--
+    This props file is automatically imported by MSBuild when a project references YFex.State.
+    It wires up the source generator so consumers don't need to add the generator reference manually.
+    In the NuGet package this is handled by placing the generator DLL in analyzers/dotnet/cs/.
+  -->
+  <ItemGroup>
+    <Analyzer Include="$(MSBuildThisFileDirectory)..\bin\$(Configuration)\netstandard2.0\YFex.State.Generator.dll"
+              Condition="Exists('$(MSBuildThisFileDirectory)..\bin\$(Configuration)\netstandard2.0\YFex.State.Generator.dll')" />
+  </ItemGroup>
+</Project>

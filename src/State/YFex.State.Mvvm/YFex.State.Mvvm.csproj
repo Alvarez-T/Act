@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net11.0;net10.0;net8.0</TargetFrameworks>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <RootNamespace>YFex.State.Mvvm</RootNamespace>
+    <AssemblyName>YFex.State.Mvvm</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.State\YFex.State.csproj" />
+    <ProjectReference Include="..\YFex.State.Collections\YFex.State.Collections.csproj" />
+  </ItemGroup>
+
+</Project>

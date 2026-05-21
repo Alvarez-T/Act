@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net11.0;net10.0;net8.0</TargetFrameworks>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <RootNamespace>YFex.Messaging.Fusion</RootNamespace>
+    <AssemblyName>YFex.Messaging.Fusion</AssemblyName>
+    <PackageId>YFex.Messaging.Fusion</PackageId>
+    <Description>ActualLab.Fusion bridge for YFex.Messaging: FusionStateBinding, FusionLiveState, and [Live] runtime backed by Fusion's reactive computed-state cache.</Description>
+    <PackageTags>yfex;messaging;fusion;reactive;live;computed</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- ActualLab.Fusion (formerly Stl.Fusion) provides IStateFactory, IComputedState<T>, Computed.Invalidate() etc. -->
+    <PackageReference Include="ActualLab.Fusion" Version="12.5.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Messaging\YFex.Messaging.csproj" />
+    <ProjectReference Include="..\YFex.State\YFex.State.csproj" />
+  </ItemGroup>
+
+</Project>

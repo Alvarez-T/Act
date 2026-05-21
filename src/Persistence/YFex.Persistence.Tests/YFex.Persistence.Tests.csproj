@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <RootNamespace>YFex.Persistence.Tests</RootNamespace>
+    <AssemblyName>YFex.Persistence.Tests</AssemblyName>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+    <NoWarn>$(NoWarn);CS1591;xUnit1031;IL2026;IL3050</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+    <PackageReference Include="FluentAssertions" Version="6.12.2" />
+    <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="MemoryPack" Version="1.21.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Persistence\YFex.Persistence.csproj" />
+    <ProjectReference Include="..\YFex.Persistence.FileSystem\YFex.Persistence.FileSystem.csproj" />
+    <ProjectReference Include="..\YFex.State.History\YFex.State.History.csproj" />
+    <ProjectReference Include="..\YFex.State.History.Persistence\YFex.State.History.Persistence.csproj" />
+    <ProjectReference Include="..\YFex.State\YFex.State.csproj" />
+    <!-- Generator emits CaptureSnapshot / RestoreSnapshot on test objects with [Observable, Persist] -->
+    <ProjectReference Include="..\YFex.State.Generator\YFex.State.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="FluentAssertions" />
+    <Using Include="YFex.Persistence" />
+    <Using Include="YFex.State.History" />
+  </ItemGroup>
+
+</Project>
