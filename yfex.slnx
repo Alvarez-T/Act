@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/Cqrs/">
+    <Project Path="src/Cqrs/YFex.Cqrs.Analyzer/YFex.Cqrs.Analyzer.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs.SourceGenerator.Test/YFex.Cqrs.SourceGenerator.Test.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs.SourceGenerator/YFex.Cqrs.SourceGenerator.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj" />
@@ -11,6 +12,10 @@
     <Project Path="src/Messaging/YFex.Messaging.Fusion/YFex.Messaging.Fusion.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Generator/YFex.Messaging.Generator.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Rpc.Encryption/YFex.Messaging.Rpc.Encryption.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Rpc.IndexedDb/YFex.Messaging.Rpc.IndexedDb.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Rpc.Sqlite/YFex.Messaging.Rpc.Sqlite.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Rpc.Wolverine/YFex.Messaging.Rpc.Wolverine.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Tests/YFex.Messaging.Tests.csproj" />
     <Project Path="src/Messaging/YFex.Messaging/YFex.Messaging.csproj" />
   </Folder>
