@@ -12,4 +12,8 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="11.0.0-preview.3.26207.106" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\UI\YFex.UI.Abstractions\YFex.UI.Abstractions.csproj" />
+  </ItemGroup>
+
 </Project>
