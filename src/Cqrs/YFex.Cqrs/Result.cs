@@ -40,6 +40,8 @@ public readonly struct Result : IUnion, IResult
 
     // Non-boxing access pattern
     public bool HasValue => _tag != 0;
+    public bool IsOk    => _tag == 1;
+    public bool IsError => _tag == 2;
 
     public bool TryGetValue(out Success value)
     {
@@ -99,6 +101,10 @@ public readonly struct Result<T> : IUnion, IResult
 
     // Non-boxing access pattern
     public bool HasValue => _tag != 0;
+    public bool IsOk    => _tag == 1;
+    public bool IsError => _tag == 2;
+    /// <summary>Typed value when <see cref="IsOk"/> is true; default otherwise.</summary>
+    public T? OkValue   => _tag == 1 ? _value : default;
 
     public bool TryGetValue(out T? value)
     {

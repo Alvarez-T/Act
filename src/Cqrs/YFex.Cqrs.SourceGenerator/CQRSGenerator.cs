@@ -10,170 +10,151 @@ namespace YFex.Cqrs.SourceGenerator;
 
 /// <summary>
 /// Incremental Source Generator that auto-generates CQRS static helper methods
-/// for partial classes containing nested Query, Command, or Events static classes.
+/// for partial classes containing nested Query, Command, or Events static classes,
+/// and emits an AddYFexConfigurations DI registration extension.
 ///
-/// Detection strategy: CreateSyntaxProvider (not ForAttributeWithMetadataName)
-/// because we detect by nested class structure, not by attribute decoration.
+/// Pipeline A — Static call helpers (always active):
+///   For each aggregate's nested records, emits ValueTask-returning static helpers
+///   that call YFexDispatcherProvider.Current.QueryAsync / CommandAsync / PublishAsync.
 ///
-/// Pipeline:
-///   1. SyntaxProvider.CreateSyntaxProvider — cheap syntax filter
-///   2. Semantic transform — extract IQuery&lt;T&gt;/ICommand/IEvent records
-///   3. RegisterSourceOutput — emit {ClassName}.g.cs
+/// Pipeline B — AddYFexConfigurations registration (always active):
+///   Scans for IAggregateConfiguration implementations and emits a DI registration extension.
 /// </summary>
 [Generator]
 public sealed class CQRSGenerator : IIncrementalGenerator
 {
-    // Interface full names used for semantic matching
-    private const string IQueryInterface   = "YFex.Cqrs.IQuery";
-    private const string ICommandInterface = "YFex.Cqrs.ICommand";
-    private const string IEventInterface   = "YFex.Cqrs.IEvent";
+    private const string IQueryInterface        = "YFex.Cqrs.IQuery";
+    private const string ICommandInterface      = "YFex.Cqrs.ICommand";
+    private const string ICommandTInterface     = "YFex.Cqrs.ICommand";   // generic variant, same base name
+    private const string IEventInterface        = "YFex.Cqrs.IEvent";
+    private const string IQueueableInterface    = "YFex.Cqrs.IQueueable";
+    private const string IAggregateConfigBase   = "YFex.Cqrs.Configuration.IAggregateConfiguration";
 
-    // Nested class names we look for
     private const string QueryClassName   = "Queries";
     private const string CommandClassName = "Commands";
     private const string EventsClassName  = "Events";
 
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
-        // ── Step 1: Cheap syntax-only filter ──────────────────────────────────
-        // Runs on every keystroke; must be fast (no SemanticModel access).
-        // We look for ClassDeclarationSyntax that:
-        //   • has the 'partial' modifier
-        //   • contains at least one nested ClassDeclarationSyntax
-        IncrementalValuesProvider<ClassDeclarationSyntax> candidateSyntax =
-            context.SyntaxProvider
-                .CreateSyntaxProvider(
-                    predicate: static (node, _)  => IsCandidateClass(node),
-                    transform: static (ctx, ct)  => (ClassDeclarationSyntax)ctx.Node)
-                .Where(static x => x is not null)!;
-
-        // ── Step 2: Semantic transform ─────────────────────────────────────────
-        // Runs only on classes that passed the syntax filter.
-        // Uses SemanticModel to resolve interface implementations.
-        IncrementalValuesProvider<ClassToGenerate?> classModels =
-            candidateSyntax.Select(static (syntax, ct) =>
-            {
-                // We need the SemanticModel; it is obtained via the containing
-                // compilation that Roslyn passes through the closure.
-                // However Select() does not give us GeneratorSyntaxContext directly,
-                // so we use a secondary CreateSyntaxProvider just for the semantic pass.
-                return (ClassToGenerate?)null; // placeholder — see combined pipeline below
-            });
-
-        // Combined pipeline: syntax filter + semantic extraction in one provider
-        IncrementalValuesProvider<ClassToGenerate> models =
+        // ── Pipeline A: Static helpers ─────────────────────────────────────────
+        IncrementalValuesProvider<ClassToGenerate> helperModels =
             context.SyntaxProvider
                 .CreateSyntaxProvider(
                     predicate: static (node, _) => IsCandidateClass(node),
-                    transform: static (ctx, ct) => GetClassToGenerate(ctx, ct))
+                    transform: static (ctx, ct)  => GetClassToGenerate(ctx, ct))
                 .Where(static m => m is not null && m.Value.HasAnyMembers)
                 .Select(static (m, _) => m!.Value);
 
-        // ── Step 3: Emit source output ─────────────────────────────────────────
-        context.RegisterSourceOutput(models,
-            static (spc, model) => EmitSource(spc, model));
+        context.RegisterSourceOutput(helperModels,
+            static (spc, model) => spc.AddSource(
+                $"{model.ClassName}.g.cs",
+                CodeBuilder.GenerateSource(model)));
+
+        // ── Pipeline B: AddYFexConfigurations ─────────────────────────────────
+        IncrementalValuesProvider<ConfigRegistration> configModels =
+            context.SyntaxProvider
+                .CreateSyntaxProvider(
+                    predicate: static (node, _) => IsConfigurationClass(node),
+                    transform: static (ctx, ct)  => GetConfigRegistration(ctx, ct))
+                .Where(static m => m is not null)
+                .Select(static (m, _) => m!.Value);
+
+        IncrementalValueProvider<ImmutableArray<ConfigRegistration>> allConfigs =
+            configModels.Collect();
+
+        context.RegisterSourceOutput(allConfigs,
+            static (spc, registrations) =>
+            {
+                if (registrations.IsDefaultOrEmpty) return;
+                spc.AddSource(
+                    "YFexConfigurationRegistrations.g.cs",
+                    CodeBuilder.GenerateConfigRegistration(registrations));
+            });
+
+        // ── Pipeline C: Fusion RPC contracts (gated on YFEX_RPC symbol) ───────
+        // Detect whether the consumer project has the YFEX_RPC preprocessor symbol.
+        // This symbol is injected automatically by YFex.Messaging.Rpc.targets when
+        // the YFex.Messaging.Rpc NuGet package is referenced.
+        IncrementalValueProvider<bool> isRpcEnabled =
+            context.ParseOptionsProvider.Select(static (opts, _) =>
+                opts is Microsoft.CodeAnalysis.CSharp.CSharpParseOptions cpo &&
+                cpo.PreprocessorSymbolNames.Contains("YFEX_RPC"));
+
+        // Combine each aggregate model with the YFEX_RPC flag and filter.
+        IncrementalValuesProvider<ClassToGenerate> rpcModels =
+            helperModels
+                .Combine(isRpcEnabled)
+                .Where(static pair => pair.Right)
+                .Select(static (pair, _) => pair.Left);
+
+        // Emit three files per aggregate: interface, server impl, and registrations.
+        context.RegisterSourceOutput(rpcModels, static (spc, model) =>
+        {
+            var (ifaceHint, ifaceSrc) = RpcContractCodeBuilder.GenerateInterface(model);
+            spc.AddSource(ifaceHint, ifaceSrc);
+
+            var (implHint, implSrc) = RpcContractCodeBuilder.GenerateServerImpl(model);
+            spc.AddSource(implHint, implSrc);
+
+            var (regHint, regSrc) = RpcContractCodeBuilder.GenerateRegistrations(model);
+            spc.AddSource(regHint, regSrc);
+        });
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Step 1: Syntax predicate (fast, syntax-only)
+    // Pipeline A helpers
     // ─────────────────────────────────────────────────────────────────────────
 
     private static bool IsCandidateClass(SyntaxNode node)
     {
-        // Must be a class declaration
-        if (node is not ClassDeclarationSyntax classDecl)
-            return false;
+        if (node is not ClassDeclarationSyntax cls) return false;
 
-        // Must have 'partial' keyword
-        bool isPartial = false;
-        foreach (var mod in classDecl.Modifiers)
-        {
-            if (mod.IsKind(SyntaxKind.PartialKeyword))
-            {
-                isPartial = true;
-                break;
-            }
-        }
+        bool isPartial = cls.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword));
         if (!isPartial) return false;
 
-        foreach (var member in classDecl.Members)
+        return cls.Members.OfType<ClassDeclarationSyntax>().Any(nested =>
         {
-            if (member is ClassDeclarationSyntax nestedClass)
-            {
-                string name = nestedClass.Identifier.ValueText;
-                if (name != QueryClassName && name != CommandClassName && name != EventsClassName)
-                    continue;
-
-                foreach (var mod in nestedClass.Modifiers)
-                {
-                    if (mod.IsKind(SyntaxKind.PartialKeyword))
-                        return true;
-                }
-            }
-        }
-
-        return false;
+            bool isNamed = nested.Identifier.ValueText is QueryClassName or CommandClassName or EventsClassName;
+            bool isNestedPartial = nested.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword));
+            return isNamed && isNestedPartial;
+        });
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Step 2: Semantic transform
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private static ClassToGenerate? GetClassToGenerate(
-        GeneratorSyntaxContext context,
-        CancellationToken ct)
+    private static ClassToGenerate? GetClassToGenerate(GeneratorSyntaxContext ctx, CancellationToken ct)
     {
-        var classDecl = (ClassDeclarationSyntax)context.Node;
-        var semanticModel = context.SemanticModel;
-
+        var classDecl = (ClassDeclarationSyntax)ctx.Node;
+        var model     = ctx.SemanticModel;
         ct.ThrowIfCancellationRequested();
 
-        // Resolve the class symbol
-        if (semanticModel.GetDeclaredSymbol(classDecl, ct) is not INamedTypeSymbol classSymbol)
-            return null;
+        if (model.GetDeclaredSymbol(classDecl, ct) is not INamedTypeSymbol classSymbol) return null;
 
-        string namespaceName = classSymbol.ContainingNamespace.IsGlobalNamespace
+        string ns        = classSymbol.ContainingNamespace.IsGlobalNamespace
             ? string.Empty
             : classSymbol.ContainingNamespace.ToDisplayString();
-
         string className = classSymbol.Name;
 
-        var queries   = new List<QueryToGenerate>();
-        var commands  = new List<CommandToGenerate>();
-        var events    = new List<EventToGenerate>();
+        var queries  = new List<QueryToGenerate>();
+        var commands = new List<CommandToGenerate>();
+        var events   = new List<EventToGenerate>();
 
-        // Iterate nested types of the partial class
-        foreach (var nestedType in classSymbol.GetTypeMembers())
+        foreach (var nested in classSymbol.GetTypeMembers())
         {
             ct.ThrowIfCancellationRequested();
+            if (!nested.IsStatic) continue;
 
-            if (!nestedType.IsStatic) continue;
-
-            switch (nestedType.Name)
+            switch (nested.Name)
             {
-                case QueryClassName:
-                    ExtractQueries(nestedType, queries, ct);
-                    break;
-                case CommandClassName:
-                    ExtractCommands(nestedType, commands, ct);
-                    break;
-                case EventsClassName:
-                    ExtractEvents(nestedType, events, ct);
-                    break;
+                case QueryClassName:   ExtractQueries(nested, queries, ct);   break;
+                case CommandClassName: ExtractCommands(nested, commands, ct);  break;
+                case EventsClassName:  ExtractEvents(nested, events, ct);     break;
             }
         }
 
-        return new ClassToGenerate(
-            namespaceName,
-            className,
+        return new ClassToGenerate(ns, className,
             new EquatableArray<QueryToGenerate>(queries),
             new EquatableArray<CommandToGenerate>(commands),
             new EquatableArray<EventToGenerate>(events));
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Extraction helpers
-    // ─────────────────────────────────────────────────────────────────────────
 
     private static void ExtractQueries(
         INamedTypeSymbol queryClass,
@@ -185,7 +166,6 @@ public sealed class CQRSGenerator : IIncrementalGenerator
             ct.ThrowIfCancellationRequested();
             if (!member.IsRecord) continue;
 
-            // Find IQuery<T> in implemented interfaces (including inherited)
             string? returnType = null;
             foreach (var iface in member.AllInterfaces)
             {
@@ -200,15 +180,13 @@ public sealed class CQRSGenerator : IIncrementalGenerator
 
             if (returnType is null) continue;
 
-            string recordName = member.Name;
-            string methodName = CodeBuilder.GetQueryMethodName(recordName);
-            var parameters    = ExtractParameters(member);
+            // Skip if user already declared a method with the same name (override guard)
+            string methodName = CodeBuilder.GetQueryMethodName(member.Name);
+            if (queryClass.GetMembers(methodName).Any(m => m.Kind == SymbolKind.Method)) continue;
 
             output.Add(new QueryToGenerate(
-                recordName,
-                methodName,
-                returnType,
-                new EquatableArray<ParameterInfo>(parameters)));
+                member.Name, methodName, returnType,
+                new EquatableArray<ParameterInfo>(ExtractParameters(member))));
         }
     }
 
@@ -222,26 +200,36 @@ public sealed class CQRSGenerator : IIncrementalGenerator
             ct.ThrowIfCancellationRequested();
             if (!member.IsRecord) continue;
 
-            bool implementsICommand = false;
+            bool isQueueable = member.AllInterfaces
+                .Any(i => !i.IsGenericType && GetBaseInterfaceName(i) == IQueueableInterface);
+
+            // ICommand<TResult>
+            string? resultType = null;
             foreach (var iface in member.AllInterfaces)
             {
-                if (!iface.IsGenericType && GetBaseInterfaceName(iface) == ICommandInterface)
+                if (iface.IsGenericType && GetBaseInterfaceName(iface) == ICommandInterface)
                 {
-                    implementsICommand = true;
+                    resultType = iface.TypeArguments[0].ToDisplayString(
+                        SymbolDisplayFormat.FullyQualifiedFormat
+                            .WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted));
                     break;
                 }
             }
 
+            // Confirm it implements ICommand or ICommand<T>
+            bool implementsICommand = resultType is not null ||
+                member.AllInterfaces.Any(i => !i.IsGenericType && GetBaseInterfaceName(i) == ICommandInterface);
+
             if (!implementsICommand) continue;
 
-            string recordName = member.Name;
-            string methodName = CodeBuilder.GetCommandMethodName(recordName);
-            var parameters    = ExtractParameters(member);
+            string methodName = CodeBuilder.GetCommandMethodName(member.Name);
+            if (commandClass.GetMembers(methodName).Any(m => m.Kind == SymbolKind.Method)) continue;
 
             output.Add(new CommandToGenerate(
-                recordName,
-                methodName,
-                new EquatableArray<ParameterInfo>(parameters)));
+                member.Name, methodName,
+                new EquatableArray<ParameterInfo>(ExtractParameters(member)),
+                resultType,
+                isQueueable));
         }
     }
 
@@ -255,44 +243,85 @@ public sealed class CQRSGenerator : IIncrementalGenerator
             ct.ThrowIfCancellationRequested();
             if (!member.IsRecord) continue;
 
-            bool implementsIEvent = false;
-            foreach (var iface in member.AllInterfaces)
-            {
-                if (!iface.IsGenericType && GetBaseInterfaceName(iface) == IEventInterface)
-                {
-                    implementsIEvent = true;
-                    break;
-                }
-            }
-
+            bool implementsIEvent = member.AllInterfaces
+                .Any(i => !i.IsGenericType && GetBaseInterfaceName(i) == IEventInterface);
             if (!implementsIEvent) continue;
 
-            string recordName = member.Name;
-            string methodName = CodeBuilder.GetEventMethodName(recordName);
+            string methodName = "Raise";
+            if (eventsClass.GetMembers(methodName)
+                .Any(m => m.Kind == SymbolKind.Method &&
+                          m is IMethodSymbol ms &&
+                          ms.Parameters.Length > 0 &&
+                          ms.Parameters[0].Type.Name == member.Name)) continue;
 
-            output.Add(new EventToGenerate(
-                recordName,
-                methodName));
+            output.Add(new EventToGenerate(member.Name, methodName));
         }
     }
 
-    /// <summary>
-    /// Extracts positional parameters from a record's primary constructor.
-    /// Falls back to the first declared constructor if no primary constructor is found.
-    /// </summary>
+    // ─────────────────────────────────────────────────────────────────────────
+    // Pipeline B helpers
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static bool IsConfigurationClass(SyntaxNode node)
+    {
+        if (node is not ClassDeclarationSyntax cls) return false;
+        return !cls.Modifiers.Any(m => m.IsKind(SyntaxKind.AbstractKeyword)) &&
+               cls.BaseList?.Types.Count > 0;
+    }
+
+    private static ConfigRegistration? GetConfigRegistration(GeneratorSyntaxContext ctx, CancellationToken ct)
+    {
+        if (ctx.Node is not ClassDeclarationSyntax cls) return null;
+        if (ctx.SemanticModel.GetDeclaredSymbol(cls, ct) is not INamedTypeSymbol symbol) return null;
+
+        // Skip file-local types (C# 11 `file` modifier) — they are not reachable from
+        // the generated file; attempting to reference them causes compilation errors.
+        if (symbol.IsFileLocal) return null;
+
+        // Skip private/protected types — not accessible outside their declaring scope.
+        if (symbol.DeclaredAccessibility == Accessibility.Private ||
+            symbol.DeclaredAccessibility == Accessibility.Protected ||
+            symbol.DeclaredAccessibility == Accessibility.ProtectedOrInternal ||
+            symbol.DeclaredAccessibility == Accessibility.ProtectedAndInternal)
+            return null;
+
+        var configs = new List<(string InterfaceName, string AggregateType)>();
+
+        foreach (var iface in symbol.AllInterfaces)
+        {
+            if (!iface.IsGenericType) continue;
+            string baseName = GetBaseInterfaceName(iface);
+            if (baseName != IAggregateConfigBase &&
+                baseName != IAggregateConfigBase.Replace(".Configuration.", ".Configuration.IServer") &&
+                baseName != IAggregateConfigBase.Replace(".Configuration.", ".Configuration.IClient") &&
+                !baseName.EndsWith("AggregateConfiguration", System.StringComparison.Ordinal)) continue;
+
+            string aggTypeName = iface.TypeArguments[0].ToDisplayString(
+                SymbolDisplayFormat.FullyQualifiedFormat
+                    .WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted));
+
+            configs.Add((iface.ToDisplayString(
+                SymbolDisplayFormat.FullyQualifiedFormat
+                    .WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted)),
+                aggTypeName));
+        }
+
+        if (configs.Count == 0) return null;
+
+        string ns = symbol.ContainingNamespace.IsGlobalNamespace
+            ? string.Empty
+            : symbol.ContainingNamespace.ToDisplayString();
+        string fqn = string.IsNullOrEmpty(ns) ? symbol.Name : $"{ns}.{symbol.Name}";
+
+        return new ConfigRegistration(fqn, configs);
+    }
+
+    // ── Shared helpers ────────────────────────────────────────────────────────
+
     private static List<ParameterInfo> ExtractParameters(INamedTypeSymbol record)
     {
         var result = new List<ParameterInfo>();
-
-        // Records expose their primary constructor parameters as the first constructor
-        IMethodSymbol? primaryCtor = null;
-        foreach (var ctor in record.Constructors)
-        {
-            if (ctor.IsImplicitlyDeclared) continue;
-            primaryCtor = ctor;
-            break;
-        }
-
+        IMethodSymbol? primaryCtor = record.Constructors.FirstOrDefault(c => !c.IsImplicitlyDeclared);
         if (primaryCtor is null) return result;
 
         foreach (var param in primaryCtor.Parameters)
@@ -300,37 +329,15 @@ public sealed class CQRSGenerator : IIncrementalGenerator
             string typeName = param.Type.ToDisplayString(
                 SymbolDisplayFormat.FullyQualifiedFormat
                     .WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted));
-
-            result.Add(new ParameterInfo(
-                typeName,
-                param.Name,
-                CodeBuilder.ToCamelCase(param.Name)));
+            result.Add(new ParameterInfo(typeName, param.Name, CodeBuilder.ToCamelCase(param.Name)));
         }
-
         return result;
     }
 
-    /// <summary>
-    /// Returns the fully-qualified base name of an interface WITHOUT generic arity.
-    /// e.g. "YFex.Cqrs.IQuery&lt;UserDto&gt;" → "YFex.Cqrs.IQuery"
-    /// </summary>
     private static string GetBaseInterfaceName(INamedTypeSymbol iface)
     {
         var ns = iface.ContainingNamespace;
-        string namespacePart = (ns is null || ns.IsGlobalNamespace)
-            ? string.Empty
-            : ns.ToDisplayString() + ".";
-        return namespacePart + iface.Name;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Step 3: Source emission
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private static void EmitSource(SourceProductionContext spc, ClassToGenerate model)
-    {
-        string source   = CodeBuilder.GenerateSource(model);
-        string fileName = $"{model.ClassName}.g.cs";
-        spc.AddSource(fileName, source);
+        string nsPart = (ns is null || ns.IsGlobalNamespace) ? string.Empty : ns.ToDisplayString() + ".";
+        return nsPart + iface.Name;
     }
 }

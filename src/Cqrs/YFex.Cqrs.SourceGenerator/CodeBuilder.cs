@@ -1,91 +1,41 @@
 using System;
+using System.Collections.Immutable;
 using System.Text;
 
 namespace YFex.Cqrs.SourceGenerator;
 
-/// <summary>
-/// Helpers for building generated source code strings.
-/// All methods are static for better caching in the incremental pipeline.
-/// </summary>
 internal static class CodeBuilder
 {
-    // -------------------------------------------------------------------------
-    // Name transformation helpers
-    // -------------------------------------------------------------------------
+    // ── Name helpers ──────────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Removes a specific suffix from a name if it ends with it.
-    /// "GetUserByIdQuery" -> "GetUserById"
-    /// </summary>
     public static string RemoveSuffix(string name, string suffix)
-    {
-        if (name.EndsWith(suffix, StringComparison.Ordinal) && name.Length > suffix.Length)
-            return name.Substring(0, name.Length - suffix.Length);
-        return name;
-    }
+        => name.EndsWith(suffix, StringComparison.Ordinal) && name.Length > suffix.Length
+            ? name.Substring(0, name.Length - suffix.Length)
+            : name;
 
-    /// <summary>
-    /// Converts PascalCase to camelCase.
-    /// "MinAge" -> "minAge", "Id" -> "id"
-    /// </summary>
     public static string ToCamelCase(string name)
     {
         if (string.IsNullOrEmpty(name)) return name;
         if (char.IsLower(name[0])) return name;
 
-        // Handle leading uppercase sequences like "ID" -> "id", "IDToken" -> "idToken"
-        int upperCount = 0;
-        while (upperCount < name.Length && char.IsUpper(name[upperCount]))
-            upperCount++;
+        int upper = 0;
+        while (upper < name.Length && char.IsUpper(name[upper])) upper++;
 
-        if (upperCount == 0) return name;
-        if (upperCount == 1) return char.ToLowerInvariant(name[0]) + name.Substring(1);
-
-        // Multiple leading caps: lower all but last if followed by lowercase
-        // e.g. "HTMLParser" -> "htmlParser", "URL" -> "url"
-        if (upperCount == name.Length)
-            return name.ToLowerInvariant();
-
-        // "HTMLParser" -> lower first (upperCount-1) chars, keep the last uppercase
-        return name.Substring(0, upperCount - 1).ToLowerInvariant()
-               + name.Substring(upperCount - 1);
+        if (upper == 0) return name;
+        if (upper == 1) return char.ToLowerInvariant(name[0]) + name.Substring(1);
+        if (upper == name.Length) return name.ToLowerInvariant();
+        return name.Substring(0, upper - 1).ToLowerInvariant() + name.Substring(upper - 1);
     }
 
-    /// <summary>
-    /// Derives the generated method name for a query record.
-    /// "GetUserByIdQuery" -> "GetUserById"
-    /// </summary>
-    public static string GetQueryMethodName(string recordName)
-        => RemoveSuffix(recordName, "Query");
+    public static string GetQueryMethodName(string recordName)   => RemoveSuffix(recordName, "Query");
+    public static string GetCommandMethodName(string recordName) => RemoveSuffix(recordName, "Command");
+    public static string GetEventMethodName(string recordName)   => RemoveSuffix(recordName, "Event");
 
-    /// <summary>
-    /// Derives the generated method name for a command record.
-    /// "CreateUserCommand" -> "CreateUser"
-    /// </summary>
-    public static string GetCommandMethodName(string recordName)
-        => RemoveSuffix(recordName, "Command");
+    // ── Parameter lists ───────────────────────────────────────────────────────
 
-    /// <summary>
-    /// Derives the generated method name for an event record.
-    /// "UserCreatedEvent" -> "OnUserCreated"
-    /// </summary>
-    public static string GetEventMethodName(string recordName)
-    {
-        string withoutSuffix = RemoveSuffix(recordName, "Event");
-        return "On" + withoutSuffix;
-    }
-
-    // -------------------------------------------------------------------------
-    // Parameter list helpers
-    // -------------------------------------------------------------------------
-
-    /// <summary>
-    /// Builds a method parameter list: "int id, string name, string email"
-    /// </summary>
     public static string BuildParameterList(EquatableArray<ParameterInfo> parameters)
     {
         if (parameters.IsEmpty) return string.Empty;
-
         var sb = new StringBuilder();
         bool first = true;
         foreach (var p in parameters)
@@ -99,13 +49,9 @@ internal static class CodeBuilder
         return sb.ToString();
     }
 
-    /// <summary>
-    /// Builds a record constructor argument list: "id, name, email"
-    /// </summary>
     public static string BuildArgumentList(EquatableArray<ParameterInfo> parameters)
     {
         if (parameters.IsEmpty) return string.Empty;
-
         var sb = new StringBuilder();
         bool first = true;
         foreach (var p in parameters)
@@ -117,45 +63,32 @@ internal static class CodeBuilder
         return sb.ToString();
     }
 
-    // -------------------------------------------------------------------------
-    // Full file generation
-    // -------------------------------------------------------------------------
+    // ── Pipeline A: Static helpers ────────────────────────────────────────────
 
-    /// <summary>
-    /// Generates the complete .g.cs file content for a ClassToGenerate model.
-    /// </summary>
     public static string GenerateSource(ClassToGenerate model)
     {
         var sb = new StringBuilder(512);
-
         sb.AppendLine("// <auto-generated/>");
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
 
-        bool hasNamespace = !string.IsNullOrEmpty(model.Namespace);
-        if (hasNamespace)
+        if (!string.IsNullOrEmpty(model.Namespace))
         {
-            sb.Append("namespace ");
-            sb.Append(model.Namespace);
-            sb.AppendLine(";");
+            sb.Append("namespace ").Append(model.Namespace).AppendLine(";");
             sb.AppendLine();
         }
 
-        sb.Append("public partial class ");
-        sb.AppendLine(model.ClassName);
+        sb.Append("public partial class ").AppendLine(model.ClassName);
         sb.AppendLine("{");
 
         bool first = true;
 
-        // Query static class
         if (!model.Queries.IsEmpty)
         {
-            if (!first) sb.AppendLine();
             first = false;
             AppendQueryClass(sb, model.Queries);
         }
 
-        // Command static class
         if (!model.Commands.IsEmpty)
         {
             if (!first) sb.AppendLine();
@@ -163,7 +96,6 @@ internal static class CodeBuilder
             AppendCommandClass(sb, model.Commands);
         }
 
-        // Events static class
         if (!model.Events.IsEmpty)
         {
             if (!first) sb.AppendLine();
@@ -171,37 +103,42 @@ internal static class CodeBuilder
         }
 
         sb.AppendLine("}");
-
         return sb.ToString();
     }
 
     private static void AppendQueryClass(StringBuilder sb, EquatableArray<QueryToGenerate> queries)
     {
-        sb.AppendLine("    public partial class Queries");
+        sb.AppendLine("    public static partial class Queries");
         sb.AppendLine("    {");
 
         bool first = true;
-        foreach (var query in queries)
+        foreach (var q in queries)
         {
             if (!first) sb.AppendLine();
             first = false;
 
-            string paramList = BuildParameterList(query.Parameters);
-            string argList = BuildArgumentList(query.Parameters);
+            string paramList = BuildParameterList(q.Parameters);
+            string argList   = BuildArgumentList(q.Parameters);
 
-            sb.Append("        public static System.Threading.Tasks.Task<YFex.Cqrs.Result<");
-            sb.Append(query.ReturnType);
+            // ValueTask<Result<TResult>> MethodName(params..., CancellationToken ct = default)
+            sb.Append("        public static System.Threading.Tasks.ValueTask<YFex.Cqrs.Result<");
+            sb.Append(q.ReturnType);
             sb.Append(">> ");
-            sb.Append(query.MethodName);
+            sb.Append(q.MethodName);
             sb.Append('(');
-            sb.Append(paramList);
-            sb.AppendLine(")");
+            if (!string.IsNullOrEmpty(paramList)) { sb.Append(paramList); sb.Append(", "); }
+            sb.AppendLine("System.Threading.CancellationToken ct = default)");
             sb.AppendLine("        {");
-            sb.Append("            return YFex.Cqrs.Query.Execute(new ");
-            sb.Append(query.RecordName);
+            sb.Append("            var q = new ");
+            sb.Append(q.RecordName);
             sb.Append('(');
             sb.Append(argList);
-            sb.AppendLine("));");
+            sb.AppendLine(");");
+            sb.Append("            return YFex.Cqrs.YFexDispatcherProvider.Current.QueryAsync<");
+            sb.Append(q.RecordName);
+            sb.Append(", ");
+            sb.Append(q.ReturnType);
+            sb.AppendLine(">(q, ct);");
             sb.AppendLine("        }");
         }
 
@@ -210,7 +147,7 @@ internal static class CodeBuilder
 
     private static void AppendCommandClass(StringBuilder sb, EquatableArray<CommandToGenerate> commands)
     {
-        sb.AppendLine("    public partial class Commands");
+        sb.AppendLine("    public static partial class Commands");
         sb.AppendLine("    {");
 
         bool first = true;
@@ -220,19 +157,84 @@ internal static class CodeBuilder
             first = false;
 
             string paramList = BuildParameterList(cmd.Parameters);
-            string argList = BuildArgumentList(cmd.Parameters);
+            string argList   = BuildArgumentList(cmd.Parameters);
 
-            sb.Append("        public static System.Threading.Tasks.Task<YFex.Cqrs.Result> ");
-            sb.Append(cmd.MethodName);
-            sb.Append('(');
-            sb.Append(paramList);
-            sb.AppendLine(")");
-            sb.AppendLine("        {");
-            sb.Append("            return YFex.Cqrs.Command.Execute(new ");
-            sb.Append(cmd.RecordName);
-            sb.Append('(');
-            sb.Append(argList);
-            sb.AppendLine("));");
+            bool hasResult    = !string.IsNullOrEmpty(cmd.ResultType);
+            bool isQueueable  = cmd.IsQueueable;
+
+            if (hasResult)
+            {
+                // ICommand<TResult>: QueueableResult<TResult> if IQueueable, else Result<TResult>
+                string returnType = isQueueable
+                    ? $"System.Threading.Tasks.ValueTask<YFex.Cqrs.QueueableResult<{cmd.ResultType}>>"
+                    : $"System.Threading.Tasks.ValueTask<YFex.Cqrs.Result<{cmd.ResultType}>>";
+
+                sb.Append("        public static ").Append(returnType).Append(' ');
+                sb.Append(cmd.MethodName);
+                sb.Append('(');
+                if (!string.IsNullOrEmpty(paramList)) { sb.Append(paramList); sb.Append(", "); }
+                sb.AppendLine("System.Threading.CancellationToken ct = default)");
+                sb.AppendLine("        {");
+                sb.Append("            var cmd = new ").Append(cmd.RecordName).Append('(').Append(argList).AppendLine(");");
+
+                if (isQueueable)
+                {
+                    sb.Append("            return YFex.Cqrs.YFexDispatcherProvider.Current.CommandAsync<");
+                    sb.Append(cmd.RecordName).Append(", ").Append(cmd.ResultType).AppendLine(">(cmd, ct);");
+                }
+                else
+                {
+                    // Non-queueable: unwrap QueueableResult<T> → Result<T>
+                    sb.Append("            return UnwrapAsync_").Append(cmd.MethodName).AppendLine("(cmd, ct);");
+                    sb.AppendLine("        }");
+                    sb.AppendLine();
+                    // Emit the private unwrap helper
+                    sb.Append("        private static async System.Threading.Tasks.ValueTask<YFex.Cqrs.Result<");
+                    sb.Append(cmd.ResultType).Append(">> UnwrapAsync_").Append(cmd.MethodName);
+                    sb.Append('(').Append(cmd.RecordName).AppendLine(" cmd, System.Threading.CancellationToken ct)");
+                    sb.AppendLine("        {");
+                    sb.Append("            var r = await YFex.Cqrs.YFexDispatcherProvider.Current.CommandAsync<");
+                    sb.Append(cmd.RecordName).Append(", ").Append(cmd.ResultType).AppendLine(">(cmd, ct).ConfigureAwait(false);");
+                    sb.AppendLine("            return r.ToResult();");
+                    // Don't close twice — continue below
+                }
+            }
+            else
+            {
+                // ICommand (no result): QueueableResult if IQueueable, else Result
+                string returnType = isQueueable
+                    ? "System.Threading.Tasks.ValueTask<YFex.Cqrs.QueueableResult>"
+                    : "System.Threading.Tasks.ValueTask<YFex.Cqrs.Result>";
+
+                sb.Append("        public static ").Append(returnType).Append(' ');
+                sb.Append(cmd.MethodName);
+                sb.Append('(');
+                if (!string.IsNullOrEmpty(paramList)) { sb.Append(paramList); sb.Append(", "); }
+                sb.AppendLine("System.Threading.CancellationToken ct = default)");
+                sb.AppendLine("        {");
+                sb.Append("            var cmd = new ").Append(cmd.RecordName).Append('(').Append(argList).AppendLine(");");
+
+                if (isQueueable)
+                {
+                    sb.Append("            return YFex.Cqrs.YFexDispatcherProvider.Current.CommandAsync<");
+                    sb.Append(cmd.RecordName).AppendLine(">(cmd, ct);");
+                }
+                else
+                {
+                    sb.Append("            return UnwrapVoidAsync_").Append(cmd.MethodName).AppendLine("(cmd, ct);");
+                    sb.AppendLine("        }");
+                    sb.AppendLine();
+                    sb.Append("        private static async System.Threading.Tasks.ValueTask<YFex.Cqrs.Result> UnwrapVoidAsync_");
+                    sb.Append(cmd.MethodName).Append('(').Append(cmd.RecordName).AppendLine(" cmd, System.Threading.CancellationToken ct)");
+                    sb.AppendLine("        {");
+                    sb.Append("            var r = await YFex.Cqrs.YFexDispatcherProvider.Current.CommandAsync<");
+                    sb.Append(cmd.RecordName).AppendLine(">(cmd, ct).ConfigureAwait(false);");
+                    sb.AppendLine("            if (r.TryGetSuccess(out var s)) return s;");
+                    sb.AppendLine("            if (r.TryGetError(out var e)) return e;");
+                    sb.AppendLine("            return YFex.Cqrs.Result.Fail(\"Command was queued unexpectedly.\");");
+                }
+            }
+
             sb.AppendLine("        }");
         }
 
@@ -241,7 +243,7 @@ internal static class CodeBuilder
 
     private static void AppendEventsClass(StringBuilder sb, EquatableArray<EventToGenerate> events)
     {
-        sb.AppendLine("    public partial class Events");
+        sb.AppendLine("    public static partial class Events");
         sb.AppendLine("    {");
 
         bool first = true;
@@ -250,22 +252,48 @@ internal static class CodeBuilder
             if (!first) sb.AppendLine();
             first = false;
 
-            // Publish helper — dispatches via the Event static facade
-            sb.Append("        public static System.Threading.Tasks.Task Publish(");
+            // Raise(TEvent e, CancellationToken ct = default)
+            sb.Append("        public static System.Threading.Tasks.ValueTask Raise(");
             sb.Append(evt.RecordName);
-            sb.AppendLine(" @event)");
-            sb.AppendLine("            => YFex.Cqrs.Event.PublishAsync(@event);");
+            sb.AppendLine(" e, System.Threading.CancellationToken ct = default)");
+            sb.Append("            => YFex.Cqrs.YFexDispatcherProvider.Current.PublishAsync(e, ct);");
             sb.AppendLine();
-
-            // Subscribe helper — returns IDisposable token; dispose to unsubscribe
-            sb.Append("        public static System.IDisposable ");
-            sb.Append(evt.MethodName);
-            sb.Append("(YFex.Messaging.IEventRecipient<");
-            sb.Append(evt.RecordName);
-            sb.AppendLine("> recipient)");
-            sb.AppendLine("            => YFex.Cqrs.Event.Subscribe(recipient);");
         }
 
         sb.AppendLine("    }");
+    }
+
+    // ── Pipeline B: AddYFexConfigurations ─────────────────────────────────────
+
+    public static string GenerateConfigRegistration(System.Collections.Immutable.ImmutableArray<ConfigRegistration> registrations)
+    {
+        var sb = new StringBuilder(512);
+        sb.AppendLine("// <auto-generated/>");
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+        sb.AppendLine("using Microsoft.Extensions.DependencyInjection;");
+        sb.AppendLine("using YFex.Cqrs.Configuration;");
+        sb.AppendLine();
+        sb.AppendLine("public static class YFexConfigurationRegistrations");
+        sb.AppendLine("{");
+        sb.AppendLine("    public static IServiceCollection AddYFexConfigurations(this IServiceCollection services)");
+        sb.AppendLine("    {");
+
+        foreach (var reg in registrations)
+        {
+            foreach (var (ifaceName, _) in reg.Interfaces)
+            {
+                sb.Append("        services.AddSingleton<");
+                sb.Append(ifaceName);
+                sb.Append(", ");
+                sb.Append(reg.ImplementationFqn);
+                sb.AppendLine(">();");
+            }
+        }
+
+        sb.AppendLine("        return services;");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        return sb.ToString();
     }
 }
