@@ -13,8 +13,10 @@ public sealed class DefaultLiveStateTests
     [Fact]
     public void Value_IsDefault_BeforeFirstFetch()
     {
-        using var state = Factory.Create<int>(ct => Task.FromResult(42));
-        state.Value.Should().Be(0, "first fetch hasn't run yet");
+        // Use a never-completing task so the first fetch cannot race past this assertion.
+        // The CTS cancellation in Dispose() will cancel the delay and clean up.
+        using var state = Factory.Create<int>(ct => Task.Delay(Timeout.Infinite, ct).ContinueWith(_ => 0));
+        state.Value.Should().Be(default, "first fetch hasn't run yet");
     }
 
     [Fact]

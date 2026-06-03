@@ -4,7 +4,8 @@ namespace YFex.Messaging.Generator;
 
 /// <summary>
 /// Represents one [Live] decorated method in a class.
-/// PropertyId range: base + 0 = value, base + 1 = IsLoading, base + 2 = Error.
+/// PropertyId range: base+0 = Value, base+1 = IsLoading, base+2 = Error,
+///                   base+3 = LastFetchedAt, base+4 = IsStale, base+5 = IsFromOfflineCache.
 /// </summary>
 internal readonly struct LiveMethodModel : IEquatable<LiveMethodModel>
 {
@@ -59,6 +60,12 @@ internal readonly struct LiveMethodModel : IEquatable<LiveMethodModel>
     /// </summary>
     public int SuspendBehavior { get; }
 
+    /// <summary>
+    /// Stale threshold in milliseconds from <c>[Live(StaleTimeMs = ...)]</c>.
+    /// Forwarded to <see cref="LiveStateOptions.StaleTimeMs"/>. Zero = never stale.
+    /// </summary>
+    public int StaleTimeMs { get; }
+
     public LiveMethodModel(
         string methodName,
         string propertyName,
@@ -69,7 +76,8 @@ internal readonly struct LiveMethodModel : IEquatable<LiveMethodModel>
         bool needsMemoryPackWarning,
         EquatableArray<string> explicitDependencies,
         bool needsRefreshTriggerWarning,
-        int suspendBehavior)
+        int suspendBehavior,
+        int staleTimeMs)
     {
         MethodName                  = methodName;
         PropertyName                = propertyName;
@@ -81,6 +89,7 @@ internal readonly struct LiveMethodModel : IEquatable<LiveMethodModel>
         ExplicitDependencies        = explicitDependencies;
         NeedsRefreshTriggerWarning  = needsRefreshTriggerWarning;
         SuspendBehavior             = suspendBehavior;
+        StaleTimeMs                 = staleTimeMs;
     }
 
     public bool Equals(LiveMethodModel other) =>
@@ -93,7 +102,8 @@ internal readonly struct LiveMethodModel : IEquatable<LiveMethodModel>
         NeedsMemoryPackWarning      == other.NeedsMemoryPackWarning      &&
         ExplicitDependencies.Equals(other.ExplicitDependencies)          &&
         NeedsRefreshTriggerWarning  == other.NeedsRefreshTriggerWarning  &&
-        SuspendBehavior             == other.SuspendBehavior;
+        SuspendBehavior             == other.SuspendBehavior             &&
+        StaleTimeMs                 == other.StaleTimeMs;
 
     public override bool Equals(object? obj) => obj is LiveMethodModel m && Equals(m);
 
@@ -112,6 +122,7 @@ internal readonly struct LiveMethodModel : IEquatable<LiveMethodModel>
             h = h * 31 + ExplicitDependencies.GetHashCode();
             h = h * 31 + NeedsRefreshTriggerWarning.GetHashCode();
             h = h * 31 + SuspendBehavior;
+            h = h * 31 + StaleTimeMs;
             return h;
         }
     }

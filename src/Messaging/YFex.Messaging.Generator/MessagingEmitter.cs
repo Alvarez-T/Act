@@ -8,7 +8,27 @@ internal static class MessagingEmitter
 {
     public static void Emit(SourceProductionContext spc, SubscribeClassModel model)
     {
-        // Report YFRPC0001 for methods with Target/Group but no [MemoryPackable]
+        // ── YFSUB001: class is not partial ────────────────────────────────
+        if (!model.IsPartial)
+        {
+            spc.ReportDiagnostic(Diagnostic.Create(
+                MessagingDiagnostics.YFSUB001,
+                Location.None,
+                model.ClassName));
+            return; // nothing to emit without partial
+        }
+
+        // ── YFSUB002: unsupported base class ──────────────────────────────
+        if (!model.ValidBase)
+        {
+            spc.ReportDiagnostic(Diagnostic.Create(
+                MessagingDiagnostics.YFSUB002,
+                Location.None,
+                model.ClassName));
+            return;
+        }
+
+        // ── YFRPC0001: cross-boundary methods without [MemoryPackable] ────
         foreach (var m in model.Methods)
         {
             if (m.NeedsMemoryPackWarning)
@@ -24,7 +44,7 @@ internal static class MessagingEmitter
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Full file generation
+    // Full file generation — branches on StateObject vs MessagingHost
     // ─────────────────────────────────────────────────────────────────────────
 
     private static string GenerateSource(SubscribeClassModel model)
@@ -50,17 +70,27 @@ internal static class MessagingEmitter
         // ── Section 1: Private adapter nested classes ─────────────────────
         AppendAdapterClasses(sb, model);
 
-        // ── Section 2: Subscription fields ───────────────────────────────
-        sb.AppendLine();
-        AppendSubscriptionFields(sb, model);
+        if (model.IsMessagingHost)
+        {
+            // ── Pipeline C: MessagingHost — OnHostStarting ────────────────
+            sb.AppendLine();
+            AppendOnHostStarting(sb, model);
+        }
+        else
+        {
+            // ── Pipeline B: StateObject — activate / deactivate ───────────
+            // ── Section 2: Subscription fields ───────────────────────────
+            sb.AppendLine();
+            AppendSubscriptionFields(sb, model);
 
-        // ── Section 3: OnActivateCascading override ───────────────────────
-        sb.AppendLine();
-        AppendOnActivateCascading(sb, model);
+            // ── Section 3: OnActivateCascading override ───────────────────
+            sb.AppendLine();
+            AppendOnActivateCascading(sb, model);
 
-        // ── Section 4: OnDeactivateCascading override ─────────────────────
-        sb.AppendLine();
-        AppendOnDeactivateCascading(sb, model);
+            // ── Section 4: OnDeactivateCascading override ─────────────────
+            sb.AppendLine();
+            AppendOnDeactivateCascading(sb, model);
+        }
 
         sb.AppendLine("}");
 
@@ -307,6 +337,80 @@ internal static class MessagingEmitter
             sb.Append(vmPath);
             sb.AppendLine(")) return;");
         }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // Pipeline C: MessagingHost — OnHostStarting
+    //
+    // For MessagingHost-derived classes, subscriptions are registered via
+    // RegisterSubscription() in OnHostStarting() (called from the ctor).
+    // The bus always gets KeepAlive = true so the adapter survives without a field.
+    // Timer adapters (debounce/throttle) are also registered so DisposeAsync cleans them up.
+    // ─────────────────────────────────────────────────────────────────────────
+
+    private static void AppendOnHostStarting(StringBuilder sb, SubscribeClassModel model)
+    {
+        sb.AppendLine("    protected override void OnHostStarting()");
+        sb.AppendLine("    {");
+        sb.AppendLine("        base.OnHostStarting();");
+
+        foreach (var method in model.Methods)
+        {
+            string adapterVar = $"__hostAdapter_{method.MethodName}";
+
+            // Create adapter
+            sb.Append("        var ");
+            sb.Append(adapterVar);
+            sb.Append(" = new ");
+            sb.Append(AdapterClassName(method.MethodName));
+            sb.AppendLine("(this);");
+
+            // Build SubscribeOptions — always KeepAlive for MessagingHost singletons
+            string optionsExpr = BuildMessagingHostOptions(method);
+
+            // Register subscription token
+            sb.Append("        RegisterSubscription(global::YFex.Messaging.EventBusProvider.Current.");
+            if (method.IsAsync)
+            {
+                sb.Append("SubscribeAsync<");
+                sb.Append(method.EventTypeFqn);
+                sb.Append(">(");
+            }
+            else
+            {
+                sb.Append("Subscribe<");
+                sb.Append(method.EventTypeFqn);
+                sb.Append(">(");
+            }
+            sb.Append(adapterVar);
+            sb.Append(", ");
+            sb.Append(optionsExpr);
+            sb.AppendLine("));");
+
+            // Register the adapter itself if it is IDisposable (debounce/throttle timer cleanup)
+            if (method.DebounceMs > 0 || method.ThrottleMs > 0)
+            {
+                sb.Append("        RegisterSubscription(");
+                sb.Append(adapterVar);
+                sb.AppendLine(");");
+            }
+        }
+
+        sb.AppendLine("    }");
+    }
+
+    private static string BuildMessagingHostOptions(SubscribeMethodModel method)
+    {
+        // MessagingHost subscriptions are always KeepAlive so the adapter stays rooted via the bus.
+        var parts = new System.Collections.Generic.List<string> { "KeepAlive = true" };
+
+        if (method.Target is { } target)
+            parts.Add($"TargetId = this.{target}");
+
+        if (method.Group is { } group)
+            parts.Add($"GroupId = this.{group}");
+
+        return $"new global::YFex.Messaging.SubscribeOptions {{ {string.Join(", ", parts)} }}";
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>YFex.Messaging.Rpc.Wolverine</RootNamespace>
+    <AssemblyName>YFex.Messaging.Rpc.Wolverine</AssemblyName>
+    <PackageId>YFex.Messaging.Rpc.Wolverine</PackageId>
+    <Description>Wolverine adapter for YFex.Messaging.Rpc: WolverineHandlerInvoker, WolverineLocalDispatcher, exception middleware, and server-push event bridge.</Description>
+    <PackageTags>yfex;messaging;rpc;wolverine;cqrs</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="WolverineFx" Version="3.10.0" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Messaging.Rpc\YFex.Messaging.Rpc.csproj" />
+  </ItemGroup>
+
+</Project>

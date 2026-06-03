@@ -60,6 +60,20 @@ public sealed class LiveAttribute : Attribute
     /// diagnostic to remind you that the property will only refresh manually.
     /// </summary>
     public string[]? DependsOn { get; init; }
+
+    /// <summary>
+    /// Milliseconds after the last successful fetch before the generated
+    /// <c>IsXStale</c> companion returns <c>true</c>.
+    /// Zero (default) means the value is never considered stale.
+    /// </summary>
+    public int StaleTimeMs { get; init; }
+
+    /// <summary>
+    /// Optional key used by persistence backends (Plan 4) to store/restore
+    /// the cached value across process restarts. Null means no persistence.
+    /// Only meaningful with <c>Cache = LiveCache.ClientPersistent</c>.
+    /// </summary>
+    public string? PersistenceKey { get; init; }
 }
 
 /// <summary>Controls what happens to a <c>[Live]</c> property when the host page is suspended.</summary>

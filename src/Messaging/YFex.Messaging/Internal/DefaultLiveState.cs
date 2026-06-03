@@ -10,18 +10,25 @@ internal sealed class DefaultLiveState<T> : ILiveState<T>
 {
     private readonly Func<CancellationToken, Task<T>> _compute;
     private readonly int _pollMs;
+    private readonly int _staleTimeMs;
     private readonly CancellationTokenSource _cts = new();
     private bool _disposed;
 
     public T? Value { get; private set; }
     public bool IsLoading { get; private set; }
     public Exception? Error { get; private set; }
+    public DateTimeOffset? LastFetchedAt { get; private set; }
+    public bool IsFromOfflineCache => false;
+    public bool IsStale => _staleTimeMs > 0
+        && LastFetchedAt.HasValue
+        && (DateTimeOffset.UtcNow - LastFetchedAt.Value).TotalMilliseconds > _staleTimeMs;
     public event Action<ILiveState<T>>? Updated;
 
     public DefaultLiveState(Func<CancellationToken, Task<T>> compute, LiveStateOptions options)
     {
-        _compute = compute;
-        _pollMs  = options.PollMs;
+        _compute     = compute;
+        _pollMs      = options.PollMs;
+        _staleTimeMs = options.StaleTimeMs;
 
         // Yield before the first fetch so subscribers have a chance to attach before
         // Updated fires — avoids a race when the computation completes synchronously.
@@ -47,8 +54,9 @@ internal sealed class DefaultLiveState<T> : ILiveState<T>
         try
         {
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, _cts.Token);
-            Value = await _compute(linked.Token).ConfigureAwait(false);
-            Error = null;
+            Value         = await _compute(linked.Token).ConfigureAwait(false);
+            Error         = null;
+            LastFetchedAt = DateTimeOffset.UtcNow;
         }
         catch (OperationCanceledException) when (_cts.IsCancellationRequested)
         {

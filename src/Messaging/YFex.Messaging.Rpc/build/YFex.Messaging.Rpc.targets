@@ -1,0 +1,12 @@
+<!--
+  YFex.Messaging.Rpc.targets
+  Shipped inside the NuGet package's build/ folder so every consumer project
+  gets the YFEX_RPC preprocessor constant automatically.
+  The CQRSGenerator gates its Fusion-contract pipeline on this symbol.
+-->
+<Project>
+  <PropertyGroup>
+    <!-- Append to the existing DefineConstants so we never clobber user constants. -->
+    <DefineConstants>$(DefineConstants);YFEX_RPC</DefineConstants>
+  </PropertyGroup>
+</Project>

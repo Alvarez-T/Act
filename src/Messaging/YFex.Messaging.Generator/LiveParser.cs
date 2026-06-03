@@ -83,6 +83,7 @@ internal static class LiveParser
                 int       pollMs         = 0;
                 int       cache          = 0; // LiveCache.Local
                 int       suspendBehavior = 0; // LiveSuspendBehavior.PauseAndRefreshOnResume
+                int       staleTimeMs    = 0;
                 string[]? dependsOn      = null;
 
                 foreach (var arg in attr.NamedArguments)
@@ -97,6 +98,9 @@ internal static class LiveParser
                             break;
                         case "SuspendBehavior":
                             suspendBehavior = (int)(arg.Value.Value ?? 0);
+                            break;
+                        case "StaleTimeMs":
+                            staleTimeMs = (int)(arg.Value.Value ?? 0);
                             break;
                         case "DependsOn":
                             // TypedConstant array of strings
@@ -136,9 +140,10 @@ internal static class LiveParser
                     needsMpWarn,
                     deps,
                     needsRefreshWarn,
-                    suspendBehavior));
+                    suspendBehavior,
+                    staleTimeMs));
 
-                nextBaseId += 3; // reserve 3 IDs: Value, IsLoading, Error
+                nextBaseId += 6; // reserve 6 IDs per method: Value, IsLoading, Error, LastFetchedAt, IsStale, IsFromOfflineCache
                 break; // only one [Live] per method
             }
         }

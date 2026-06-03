@@ -16,11 +16,26 @@ public interface ILiveState<T> : IDisposable
     /// <summary>Last exception thrown by the fetch method. Null when succeeded.</summary>
     Exception? Error { get; }
 
+    /// <summary>UTC timestamp of the last successful fetch. Null before first successful fetch.</summary>
+    DateTimeOffset? LastFetchedAt { get; }
+
+    /// <summary>
+    /// True when the value is older than the configured <c>StaleTimeMs</c> threshold.
+    /// Always false when <c>StaleTimeMs</c> is 0 or no successful fetch has occurred.
+    /// </summary>
+    bool IsStale { get; }
+
+    /// <summary>
+    /// True when the current <see cref="Value"/> was loaded from offline/persistent storage
+    /// rather than a live computation. Always false for the default in-memory implementation.
+    /// </summary>
+    bool IsFromOfflineCache { get; }
+
     /// <summary>Triggers a fresh fetch regardless of current state.</summary>
     Task RecomputeAsync(CancellationToken ct = default);
 
     /// <summary>Fires after every completed fetch (successful or failed).</summary>
-    event Action<ILiveState<T>> Updated;
+    event Action<ILiveState<T>>? Updated;
 }
 
 /// <summary>Options forwarded to the live-state implementation.</summary>
@@ -40,4 +55,10 @@ public readonly struct LiveStateOptions
     /// The factory uses this to decide where to cache and how to deliver invalidations.
     /// </summary>
     public LiveCache Cache { get; init; }
+
+    /// <summary>
+    /// Milliseconds after the last successful fetch before <see cref="ILiveState{T}.IsStale"/>
+    /// returns true. Zero (default) means the value is never considered stale.
+    /// </summary>
+    public int StaleTimeMs { get; init; }
 }

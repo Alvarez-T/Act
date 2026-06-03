@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
@@ -12,6 +12,8 @@
     <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
     <NoWarn>$(NoWarn);CS1591;xUnit1031</NoWarn>
+    <!-- Suppress RequiresUnreferencedCode/RequiresDynamicCode for OutboxReplayer tests -->
+    <NoWarn>$(NoWarn);IL2026;IL3050</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,16 +22,26 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageReference Include="FluentAssertions" Version="6.12.2" />
     <PackageReference Include="coverlet.collector" Version="6.0.2" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\YFex.Messaging\YFex.Messaging.csproj" />
-    <ProjectReference Include="..\YFex.State\YFex.State.csproj" />
-    <!-- Generators must be referenced explicitly for project-to-project Analyzer propagation -->
+    <ProjectReference Include="..\YFex.Messaging.Rpc\YFex.Messaging.Rpc.csproj" />
+    <ProjectReference Include="..\YFex.Messaging.Rpc.Sqlite\YFex.Messaging.Rpc.Sqlite.csproj" />
+    <ProjectReference Include="..\YFex.Messaging.Rpc.Encryption\YFex.Messaging.Rpc.Encryption.csproj" />
+    <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
+    <ProjectReference Include="..\..\State\YFex.State\YFex.State.csproj" />
+    <!-- Generators referenced as Analyzers for source generation in this project -->
     <ProjectReference Include="..\YFex.Messaging.Generator\YFex.Messaging.Generator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\YFex.State.Generator\YFex.State.Generator.csproj"
+    <ProjectReference Include="..\..\State\YFex.State.Generator\YFex.State.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Cqrs\YFex.Cqrs.SourceGenerator\YFex.Cqrs.SourceGenerator.csproj"
                       OutputItemType="Analyzer"
                       ReferenceOutputAssembly="false" />
   </ItemGroup>
@@ -38,7 +50,11 @@
     <Using Include="Xunit" />
     <Using Include="FluentAssertions" />
     <Using Include="YFex.Messaging" />
+    <Using Include="YFex.Cqrs" />
+    <Using Include="YFex.Messaging.Rpc" />
     <Using Include="YFex.State" />
+    <Using Include="System.Threading" />
+    <Using Include="System.Threading.Tasks" />
   </ItemGroup>
 
 </Project>

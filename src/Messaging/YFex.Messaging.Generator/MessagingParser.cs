@@ -8,9 +8,12 @@ namespace YFex.Messaging.Generator;
 
 internal static class MessagingParser
 {
-    private const string SubscribeAttributeName    = "SubscribeAttribute";
-    private const string SubscribeAttributeNs      = "YFex.Messaging";
-    private const string SubscribeShortName        = "Subscribe";
+    private const string SubscribeAttributeName = "SubscribeAttribute";
+    private const string SubscribeAttributeNs   = "YFex.Messaging";
+    private const string SubscribeShortName     = "Subscribe";
+
+    private const string StateObjectFqn     = "YFex.State.StateObject";
+    private const string MessagingHostFqn   = "YFex.Messaging.MessagingHost";
 
     // ─────────────────────────────────────────────────────────────────────────
     // Step 1: Cheap syntax-only predicate
@@ -53,13 +56,34 @@ internal static class MessagingParser
         GeneratorSyntaxContext context,
         CancellationToken ct)
     {
-        var classDecl    = (ClassDeclarationSyntax)context.Node;
+        var classDecl     = (ClassDeclarationSyntax)context.Node;
         var semanticModel = context.SemanticModel;
 
         ct.ThrowIfCancellationRequested();
 
         if (semanticModel.GetDeclaredSymbol(classDecl, ct) is not INamedTypeSymbol classSymbol)
             return null;
+
+        // ── YFSUB001: must be partial ──────────────────────────────────────
+        bool isPartial = classDecl.Modifiers.Any(SyntaxKind.PartialKeyword);
+        if (!isPartial)
+        {
+            context.SemanticModel.Compilation.GetDiagnostics();  // ensure workspace is valid
+            // We report via the source production context — return a sentinel
+            // that the pipeline recognises as needing a diagnostic.
+            // Since we can't report here, we set methods to empty after setting a flag.
+            // The emitter skips empty models; the diagnostic fires below via a separate check.
+            // Simplest: return null and trust the IDE's partial-check; but for clarity emit the model
+            // with a zero-method list and let the emitter call ReportDiagnostic.
+            // Actually: the clean way is to return a special model variant.
+            // For now: report is done in MessagingEmitter via YFSUB001 on zero-method models.
+            // We will signal this with a dedicated marker — use IsMessagingHost=false + empty methods.
+        }
+
+        // ── YFSUB002: must inherit StateObject or MessagingHost ────────────
+        bool inheritsStateObject   = InheritsFrom(classSymbol, StateObjectFqn);
+        bool inheritsMessagingHost = InheritsFrom(classSymbol, MessagingHostFqn);
+        bool validBase = inheritsStateObject || inheritsMessagingHost;
 
         string namespaceName = classSymbol.ContainingNamespace.IsGlobalNamespace
             ? string.Empty
@@ -127,10 +151,6 @@ internal static class MessagingParser
                     needsMemoryPackWarning: needsMpWarn,
                     debounceMs: debounceMs,
                     throttleMs: throttleMs));
-
-                // Only process the first SubscribeAttribute per method for now;
-                // AllowMultiple on the same method for different T is handled by
-                // having multiple [Subscribe<T>] attributes — each gets its own iteration.
             }
         }
 
@@ -139,7 +159,10 @@ internal static class MessagingParser
         return new SubscribeClassModel(
             namespaceName,
             classSymbol.Name,
-            new EquatableArray<SubscribeMethodModel>(methods.ToArray()));
+            new EquatableArray<SubscribeMethodModel>(methods.ToArray()),
+            isMessagingHost: inheritsMessagingHost,
+            isPartial:      isPartial,
+            validBase:      validBase);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -165,5 +188,23 @@ internal static class MessagingParser
 
         string ns = symbol.ContainingNamespace?.ToDisplayString() ?? string.Empty;
         return ns == SubscribeAttributeNs;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="type"/> or any of its base types has a fully-qualified
+    /// name equal to <paramref name="targetFqn"/> (e.g. "YFex.State.StateObject").
+    /// </summary>
+    internal static bool InheritsFrom(INamedTypeSymbol type, string targetFqn)
+    {
+        var current = type.BaseType;
+        while (current is not null)
+        {
+            string fqn = current.ContainingNamespace is { IsGlobalNamespace: false } ns
+                ? $"{ns.ToDisplayString()}.{current.Name}"
+                : current.Name;
+            if (fqn == targetFqn) return true;
+            current = current.BaseType;
+        }
+        return false;
     }
 }

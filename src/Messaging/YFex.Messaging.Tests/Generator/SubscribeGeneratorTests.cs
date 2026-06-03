@@ -6,8 +6,10 @@ namespace YFex.Messaging.Tests.Generator;
 /// Each test configures its own DefaultEventBus and calls EventBusProvider.Configure to avoid
 /// cross-test interference with the static provider.
 /// </summary>
-public sealed class SubscribeGeneratorTests
+[Collection("DispatcherTests")]
+public sealed class SubscribeGeneratorTests : IDisposable
 {
+    public void Dispose() => EventBusProvider.Configure(new DefaultEventBus());
     // ── Lifecycle gate ─────────────────────────────────────────────────────────
 
     [Fact]

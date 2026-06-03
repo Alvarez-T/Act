@@ -121,10 +121,13 @@ internal static class LiveEmitter
 
             if (model.InheritsMvvmStateObject)
             {
-                // PropertyChangedEventArgs for value, IsLoading, Error
-                AppendPceaField(sb, m.PropertyName,          m.PropertyName);
-                AppendPceaField(sb, $"Is{m.PropertyName}Loading", $"Is{m.PropertyName}Loading");
-                AppendPceaField(sb, $"{m.PropertyName}Error",     $"{m.PropertyName}Error");
+                // PropertyChangedEventArgs for value, IsLoading, Error, LastFetchedAt, IsStale, IsFromOfflineCache
+                AppendPceaField(sb, m.PropertyName,                      m.PropertyName);
+                AppendPceaField(sb, $"Is{m.PropertyName}Loading",        $"Is{m.PropertyName}Loading");
+                AppendPceaField(sb, $"{m.PropertyName}Error",            $"{m.PropertyName}Error");
+                AppendPceaField(sb, $"{m.PropertyName}LastFetchedAt",    $"{m.PropertyName}LastFetchedAt");
+                AppendPceaField(sb, $"Is{m.PropertyName}Stale",         $"Is{m.PropertyName}Stale");
+                AppendPceaField(sb, $"Is{m.PropertyName}FromOfflineCache", $"Is{m.PropertyName}FromOfflineCache");
             }
         }
     }
@@ -189,6 +192,33 @@ internal static class LiveEmitter
             sb.AppendLine("?.Error;");
             sb.AppendLine();
 
+            // LastFetchedAt
+            sb.Append("    public global::System.DateTimeOffset? ");
+            sb.Append(m.PropertyName);
+            sb.AppendLine("LastFetchedAt");
+            sb.Append("        => ");
+            sb.Append(field);
+            sb.AppendLine("?.LastFetchedAt;");
+            sb.AppendLine();
+
+            // IsStale
+            sb.Append("    public bool Is");
+            sb.Append(m.PropertyName);
+            sb.AppendLine("Stale");
+            sb.Append("        => ");
+            sb.Append(field);
+            sb.AppendLine("?.IsStale ?? false;");
+            sb.AppendLine();
+
+            // IsFromOfflineCache
+            sb.Append("    public bool Is");
+            sb.Append(m.PropertyName);
+            sb.AppendLine("FromOfflineCache");
+            sb.Append("        => ");
+            sb.Append(field);
+            sb.AppendLine("?.IsFromOfflineCache ?? false;");
+            sb.AppendLine();
+
             // RefreshAsync
             sb.Append("    public global::System.Threading.Tasks.Task Refresh");
             sb.Append(m.PropertyName);
@@ -211,27 +241,19 @@ internal static class LiveEmitter
 
         foreach (var m in model.Methods)
         {
-            uint idValue     = m.BasePropertyId;
-            uint idIsLoading = m.BasePropertyId + 1;
-            uint idError     = m.BasePropertyId + 2;
+            uint idValue              = m.BasePropertyId;
+            uint idIsLoading          = m.BasePropertyId + 1;
+            uint idError              = m.BasePropertyId + 2;
+            uint idLastFetchedAt      = m.BasePropertyId + 3;
+            uint idIsStale            = m.BasePropertyId + 4;
+            uint idIsFromOfflineCache = m.BasePropertyId + 5;
 
-            sb.Append("            ");
-            sb.Append(idValue);
-            sb.Append("u => ");
-            sb.Append(ArgsField(m.PropertyName));
-            sb.AppendLine(",");
-
-            sb.Append("            ");
-            sb.Append(idIsLoading);
-            sb.Append("u => ");
-            sb.Append(ArgsField($"Is{m.PropertyName}Loading"));
-            sb.AppendLine(",");
-
-            sb.Append("            ");
-            sb.Append(idError);
-            sb.Append("u => ");
-            sb.Append(ArgsField($"{m.PropertyName}Error"));
-            sb.AppendLine(",");
+            sb.Append("            "); sb.Append(idValue);              sb.Append("u => "); sb.Append(ArgsField(m.PropertyName));                          sb.AppendLine(",");
+            sb.Append("            "); sb.Append(idIsLoading);          sb.Append("u => "); sb.Append(ArgsField($"Is{m.PropertyName}Loading"));            sb.AppendLine(",");
+            sb.Append("            "); sb.Append(idError);              sb.Append("u => "); sb.Append(ArgsField($"{m.PropertyName}Error"));                sb.AppendLine(",");
+            sb.Append("            "); sb.Append(idLastFetchedAt);      sb.Append("u => "); sb.Append(ArgsField($"{m.PropertyName}LastFetchedAt"));        sb.AppendLine(",");
+            sb.Append("            "); sb.Append(idIsStale);            sb.Append("u => "); sb.Append(ArgsField($"Is{m.PropertyName}Stale"));              sb.AppendLine(",");
+            sb.Append("            "); sb.Append(idIsFromOfflineCache); sb.Append("u => "); sb.Append(ArgsField($"Is{m.PropertyName}FromOfflineCache"));   sb.AppendLine(",");
         }
 
         sb.AppendLine("            _ => base.GetPropertyChangedArgs(id)");
@@ -252,7 +274,7 @@ internal static class LiveEmitter
             string field = LiveField(m.PropertyName);
 
             // Build LiveStateOptions
-            bool hasOpts = m.PollMs > 0 || m.Cache != 0;
+            bool hasOpts = m.PollMs > 0 || m.Cache != 0 || m.StaleTimeMs > 0;
             string opts;
             if (!hasOpts)
             {
@@ -261,8 +283,9 @@ internal static class LiveEmitter
             else
             {
                 var parts = new System.Collections.Generic.List<string>();
-                if (m.PollMs > 0) parts.Add($"PollMs = {m.PollMs}");
-                if (m.Cache != 0)  parts.Add($"Cache = (global::YFex.Messaging.LiveCache){m.Cache}");
+                if (m.PollMs > 0)      parts.Add($"PollMs = {m.PollMs}");
+                if (m.Cache != 0)      parts.Add($"Cache = (global::YFex.Messaging.LiveCache){m.Cache}");
+                if (m.StaleTimeMs > 0) parts.Add($"StaleTimeMs = {m.StaleTimeMs}");
                 opts = $"new global::YFex.Messaging.LiveStateOptions {{ {string.Join(", ", parts)} }}";
             }
 
@@ -364,20 +387,11 @@ internal static class LiveEmitter
 
             if (model.InheritsMvvmStateObject)
             {
-                // IsLoading and Error need their own notifications via temporary descriptors
-                sb.Append("        this.FireNotification(new global::YFex.State.Notification.ChangedNotification");
-                sb.Append(" { PropertyName = nameof(Is");
-                sb.Append(m.PropertyName);
-                sb.Append("Loading), PropertyId = ");
-                sb.Append(m.BasePropertyId + 1);
-                sb.AppendLine("u });");
-
-                sb.Append("        this.FireNotification(new global::YFex.State.Notification.ChangedNotification");
-                sb.Append(" { PropertyName = nameof(");
-                sb.Append(m.PropertyName);
-                sb.Append("Error), PropertyId = ");
-                sb.Append(m.BasePropertyId + 2);
-                sb.AppendLine("u });");
+                AppendInlineNotification(sb, $"Is{m.PropertyName}Loading",        m.BasePropertyId + 1);
+                AppendInlineNotification(sb, $"{m.PropertyName}Error",            m.BasePropertyId + 2);
+                AppendInlineNotification(sb, $"{m.PropertyName}LastFetchedAt",    m.BasePropertyId + 3);
+                AppendInlineNotification(sb, $"Is{m.PropertyName}Stale",         m.BasePropertyId + 4);
+                AppendInlineNotification(sb, $"Is{m.PropertyName}FromOfflineCache", m.BasePropertyId + 5);
             }
 
             sb.AppendLine("    }");
@@ -581,4 +595,14 @@ internal static class LiveEmitter
     private static string SuspendDirtyCallback(string propName) => $"__OnLive{propName}Dirtied";
     private static string DepWatcherClassName(string propName)  => $"__LiveDep_{propName}";
     private static string DepWatcherFieldName(string propName)  => $"__liveDep_{propName}";
+
+    private static void AppendInlineNotification(StringBuilder sb, string propertyName, uint propertyId)
+    {
+        sb.Append("        this.FireNotification(new global::YFex.State.Notification.ChangedNotification");
+        sb.Append(" { PropertyName = nameof(");
+        sb.Append(propertyName);
+        sb.Append("), PropertyId = ");
+        sb.Append(propertyId);
+        sb.AppendLine("u });");
+    }
 }

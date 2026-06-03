@@ -1,7 +1,7 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>net11.0;net10.0;net8.0</TargetFrameworks>
+    <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
@@ -12,13 +12,24 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- ActualLab.Fusion is a transitive dep via YFex.Messaging.Fusion;
-         reference it explicitly for RPC service interfaces and extensions. -->
-    <PackageReference Include="ActualLab.Fusion" Version="12.5.2" />
-    <PackageReference Include="MemoryPack" Version="1.21.3" />
+    <PackageReference Include="ActualLab.Fusion" Version="13.0.12" />
+    <PackageReference Include="ActualLab.Fusion.Server" Version="13.0.12" />
+    <PackageReference Include="MemoryPack" Version="1.21.4" />
+    <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" Version="11.0.0-preview.4.26230.115" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="11.0.0-preview.4.26230.115" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0-preview.4.26230.115" />
+    <!-- Server-side ASP.NET routing for MapYFexMessagingRpc. Frameworks that don't use
+         ASP.NET simply never call this extension method; the extra types are no-ops. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!-- Ship the .targets file inside the NuGet package's build/ folder. -->
+  <ItemGroup>
+    <None Include="build\YFex.Messaging.Rpc.targets" Pack="true" PackagePath="build/$(PackageId).targets" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
     <ProjectReference Include="..\YFex.Messaging\YFex.Messaging.csproj" />
     <ProjectReference Include="..\YFex.Messaging.Fusion\YFex.Messaging.Fusion.csproj" />
   </ItemGroup>
