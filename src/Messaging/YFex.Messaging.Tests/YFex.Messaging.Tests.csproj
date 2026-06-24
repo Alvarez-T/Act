@@ -17,14 +17,20 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
-    <PackageReference Include="xunit" Version="2.9.2" />
-    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
-    <PackageReference Include="FluentAssertions" Version="6.12.2" />
-    <PackageReference Include="coverlet.collector" Version="6.0.2" />
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging" Version="10.0.0" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="4.0.0-pre.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="FluentAssertions" Version="8.10.0" />
+    <PackageReference Include="coverlet.collector" Version="10.0.1">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="11.0.0-preview.5.26302.115" />
+    <PackageReference Include="Microsoft.Extensions.Logging" Version="11.0.0-preview.5.26302.115" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="11.0.0-preview.5.26302.115" />
   </ItemGroup>
 
   <ItemGroup>
@@ -35,15 +41,9 @@
     <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
     <ProjectReference Include="..\..\State\YFex.State\YFex.State.csproj" />
     <!-- Generators referenced as Analyzers for source generation in this project -->
-    <ProjectReference Include="..\YFex.Messaging.Generator\YFex.Messaging.Generator.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\State\YFex.State.Generator\YFex.State.Generator.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
-    <ProjectReference Include="..\..\Cqrs\YFex.Cqrs.SourceGenerator\YFex.Cqrs.SourceGenerator.csproj"
-                      OutputItemType="Analyzer"
-                      ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\YFex.Messaging.Generator\YFex.Messaging.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\State\YFex.State.Generator\YFex.State.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Cqrs\YFex.Cqrs.SourceGenerator\YFex.Cqrs.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

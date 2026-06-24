@@ -11,12 +11,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="MemoryPack" Version="1.21.3" />
-    <PackageReference Include="System.Text.Json" Version="10.0.0" />
+    <PackageReference Include="MemoryPack" Version="1.21.4" />
+    <PackageReference Include="System.Text.Json" Version="11.0.0-preview.5.26302.115" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\YFex.Persistence\YFex.Persistence.csproj" />
+    <ProjectReference Include="..\..\Persistence\YFex.Persistence\YFex.Persistence.csproj" />
     <ProjectReference Include="..\YFex.State.History\YFex.State.History.csproj" />
   </ItemGroup>
 

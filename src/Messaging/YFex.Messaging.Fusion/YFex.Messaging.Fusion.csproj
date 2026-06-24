@@ -16,7 +16,8 @@
 
   <ItemGroup>
     <!-- ActualLab.Fusion (formerly Stl.Fusion) provides IStateFactory, IComputedState<T>, Computed.Invalidate() etc. -->
-    <PackageReference Include="ActualLab.Fusion" Version="12.5.2" />
+    <PackageReference Include="ActualLab.Fusion" Version="13.0.12" />
+    <PackageReference Include="MessagePack" Version="3.1.7" />
   </ItemGroup>
 
   <ItemGroup>
