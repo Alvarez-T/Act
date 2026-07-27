@@ -2,15 +2,11 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Numerics;
-using System.Runtime.CompilerServices;
+using System.Text.Json;
 using System.Text.Json.Serialization;
-using YFex.Converters;
-using YFex.Json;
 
-namespace Act.Utils;
+namespace YFex;
 
-// ── TypeConverter declared here so XAML binding (WPF / Avalonia) works
-// without a separate [assembly:…] registration.
 [TypeConverter(typeof(PercentualTypeConverter))]
 [JsonConverter(typeof(PercentualJsonConverter))]
 public readonly record struct Percentual
@@ -249,4 +245,56 @@ public readonly record struct Percentual
     // from ALL fields.  Because _percentageValue already encodes the rounded
     // value, two Percentuals with the same _percentageValue but different
     // DecimalPlaces are NOT equal — which is the correct semantics.
+}
+
+public sealed class PercentualTypeConverter : TypeConverter
+{
+    public override bool CanConvertFrom(ITypeDescriptorContext? context, Type sourceType)
+        => sourceType == typeof(string)
+        || sourceType == typeof(decimal)
+        || sourceType == typeof(double)
+        || sourceType == typeof(float)
+        || base.CanConvertFrom(context, sourceType);
+
+    public override bool CanConvertTo(ITypeDescriptorContext? context, [NotNullWhen(true)] Type? destinationType)
+        => destinationType == typeof(string)
+        || destinationType == typeof(decimal)
+        || base.CanConvertTo(context, destinationType);
+
+    public override object? ConvertFrom(ITypeDescriptorContext? context, CultureInfo? culture, object value)
+        => value switch
+        {
+            string s => Percentual.Parse(s, culture),
+            decimal d => Percentual.FromPercentage(d),
+            double dbl => Percentual.FromPercentage((decimal)dbl),
+            float f => Percentual.FromPercentage((decimal)f),
+            _ => base.ConvertFrom(context, culture, value)
+        };
+
+    public override object? ConvertTo(
+        ITypeDescriptorContext? context, CultureInfo? culture, object? value, Type destinationType)
+    {
+        if (value is Percentual p)
+        {
+            if (destinationType == typeof(string)) return p.ToStringWithSymbol();
+            if (destinationType == typeof(decimal)) return p.ToPercentageValue();
+        }
+        return base.ConvertTo(context, culture, value, destinationType);
+    }
+}
+
+public sealed class PercentualJsonConverter : JsonConverter<Percentual>
+{
+    public override Percentual Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        return reader.TokenType switch
+        {
+            JsonTokenType.Number => Percentual.FromPercentage(reader.GetDecimal()),
+            JsonTokenType.String => Percentual.Parse(reader.GetString()!),
+            _ => throw new JsonException($"Cannot deserialize token {reader.TokenType} as Percentual.")
+        };
+    }
+
+    public override void Write(Utf8JsonWriter writer, Percentual value, JsonSerializerOptions options)
+        => writer.WriteNumberValue(value.ToPercentageValue());
 }
