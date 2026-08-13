@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0-windows</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Security\YFex.Security.csproj" />
+    <ProjectReference Include="..\YFex.Security.Storage\YFex.Security.Storage.csproj" />
+    <ProjectReference Include="..\YFex.Security.Capture\YFex.Security.Capture.csproj" />
+    <ProjectReference Include="..\YFex.Security.Analysis\YFex.Security.Analysis.csproj" />
+    <ProjectReference Include="..\YFex.Windows.Security\YFex.Windows.Security.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.*" />
+    <PackageReference Include="Serilog.Extensions.Hosting" Version="9.*" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.*" />
+    <PackageReference Include="Serilog.Sinks.Console" Version="6.*" />
+  </ItemGroup>
+
+</Project>

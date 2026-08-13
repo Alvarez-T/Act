@@ -5,24 +5,51 @@
     <Project Path="src/Cqrs/YFex.Cqrs.SourceGenerator/YFex.Cqrs.SourceGenerator.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj" />
   </Folder>
-  <Folder Name="/Database/">
-    <Project Path="src/Database/YFex.Data/YFex.Data.csproj" />
-  </Folder>
   <Folder Name="/Messaging/">
     <Project Path="src/Messaging/YFex.Messaging.Fusion/YFex.Messaging.Fusion.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Generator/YFex.Messaging.Generator.csproj" />
-    <Project Path="src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc.Encryption/YFex.Messaging.Rpc.Encryption.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc.IndexedDb/YFex.Messaging.Rpc.IndexedDb.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc.Sqlite/YFex.Messaging.Rpc.Sqlite.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc.Wolverine/YFex.Messaging.Rpc.Wolverine.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Tests/YFex.Messaging.Tests.csproj" />
     <Project Path="src/Messaging/YFex.Messaging/YFex.Messaging.csproj" />
+  </Folder>
+  <Folder Name="/Mvvm/">
+    <Project Path="src/UI/YFex.Mvvm/YFex.Mvvm.csproj" />
   </Folder>
   <Folder Name="/Navigation/">
     <Project Path="src/Navigation/YFex.NavigatR.SourceGenerator/YFex.NavigatR.SourceGenerator.csproj" />
     <Project Path="src/Navigation/YFex.NavigatR.Tests/YFex.NavigatR.Tests.csproj" />
     <Project Path="src/Navigation/YFex.NavigatR/YFex.NavigatR.csproj" />
+  </Folder>
+  <Folder Name="/Persistence/">
+    <Project Path="src/Persistence/YFex.Persistence.Data/YFex.Persistence.Data.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence.FileSystem/YFex.Persistence.FileSystem.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence.Generator/YFex.Persistence.Generator.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence/YFex.Persistence.csproj" />
+  </Folder>
+  <Folder Name="/Data/">
+    <Project Path="../YFex.Data/src/YFex.Data/YFex.Data.csproj" />
+    <Project Path="../YFex.Data/src/YFex.Sqlite/YFex.Sqlite.csproj" />
+  </Folder>
+  <Folder Name="/Security/">
+    <Project Path="src/Security/YFex.Security.Analysis/YFex.Security.Analysis.csproj" />
+    <Project Path="src/Security/YFex.Security.ApiReverser/YFex.Security.ApiReverser.csproj" />
+    <Project Path="src/Security/YFex.Security.Capture/YFex.Security.Capture.csproj" />
+    <Project Path="src/Security/YFex.Security.Cli/YFex.Security.Cli.csproj" />
+    <Project Path="src/Security/YFex.Security.Hooking/YFex.Security.Hooking.csproj" />
+    <Project Path="src/Security/YFex.Security.Proxy/YFex.Security.Proxy.csproj" />
+    <Project Path="src/Security/YFex.Security.Service/YFex.Security.Service.csproj" />
+    <Project Path="src/Security/YFex.Security.Storage/YFex.Security.Storage.csproj" />
+    <Project Path="src/Security/YFex.Security/YFex.Security.csproj" />
+    <Project Path="src/Security/YFex.Windows.Security/YFex.Windows.Security.csproj" />
+  </Folder>
+  <Folder Name="/System/">
+    <Project Path="src/System/YFex.System.Windows/YFex.System.Windows.csproj" />
+    <Project Path="src/System/YFex.System/YFex.System.csproj" />
   </Folder>
   <Folder Name="/State/">
     <Project Path="src/State/YFex.State.Blazor/YFex.State.Blazor.csproj" />
@@ -37,10 +64,6 @@
     <Project Path="src/State/YFex.State.Smoke/YFex.State.Smoke.csproj" />
     <Project Path="src/State/YFex.State.Tests/YFex.State.Tests.csproj" />
     <Project Path="src/State/YFex.State/YFex.State.csproj" />
-  </Folder>
-  <Folder Name="/UI/">
-    <Project Path="src/UI/YFex.Mvvm/YFex.Mvvm.csproj" />
-    <Project Path="src/UI/YFex.UI.Abstractions/YFex.UI.Abstractions.csproj" />
   </Folder>
   <Project Path="src/YFex/YFex.csproj" />
 </Solution>

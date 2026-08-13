@@ -54,6 +54,8 @@ For .NET developers building applications with YFex.
 | [Messaging & Offline](public/messaging.md) | YFex.Messaging, YFex.Messaging.Fusion, YFex.Messaging.Rpc + backends | Event bus, live state, offline outbox, client cache, Fusion integration |
 | [UI Abstractions](public/ui-abstractions.md) | YFex.UI.Abstractions, YFex.Mvvm | Dialogs, message boxes, toasts, notifications, PageViewModel hierarchy |
 | [Core Utilities](public/core.md) | YFex, YFex.Data | Percentual, enum extensions, match extensions, collections, SQL query builder |
+| [System & Platform](public/system.md) | YFex.System, YFex.System.Windows | Consent-gated telemetry, privacy scrubbing, platform/environment capture |
+| [Security & Network Intelligence](public/security.md) | YFex.Security + Windows.Security, Storage, Capture, Analysis, Service, Cli (+ Hooking/Proxy/ApiReverser) | Passive DNS/TCP/TLS/process capture, JA3, baselines, anomaly detection, app-layer capture & API reversing |
 
 ### Internal Documentation
 
@@ -119,6 +121,9 @@ Start with [CQRS](public/cqrs.md) to define your queries and commands, then [Mes
 
 **Adding undo/redo to an existing app?**
 Read [Undo & Redo](public/state-history.md). It builds on top of the reactive state engine, so familiarity with `[Observable]` properties helps.
+
+**Collecting telemetry or reading the host environment?**
+Read [System & Platform](public/system.md) for consent-gated telemetry and platform capture. For network/process monitoring, anomaly detection, and (authorized) app-layer traffic capture, see [Security & Network Intelligence](public/security.md).
 
 **Contributing to the framework?**
 Read the [Source Generators](internal/source-generators.md) overview first, then dive into the specific internal doc for the subsystem you're working on.

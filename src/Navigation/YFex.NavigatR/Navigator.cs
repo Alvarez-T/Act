@@ -57,9 +57,6 @@ public sealed class Navigator : IDisposable
         _prefetchTimeout = prefetchTimeout ?? TimeSpan.FromSeconds(30);
     }
 
-    // -----------------------------------------------------------------------
-    // Public API
-    // -----------------------------------------------------------------------
     public NavigationTask NavigateTo(IRoute route, CancellationToken ct = default)
         => new(this, route, ct);
 

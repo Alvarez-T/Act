@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>preview</LangVersion>
+    <PackageId>YFex.Persistence.Data</PackageId>
+    <Description>Database-backed persistence adapters for YFex.Persistence, implemented over YFex.Data. Engine-neutral: DataDurableQueue&lt;T&gt; works against any dialect (SQLite, Oracle, ...) that YFex.Data supports.</Description>
+    <PackageTags>yfex;persistence;data;queue;sql</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Persistence\YFex.Persistence.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Data\src\YFex.Data\YFex.Data.csproj" />
+  </ItemGroup>
+
+</Project>

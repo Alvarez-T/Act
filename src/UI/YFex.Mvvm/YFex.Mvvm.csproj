@@ -8,7 +8,7 @@
 
   <ItemGroup>
     <!-- Generators referenced explicitly — project-to-project Analyzer propagation is not transitive -->
-    <ProjectReference Include="..\..\..\..\YFex.UI\src\Core\YFex.UI.Abstractions\YFex.UI.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.UI\src\Core\YFex.UI.Public\YFex.UI.Public.csproj" />
     <ProjectReference Include="..\..\Messaging\YFex.Messaging.Fusion\YFex.Messaging.Fusion.csproj" />
     <ProjectReference Include="..\..\Navigation\YFex.NavigatR\YFex.NavigatR.csproj" />
     <ProjectReference Include="..\..\Persistence\YFex.Persistence\YFex.Persistence.csproj" />

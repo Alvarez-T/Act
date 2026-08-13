@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema" targetNamespace="urn:sample" elementFormDefault="qualified">
+
+  <!-- Faceted simple type: enumeration -> validating struct -->
+  <xs:simpleType name="TUf">
+    <xs:restriction base="xs:string">
+      <xs:whiteSpace value="preserve"/>
+      <xs:enumeration value="SP"/>
+      <xs:enumeration value="RJ"/>
+      <xs:enumeration value="MG"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Faceted simple type: pattern + length -->
+  <xs:simpleType name="TChNFe">
+    <xs:restriction base="xs:string">
+      <xs:whiteSpace value="preserve"/>
+      <xs:pattern value="[0-9]{44}"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Faceted decimal -->
+  <xs:simpleType name="Tdec_1302">
+    <xs:restriction base="xs:decimal">
+      <xs:totalDigits value="15"/>
+      <xs:fractionDigits value="2"/>
+    </xs:restriction>
+  </xs:simpleType>
+
+  <!-- Complex type exercising occurrence rules + plain string + choice -->
+  <xs:complexType name="prod">
+    <xs:sequence>
+      <!-- required, non-null -->
+      <xs:element name="cProd" type="xs:string"/>
+      <!-- optional -> nullable -->
+      <xs:element name="cEAN" type="xs:string" minOccurs="0"/>
+      <!-- faceted struct, required -->
+      <xs:element name="vUnCom" type="Tdec_1302"/>
+      <!-- unbounded -> List<T> -->
+      <xs:element name="NVE" type="xs:string" minOccurs="0" maxOccurs="unbounded"/>
+      <!-- choice -> nullable members + discriminator -->
+      <xs:choice>
+        <xs:element name="orig" type="xs:string"/>
+        <xs:element name="rastro" type="xs:string"/>
+      </xs:choice>
+    </xs:sequence>
+  </xs:complexType>
+
+  <xs:element name="det">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="prod" type="prod"/>
+        <xs:element name="uf" type="TUf"/>
+        <xs:element name="chave" type="TChNFe" minOccurs="0"/>
+      </xs:sequence>
+      <xs:attribute name="nItem" type="xs:int" use="required"/>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

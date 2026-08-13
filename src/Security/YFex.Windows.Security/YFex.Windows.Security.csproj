@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0-windows</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\System\YFex.System\YFex.System.csproj" />
+    <ProjectReference Include="..\YFex.Security\YFex.Security.csproj" />
+    <PackageReference Include="System.Management" Version="9.0.*" />
+  </ItemGroup>
+
+</Project>

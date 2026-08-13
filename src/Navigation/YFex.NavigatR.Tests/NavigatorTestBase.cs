@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using YFex.NavigatR;
+using YFex.UI.Abstractions;
 
 namespace YFex.NavigatR.Tests;
 

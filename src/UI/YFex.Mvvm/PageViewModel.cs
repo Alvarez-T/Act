@@ -1,5 +1,4 @@
 using YFex.NavigatR;
-using YFex.UI.Abstractions;
 
 namespace YFex.Mvvm;
 
@@ -12,7 +11,8 @@ namespace YFex.Mvvm;
 /// <remarks>
 /// Lifecycle order for a single page:
 /// <list type="number">
-///   <item>DI creates the instance, sets services via constructor.</item>
+///   <item>DI creates the instance; UI services and the <see cref="Navigator"/> are
+///         resolved from their ambient locators by the base constructors.</item>
 ///   <item><see cref="INavigable.OnNavigation"/> — route parameters arrive; set initial state here.</item>
 ///   <item><see cref="YFex.State.StateObject.Activate"/> — called by the Navigator after navigation;
 ///         triggers <see cref="YFex.State.StateObject.OnActivateCascading"/> which wires
@@ -31,29 +31,11 @@ namespace YFex.Mvvm;
 /// </remarks>
 public abstract partial class PageViewModel : ViewModel, INavigable, IDisposable
 {
-    /// <summary>The navigator used to push and pop pages from this ViewModel.</summary>
-    public Navigator Navigator { get; }
-
-    /// <summary>DI constructor — used by the service container.</summary>
-    protected PageViewModel(
-        Navigator        navigator,
-        INotification    notification,
-        IDialog          dialog,
-        IToast           toast)
-        : base(notification, dialog, toast)
-    {
-        Navigator = navigator;
-    }
-
     /// <summary>
-    /// Parameterless constructor for test subclasses that do not use DI.
-    /// <see cref="Navigator"/> and service properties will be <see langword="null"/>.
+    /// The navigator used to push and pop pages from this ViewModel, resolved from
+    /// <see cref="NavigatorLocator"/> for the current async context at construction time.
     /// </summary>
-#pragma warning disable CS8618
-    protected PageViewModel() { }
-#pragma warning restore CS8618
-
-    // ── INavigable ────────────────────────────────────────────────────────────
+    public Navigator Navigator { get; } = NavigatorLocator.GetNavigator();
 
     /// <inheritdoc/>
     public abstract Task OnNavigation(NavigationContext context, CancellationToken ct = default);
@@ -80,8 +62,6 @@ public abstract partial class PageViewModel : ViewModel, INavigable, IDisposable
         return Task.CompletedTask;
     }
 
-    // ── Cascade hooks for generated code ──────────────────────────────────────
-
     /// <summary>
     /// Called by <see cref="OnSuspend"/> before returning.
     /// Generated <c>[Live]</c> overrides unsubscribe from <c>Updated</c> and mark
@@ -97,8 +77,6 @@ public abstract partial class PageViewModel : ViewModel, INavigable, IDisposable
     /// Always call <c>base.OnResumeCascading()</c> first.
     /// </summary>
     protected virtual void OnResumeCascading() { }
-
-    // ── Disposal ──────────────────────────────────────────────────────────────
 
     /// <summary>
     /// Disposes this ViewModel. Calls <see cref="YFex.State.StateObject.Deactivate"/>
@@ -116,62 +94,24 @@ public abstract partial class PageViewModel : ViewModel, INavigable, IDisposable
 /// <summary>A navigable ViewModel that produces a typed result.</summary>
 public abstract partial class PageViewModel<TResult> : PageViewModel, INavigable<TResult>
 {
-    /// <summary>DI constructor.</summary>
-    protected PageViewModel(
-        Navigator     navigator,
-        INotification notification,
-        IDialog       dialog,
-        IToast        toast)
-        : base(navigator, notification, dialog, toast) { }
-
-    /// <summary>Parameterless constructor for test subclasses.</summary>
-    protected PageViewModel() { }
-
     /// <inheritdoc/>
     public abstract Task<NavigationResult<TResult>> WaitForResultAsync();
 }
-
-// ── Convenience base classes ─────────────────────────────────────────────────
 
 /// <summary>
 /// Handles the lifecycle of a strongly-typed edit form.
 /// <typeparamref name="TModel"/> is the <c>StateObject</c> holding the editable data.
 /// </summary>
-public abstract class EditorViewModel<TModel> : PageViewModel
-{
-    protected EditorViewModel(
-        Navigator navigator, INotification notification, IDialog dialog, IToast toast)
-        : base(navigator, notification, dialog, toast) { }
-
-    protected EditorViewModel() { }
-}
+public abstract class EditorViewModel<TModel> : PageViewModel;
 
 /// <summary>
 /// Base for ViewModels that orchestrate master/detail layouts without owning a full page.
 /// Does not implement <see cref="INavigable"/> — embed in a <see cref="PageViewModel"/>.
 /// </summary>
-public abstract class MasterDetailViewModel : ViewModel
-{
-    protected MasterDetailViewModel(INotification notification, IDialog dialog, IToast toast)
-        : base(notification, dialog, toast) { }
-
-    protected MasterDetailViewModel() { }
-}
+public abstract class MasterDetailViewModel : ViewModel;
 
 /// <summary>Base for list ViewModels embedded in a page.</summary>
-public abstract class ListViewModel : ViewModel
-{
-    protected ListViewModel(INotification notification, IDialog dialog, IToast toast)
-        : base(notification, dialog, toast) { }
-
-    protected ListViewModel() { }
-}
+public abstract class ListViewModel : ViewModel;
 
 /// <summary>Base for selector/picker ViewModels embedded in a page.</summary>
-public abstract class SelectorViewModel : ViewModel
-{
-    protected SelectorViewModel(INotification notification, IDialog dialog, IToast toast)
-        : base(notification, dialog, toast) { }
-
-    protected SelectorViewModel() { }
-}
+public abstract class SelectorViewModel : ViewModel;

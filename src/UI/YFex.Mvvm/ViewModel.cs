@@ -1,33 +1,30 @@
 using YFex.State.Mvvm;
-using YFex.UI.Abstractions;
+using YFex.UI.Public;
 
 namespace YFex.Mvvm;
 
 /// <summary>
-/// Base ViewModel. Provides UI service dependencies (Notification, Dialog, Toast)
+/// Base ViewModel. Exposes the shared UI services (Toast, Notification, MessageBox, Dialog)
 /// and inherits the full YFex.State reactive stack via <see cref="MvvmStateObject"/>.
 /// <para>
-/// Extend via DI using the parameterized constructor. The parameterless constructor
-/// is provided for test subclasses that do not require service injection.
+/// Services are resolved from their ambient locators in the constructor, so subclasses
+/// never declare or forward them — a subclass constructor takes only its own dependencies.
+/// A framework project (e.g. YFex.Avalonia) must register the concrete services during
+/// startup before any ViewModel is constructed.
 /// </para>
 /// </summary>
 public abstract class ViewModel : MvvmStateObject
 {
-    public INotification Notification { get; }
-    public IDialog       Dialog       { get; }
     public IToast        Toast        { get; }
+    public INotification Notification { get; }
+    public IMessageBox   MessageBox   { get; }
+    public IDialog       Dialog       { get; }
 
-    /// <summary>DI constructor — used by the service container.</summary>
-    protected ViewModel(INotification notification, IDialog dialog, IToast toast)
+    protected ViewModel()
     {
-        Notification = notification;
-        Dialog       = dialog;
-        Toast        = toast;
+        Toast        = ToastLocator.Current;
+        Notification = NotificationLocator.Current;
+        MessageBox   = MessageBoxLocator.Current;
+        Dialog       = DialogLocator.Current;
     }
-
-    /// <summary>
-    /// Parameterless constructor for test subclasses that do not use DI.
-    /// Service properties will be <see langword="null"/> — do not call them in production code.
-    /// </summary>
-    protected ViewModel() : this(null!, null!, null!) { }
 }
