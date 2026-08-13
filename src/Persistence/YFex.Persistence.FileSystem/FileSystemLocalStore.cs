@@ -3,12 +3,12 @@ using YFex.Persistence;
 namespace YFex.Persistence.FileSystem;
 
 /// <summary>
-/// <see cref="ILocalStore"/> backed by the local file system. Each key maps to a
-/// single file inside <see cref="_basePath"/>. Unlike <see cref="FileSystemSnapshotStore"/>,
-/// the key is used verbatim as the file name (after sanitization), so callers can
-/// preserve a specific extension such as <c>consent.json</c>.
+/// <see cref="ISyncLocalStore"/> backed by the local file system. Each key maps to a
+/// single file inside <see cref="_basePath"/>. The key is used verbatim as the file name
+/// (after sanitization), so callers can preserve a specific extension such as
+/// <c>consent.json</c>.
 /// </summary>
-public sealed class FileSystemLocalStore : ILocalStore
+public sealed class FileSystemLocalStore : ISyncLocalStore
 {
     private readonly string _basePath;
 

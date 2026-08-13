@@ -110,7 +110,7 @@ public sealed class LiveGeneratorTests
 
         await PollUntilAsync(() => vm.FetchCount >= 3, timeoutMs: 1000);
 
-        vm.FetchCount.Should().BeGreaterOrEqualTo(3);
+        vm.FetchCount.Should().BeGreaterThanOrEqualTo(3);
         vm.Deactivate();
     }
 

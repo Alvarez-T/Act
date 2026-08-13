@@ -1,6 +1,6 @@
 using System.Text;
 using YFex.Messaging.Rpc;
-using YFex.Messaging.Rpc.Encryption;
+using YFex.Persistence.Encryption;
 
 namespace YFex.Messaging.Tests.Encryption;
 
@@ -22,9 +22,9 @@ public sealed class EncryptionTests
     [Fact]
     public async Task EncryptedStorage_GetAsync_ReturnsOriginalPlaintext()
     {
-        var inner = new InMemoryClientStorage();
+        var inner = new MemoryKeyValueStore();
         using var protector = Protector(Key1);
-        var encrypted = new EncryptedClientStorage(inner, protector);
+        var encrypted = new EncryptedKeyValueStore(inner, protector);
 
         await encrypted.SetAsync("k", Bytes("secret"));
         var result = await encrypted.GetAsync("k");
@@ -36,9 +36,9 @@ public sealed class EncryptionTests
     [Fact]
     public async Task EncryptedStorage_StoredBytesAreDifferentFromPlaintext()
     {
-        var inner = new InMemoryClientStorage();
+        var inner = new MemoryKeyValueStore();
         using var protector = Protector(Key1);
-        var encrypted = new EncryptedClientStorage(inner, protector);
+        var encrypted = new EncryptedKeyValueStore(inner, protector);
         var plaintext = Bytes("plaintext-value");
 
         await encrypted.SetAsync("raw", plaintext);
@@ -53,14 +53,14 @@ public sealed class EncryptionTests
     [Fact]
     public async Task PlaintextValue_IsUnreadable_ThroughEncryptedStorage()
     {
-        var inner = new InMemoryClientStorage();
+        var inner = new MemoryKeyValueStore();
         using var protector = Protector(Key1);
 
         // Write WITHOUT encryption (direct to inner)
         await inner.SetAsync("k", Bytes("unencrypted-value"));
 
         // Read WITH encryption — version byte is wrong, so Unprotect returns null
-        var encrypted = new EncryptedClientStorage(inner, protector);
+        var encrypted = new EncryptedKeyValueStore(inner, protector);
         var result = await encrypted.GetAsync("k");
 
         result.Should().BeNull(
@@ -70,9 +70,9 @@ public sealed class EncryptionTests
     [Fact]
     public async Task EncryptedValue_IsUnreadable_ThroughPlaintextStorage()
     {
-        var inner = new InMemoryClientStorage();
+        var inner = new MemoryKeyValueStore();
         using var protector = Protector(Key1);
-        var encrypted = new EncryptedClientStorage(inner, protector);
+        var encrypted = new EncryptedKeyValueStore(inner, protector);
 
         await encrypted.SetAsync("k", Bytes("secret"));
         var raw = await inner.GetAsync("k");
@@ -87,9 +87,9 @@ public sealed class EncryptionTests
     [Fact]
     public async Task TamperedCiphertext_ReturnsNull_NotGarbage()
     {
-        var inner = new InMemoryClientStorage();
+        var inner = new MemoryKeyValueStore();
         using var protector = Protector(Key1);
-        var encrypted = new EncryptedClientStorage(inner, protector);
+        var encrypted = new EncryptedKeyValueStore(inner, protector);
 
         await encrypted.SetAsync("k", Bytes("original"));
         var raw = await inner.GetAsync("k");
@@ -110,11 +110,11 @@ public sealed class EncryptionTests
     [Fact]
     public async Task ValueWrittenWithKey1_IsNotReadable_WithKey2()
     {
-        var inner = new InMemoryClientStorage();
+        var inner = new MemoryKeyValueStore();
         using var prot1 = Protector(Key1);
         using var prot2 = Protector(Key2);
-        var enc1 = new EncryptedClientStorage(inner, prot1);
-        var enc2 = new EncryptedClientStorage(inner, prot2);
+        var enc1 = new EncryptedKeyValueStore(inner, prot1);
+        var enc2 = new EncryptedKeyValueStore(inner, prot2);
 
         await enc1.SetAsync("k", Bytes("key1-value"));
         var result = await enc2.GetAsync("k");

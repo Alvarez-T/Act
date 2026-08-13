@@ -36,8 +36,9 @@
   <ItemGroup>
     <ProjectReference Include="..\YFex.Messaging\YFex.Messaging.csproj" />
     <ProjectReference Include="..\YFex.Messaging.Rpc\YFex.Messaging.Rpc.csproj" />
-    <ProjectReference Include="..\YFex.Messaging.Rpc.Sqlite\YFex.Messaging.Rpc.Sqlite.csproj" />
-    <ProjectReference Include="..\YFex.Messaging.Rpc.Encryption\YFex.Messaging.Rpc.Encryption.csproj" />
+    <ProjectReference Include="..\..\Persistence\YFex.Persistence\YFex.Persistence.csproj" />
+    <ProjectReference Include="..\..\Persistence\YFex.Persistence.Sqlite\YFex.Persistence.Sqlite.csproj" />
+    <ProjectReference Include="..\..\Persistence\YFex.Persistence.Encryption\YFex.Persistence.Encryption.csproj" />
     <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
     <ProjectReference Include="..\..\State\YFex.State\YFex.State.csproj" />
     <!-- Generators referenced as Analyzers for source generation in this project -->
@@ -52,6 +53,7 @@
     <Using Include="YFex.Messaging" />
     <Using Include="YFex.Cqrs" />
     <Using Include="YFex.Messaging.Rpc" />
+    <Using Include="YFex.Persistence" />
     <Using Include="YFex.State" />
     <Using Include="System.Threading" />
     <Using Include="System.Threading.Tasks" />

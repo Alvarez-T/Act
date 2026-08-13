@@ -10,10 +10,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\YFex.System\YFex.System.csproj" />
-    <ProjectReference Include="..\..\Persistence\YFex.Persistence.Data\YFex.Persistence.Data.csproj" />
-    <ProjectReference Include="..\..\..\..\YFex.Data\src\YFex.Sqlite\YFex.Sqlite.csproj" />
+    <ProjectReference Include="..\..\Persistence\YFex.Persistence.Sqlite\YFex.Persistence.Sqlite.csproj" />
     <PackageReference Include="Microsoft.Win32.SystemEvents" Version="9.0.*" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.*" />
   </ItemGroup>
 
 </Project>

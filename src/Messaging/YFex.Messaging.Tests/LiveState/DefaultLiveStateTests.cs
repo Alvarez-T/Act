@@ -118,7 +118,7 @@ public sealed class DefaultLiveStateTests
 
         await PollUntilAsync(() => callCount >= 3, timeoutMs: 1000);
 
-        callCount.Should().BeGreaterOrEqualTo(3);
+        callCount.Should().BeGreaterThanOrEqualTo(3);
     }
 
     // ── Helper ─────────────────────────────────────────────────────────────────

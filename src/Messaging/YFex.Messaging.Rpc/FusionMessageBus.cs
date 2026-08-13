@@ -4,6 +4,8 @@ using Microsoft.Extensions.DependencyInjection;
 using YFex.Cqrs;
 using YFex.Messaging;
 
+using YFex.Persistence;
+
 namespace YFex.Messaging.Rpc;
 
 // ── Routing entry types ──────────────────────────────────────────────────────
@@ -77,7 +79,7 @@ public sealed class FusionMessageBusBuilder
     public FusionMessageBus Build(
         CompiledMessagingRegistry registry,
         INetworkStatus networkStatus,
-        IClientCache cache,
+        ICache cache,
         IOutbox outbox,
         IEventBus eventBus,
         IServiceProvider sp)
@@ -104,7 +106,7 @@ public sealed class FusionMessageBus : IDispatcher
     private readonly FrozenDictionary<Type, VoidCommandDispatchEntry> _voidCommands;
     private readonly CompiledMessagingRegistry _registry;
     private readonly INetworkStatus _networkStatus;
-    private readonly IClientCache _cache;
+    private readonly ICache _cache;
     private readonly IOutbox _outbox;
     private readonly IEventBus _eventBus;
     private readonly IServiceProvider _sp;
@@ -115,7 +117,7 @@ public sealed class FusionMessageBus : IDispatcher
         FrozenDictionary<Type, VoidCommandDispatchEntry> voidCommands,
         CompiledMessagingRegistry registry,
         INetworkStatus networkStatus,
-        IClientCache cache,
+        ICache cache,
         IOutbox outbox,
         IEventBus eventBus,
         IServiceProvider sp)

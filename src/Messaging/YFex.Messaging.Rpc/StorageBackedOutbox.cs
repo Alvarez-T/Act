@@ -1,10 +1,12 @@
 using System.Text.Json;
 using YFex.Cqrs;
 
+using YFex.Persistence;
+
 namespace YFex.Messaging.Rpc;
 
 /// <summary>
-/// <see cref="IOutbox"/> backed by any <see cref="IClientStorage"/> using the <c>outbox:</c>
+/// <see cref="IOutbox"/> backed by any <see cref="IKeyValueStore"/> using the <c>outbox:</c>
 /// key prefix (Option A). Suitable for IndexedDB and any future custom backend.
 /// Each entry is stored at <c>outbox:{idempotencyKey}</c> as a JSON blob.
 /// </summary>
@@ -12,7 +14,7 @@ public sealed class StorageBackedOutbox : IOutbox
 {
     private const string Prefix = "outbox:";
 
-    private readonly IClientStorage _storage;
+    private readonly IKeyValueStore _storage;
     private readonly OutboxOptions _options;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private IWritableSyncFailureLog? _failureLog;
@@ -20,7 +22,7 @@ public sealed class StorageBackedOutbox : IOutbox
 
     internal void SetFailureLog(IWritableSyncFailureLog log) => _failureLog = log;
 
-    public StorageBackedOutbox(IClientStorage storage, OutboxOptions options)
+    public StorageBackedOutbox(IKeyValueStore storage, OutboxOptions options)
     {
         _storage = storage;
         _options = options;

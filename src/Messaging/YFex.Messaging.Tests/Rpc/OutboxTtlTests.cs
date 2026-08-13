@@ -21,7 +21,7 @@ public sealed class OutboxTtlTests
         var outbox = new InMemoryOutbox(new OutboxOptions());
         var failureLog = new InMemorySyncFailureLog();
         outbox.SetFailureLog(failureLog);
-        var cache = new InMemoryClientCache();
+        var cache = new InMemoryCache();
         var bus = new DefaultEventBus();
         var registry = CompiledMessagingRegistry.Build(baseline: []);
         var syncStatus = new SyncStatus();

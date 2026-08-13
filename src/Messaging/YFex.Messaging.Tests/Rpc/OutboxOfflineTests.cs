@@ -136,7 +136,7 @@ public sealed class OutboxOfflineTests
         var sp = services.BuildServiceProvider();
 
         var network = new ManualNetworkStatus(connected: false);
-        var cache = new InMemoryClientCache();
+        var cache = new InMemoryCache();
         var outbox = new InMemoryOutbox(new OutboxOptions());
         var failLog = new InMemorySyncFailureLog();
         outbox.SetFailureLog(failLog);

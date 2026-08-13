@@ -8,9 +8,6 @@
   <Folder Name="/Messaging/">
     <Project Path="src/Messaging/YFex.Messaging.Fusion/YFex.Messaging.Fusion.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Generator/YFex.Messaging.Generator.csproj" />
-    <Project Path="src/Messaging/YFex.Messaging.Rpc.Encryption/YFex.Messaging.Rpc.Encryption.csproj" />
-    <Project Path="src/Messaging/YFex.Messaging.Rpc.IndexedDb/YFex.Messaging.Rpc.IndexedDb.csproj" />
-    <Project Path="src/Messaging/YFex.Messaging.Rpc.Sqlite/YFex.Messaging.Rpc.Sqlite.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc.Wolverine/YFex.Messaging.Rpc.Wolverine.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Tests/YFex.Messaging.Tests.csproj" />
@@ -25,9 +22,12 @@
     <Project Path="src/Navigation/YFex.NavigatR/YFex.NavigatR.csproj" />
   </Folder>
   <Folder Name="/Persistence/">
-    <Project Path="src/Persistence/YFex.Persistence.Data/YFex.Persistence.Data.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj" />
     <Project Path="src/Persistence/YFex.Persistence.FileSystem/YFex.Persistence.FileSystem.csproj" />
     <Project Path="src/Persistence/YFex.Persistence.Generator/YFex.Persistence.Generator.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence.IndexedDb/YFex.Persistence.IndexedDb.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence.Smoke/YFex.Persistence.Smoke.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence.Sqlite/YFex.Persistence.Sqlite.csproj" />
     <Project Path="src/Persistence/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj" />
     <Project Path="src/Persistence/YFex.Persistence/YFex.Persistence.csproj" />
   </Folder>

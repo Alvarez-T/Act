@@ -19,11 +19,11 @@ public sealed class PersistenceService : IPersistenceService
     /// <summary>Replaces the process-wide singleton. Called by DI registration.</summary>
     public static void Configure(PersistenceService service) => _instance = service;
 
-    private readonly ISnapshotStore _store;
+    private readonly IKeyValueStore _store;
     private readonly List<ISnapshotProvider> _providers = new();
     private readonly object _lock = new();
 
-    public PersistenceService(ISnapshotStore store)
+    public PersistenceService(IKeyValueStore store)
     {
         _store = store;
     }
@@ -64,7 +64,7 @@ public sealed class PersistenceService : IPersistenceService
                 CapturedAtUtcTicks = DateTime.UtcNow.Ticks,
             };
             byte[] bytes = MemoryPackSerializer.Serialize(envelope);
-            await _store.SaveAsync(StoreKey(provider.Discriminator), bytes, ct).ConfigureAwait(false);
+            await _store.SetAsync(StoreKey(provider.Discriminator), bytes, ct: ct).ConfigureAwait(false);
         }
     }
 
@@ -81,7 +81,7 @@ public sealed class PersistenceService : IPersistenceService
         foreach (var provider in snapshot)
         {
             ct.ThrowIfCancellationRequested();
-            byte[]? raw = await _store.LoadAsync(StoreKey(provider.Discriminator), ct).ConfigureAwait(false);
+            byte[]? raw = await _store.GetAsync(StoreKey(provider.Discriminator), ct).ConfigureAwait(false);
             if (raw is null) continue;
 
             SnapshotEnvelope? envelope;
@@ -99,7 +99,7 @@ public sealed class PersistenceService : IPersistenceService
 
     /// <summary>Clears the snapshot for one provider from the store.</summary>
     public Task ClearSnapshotAsync(string discriminator, CancellationToken ct = default)
-        => _store.DeleteAsync(StoreKey(discriminator), ct);
+        => _store.DeleteAsync(StoreKey(discriminator), ct).AsTask();
 
     private static string StoreKey(string discriminator) => $"yfex:snapshot:{discriminator}";
 }

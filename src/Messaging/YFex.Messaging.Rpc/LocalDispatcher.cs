@@ -5,6 +5,8 @@ using YFex.Cqrs;
 using YFex.Cqrs.Runtime;
 using YFex.Messaging;
 
+using YFex.Persistence;
+
 namespace YFex.Messaging.Rpc;
 
 /// <summary>
@@ -12,7 +14,7 @@ namespace YFex.Messaging.Rpc;
 /// Handles the three-phase dispatch pipeline:
 /// <list type="bullet">
 ///   <item>Online: validate â†’ authorize â†’ invoke â†’ cache â†’ invalidate</item>
-///   <item>Offline query: serve from <see cref="IClientCache"/> (if <see cref="ICacheable"/>)</item>
+///   <item>Offline query: serve from <see cref="ICache"/> (if <see cref="ICacheable"/>)</item>
 ///   <item>Offline command: run <c>OnOffline</c> handler â†’ enqueue (if <see cref="IQueueable"/>)</item>
 /// </list>
 /// </summary>
@@ -21,7 +23,7 @@ public sealed class LocalDispatcher : IDispatcher
     private readonly IHandlerInvoker _invoker;
     private readonly CompiledMessagingRegistry _registry;
     private readonly INetworkStatus _networkStatus;
-    private readonly IClientCache _cache;
+    private readonly ICache _cache;
     private readonly IOutbox _outbox;
     private readonly IEventBus _eventBus;
     private readonly IServiceProvider _sp;
@@ -30,7 +32,7 @@ public sealed class LocalDispatcher : IDispatcher
         IHandlerInvoker invoker,
         CompiledMessagingRegistry registry,
         INetworkStatus networkStatus,
-        IClientCache cache,
+        ICache cache,
         IOutbox outbox,
         IEventBus eventBus,
         IServiceProvider sp)

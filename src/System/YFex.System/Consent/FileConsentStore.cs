@@ -7,7 +7,7 @@ namespace YFex.System.Consent;
 
 /// <summary>
 /// <see cref="IConsentStore"/> that persists consent state as a JSON document through an
-/// <see cref="ILocalStore"/>. The store owns file location and IO; this class owns only the
+/// <see cref="ISyncLocalStore"/>. The store owns file location and IO; this class owns only the
 /// consent JSON schema.
 /// </summary>
 public sealed class FileConsentStore : IConsentStore
@@ -15,11 +15,11 @@ public sealed class FileConsentStore : IConsentStore
     /// <summary>Storage key for the consent document (used verbatim as the file name).</summary>
     public const string Key = "consent.json";
 
-    private readonly ILocalStore _store;
+    private readonly ISyncLocalStore _store;
     private ConsentState _cached;
     private bool _loaded;
 
-    public FileConsentStore(ILocalStore store)
+    public FileConsentStore(ISyncLocalStore store)
     {
         _store = store;
     }

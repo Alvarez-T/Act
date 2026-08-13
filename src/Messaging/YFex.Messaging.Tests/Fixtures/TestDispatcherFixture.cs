@@ -13,7 +13,7 @@ namespace YFex.Messaging.Tests.Fixtures;
 public sealed class TestDispatcherFixture
 {
     public ManualNetworkStatus Network { get; }
-    public InMemoryClientCache Cache { get; }
+    public InMemoryCache Cache { get; }
     public InMemoryOutbox Outbox { get; }
     public InMemorySyncFailureLog FailureLog { get; }
     public DefaultEventBus EventBus { get; }
@@ -27,7 +27,7 @@ public sealed class TestDispatcherFixture
         OutboxOptions? outboxOptions = null)
     {
         Network = new ManualNetworkStatus(startConnected);
-        Cache = new InMemoryClientCache();
+        Cache = new InMemoryCache();
         Outbox = new InMemoryOutbox(outboxOptions ?? new OutboxOptions());
         FailureLog = new InMemorySyncFailureLog();
         Outbox.SetFailureLog(FailureLog);

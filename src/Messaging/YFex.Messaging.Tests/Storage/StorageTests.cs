@@ -1,11 +1,10 @@
 using System.Text;
-using Microsoft.Extensions.DependencyInjection;
-using YFex.Messaging.Rpc;
-using YFex.Messaging.Rpc.Sqlite;
+using YFex.Persistence;
+using YFex.Persistence.Sqlite;
 
 namespace YFex.Messaging.Tests.Storage;
 
-/// <summary>Tests #29–31: Storage backend swap, SQLite persistence, and concurrent reads.</summary>
+/// <summary>Tests #29–31: storage backend swap, SQLite persistence, and concurrent reads.</summary>
 [Trait("Category", "Storage")]
 public sealed class StorageTests
 {
@@ -21,19 +20,8 @@ public sealed class StorageTests
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    private async Task<(IServiceProvider Sp, SqliteClientStorage Storage)> CreateSqliteAsync()
-    {
-        var services = new ServiceCollection();
-        services.AddYFexSqliteStorage(opts =>
-        {
-            opts.Directory = _dbDir;
-            opts.DatabaseFileName = _dbFile;
-        });
-        var sp = services.BuildServiceProvider();
-        var storage = sp.GetRequiredService<SqliteClientStorage>();
-        _ = await storage.GetAsync("_warmup"); // trigger schema creation
-        return (sp, storage);
-    }
+    private SqliteKeyValueStore CreateSqlite()
+        => new(new SqliteConnectionFactory(Path.Combine(_dbDir, _dbFile)));
 
     private static byte[] Bytes(string s) => Encoding.UTF8.GetBytes(s);
 
@@ -42,7 +30,7 @@ public sealed class StorageTests
     [Fact]
     public async Task InMemoryStorage_SetAndGet_RoundTrips()
     {
-        IClientStorage storage = new InMemoryClientStorage();
+        IKeyValueStore storage = new MemoryKeyValueStore();
         var data = Bytes("hello");
 
         await storage.SetAsync("key1", data);
@@ -54,8 +42,7 @@ public sealed class StorageTests
     [Fact]
     public async Task SqliteStorage_SetAndGet_RoundTrips()
     {
-        var (sp, storage) = await CreateSqliteAsync();
-        await using var _ = sp as IAsyncDisposable;
+        var storage = CreateSqlite();
         var data = Bytes("sqlite-value");
 
         await storage.SetAsync("key1", data);
@@ -67,7 +54,7 @@ public sealed class StorageTests
     [Fact]
     public async Task InMemoryStorage_Delete_RemovesEntry()
     {
-        IClientStorage storage = new InMemoryClientStorage();
+        IKeyValueStore storage = new MemoryKeyValueStore();
         await storage.SetAsync("k", Bytes("v"));
         await storage.DeleteAsync("k");
 
@@ -77,9 +64,7 @@ public sealed class StorageTests
     [Fact]
     public async Task SqliteStorage_Delete_RemovesEntry()
     {
-        var (sp, storage) = await CreateSqliteAsync();
-        await using var _ = sp as IAsyncDisposable;
-
+        var storage = CreateSqlite();
         await storage.SetAsync("k", Bytes("v"));
         await storage.DeleteAsync("k");
 
@@ -89,7 +74,7 @@ public sealed class StorageTests
     [Fact]
     public async Task InMemoryStorage_GetKeysWithPrefix_ReturnsMatchingKeys()
     {
-        IClientStorage storage = new InMemoryClientStorage();
+        IKeyValueStore storage = new MemoryKeyValueStore();
         await storage.SetAsync("cache:a", Bytes("1"));
         await storage.SetAsync("cache:b", Bytes("2"));
         await storage.SetAsync("outbox:x", Bytes("3"));
@@ -101,9 +86,7 @@ public sealed class StorageTests
     [Fact]
     public async Task SqliteStorage_GetKeysWithPrefix_ReturnsMatchingKeys()
     {
-        var (sp, storage) = await CreateSqliteAsync();
-        await using var _ = sp as IAsyncDisposable;
-
+        var storage = CreateSqlite();
         await storage.SetAsync("cache:a", Bytes("1"));
         await storage.SetAsync("cache:b", Bytes("2"));
         await storage.SetAsync("outbox:x", Bytes("3"));
@@ -115,26 +98,18 @@ public sealed class StorageTests
     // ── Test #30: SQLite persistence across "restart" ─────────────────────────
 
     [Fact]
-    public async Task SqliteStorage_PersistsAcrossDispose_WhenReopenedWithSamePath()
+    public async Task SqliteStorage_PersistsAcrossReopen_WhenReopenedWithSamePath()
     {
         var data = Bytes("persistent-value");
         const string key = "persist:test";
 
-        // First "session" — write and close
-        {
-            var (sp, storage) = await CreateSqliteAsync();
-            await storage.SetAsync(key, data);
-            await ((IAsyncDisposable)sp).DisposeAsync();
-        }
+        // First "session" — write
+        await CreateSqlite().SetAsync(key, data);
 
         // Second "session" — reopen the same file and read
-        {
-            var (sp, storage) = await CreateSqliteAsync();
-            await using var _ = sp as IAsyncDisposable;
-            var result = await storage.GetAsync(key);
-            result.Should().Equal(data,
-                "value written in first session must survive close+reopen of the same DB file");
-        }
+        var result = await CreateSqlite().GetAsync(key);
+        result.Should().Equal(data,
+            "value written in first session must survive reopen of the same DB file");
     }
 
     // ── Test #31: SQLite concurrent reads ─────────────────────────────────────
@@ -142,8 +117,7 @@ public sealed class StorageTests
     [Fact]
     public async Task SqliteStorage_ConcurrentReads_AllReturnSameValue()
     {
-        var (sp, storage) = await CreateSqliteAsync();
-        await using var _ = sp as IAsyncDisposable;
+        var storage = CreateSqlite();
         var data = Bytes("concurrent");
         await storage.SetAsync("shared", data);
 
@@ -156,8 +130,7 @@ public sealed class StorageTests
     [Fact]
     public async Task SqliteStorage_TTL_ExpiresEntry()
     {
-        var (sp, storage) = await CreateSqliteAsync();
-        await using var _ = sp as IAsyncDisposable;
+        var storage = CreateSqlite();
 
         await storage.SetAsync("ttl-key", Bytes("expiring"), ttl: TimeSpan.FromMilliseconds(10));
         await Task.Delay(50);

@@ -16,7 +16,7 @@ public static class TelemetryServiceCollectionExtensions
         Action<TelemetryOptions> configure)
     {
         services.Configure(configure);
-        services.TryAddSingleton<ILocalStore>(_ => new FileSystemLocalStore(
+        services.TryAddSingleton<ISyncLocalStore>(_ => new FileSystemLocalStore(
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "YFex")));

@@ -9,6 +9,8 @@ using YFex.Cqrs;
 using YFex.Messaging;
 using YFex.Messaging.Fusion;
 
+using YFex.Persistence;
+
 namespace YFex.Messaging.Rpc;
 
 /// <summary>DI registration helpers for <c>YFex.Messaging.Rpc</c>.</summary>
@@ -18,7 +20,7 @@ public static class RpcMessagingExtensions
 
     /// <summary>
     /// Registers the full YFex client-side Rpc stack:
-    /// Fusion client, IClientCache, IOutbox, ISyncFailureLog, SyncStatus,
+    /// Fusion client, ICache, IOutbox, ISyncFailureLog, SyncStatus,
     /// FusionMessageBus (IDispatcher), OutboxReplayer, and FusionNetworkStatus.
     /// </summary>
     public static IServiceCollection AddYFexMessagingRpcClient(
@@ -44,8 +46,8 @@ public static class RpcMessagingExtensions
         });
 
         // Storage + cache (in-memory; Plan 4 overrides with persistent backends)
-        services.TryAddSingleton<IClientStorage, InMemoryClientStorage>();
-        services.TryAddSingleton<IClientCache, InMemoryClientCache>();
+        services.TryAddSingleton<IKeyValueStore, MemoryKeyValueStore>();
+        services.TryAddSingleton<ICache, InMemoryCache>();
 
         // Outbox + failure log (cross-wired after construction)
         services.AddSingleton<InMemoryOutbox>();
@@ -103,7 +105,7 @@ public static class RpcMessagingExtensions
             var bus = builder.Build(
                 sp.GetRequiredService<CompiledMessagingRegistry>(),
                 sp.GetRequiredService<INetworkStatus>(),
-                sp.GetRequiredService<IClientCache>(),
+                sp.GetRequiredService<ICache>(),
                 sp.GetRequiredService<IOutbox>(),
                 sp.GetRequiredService<IEventBus>(),
                 sp);
@@ -142,8 +144,8 @@ public static class RpcMessagingExtensions
         NetworkStatusProvider.Configure(AlwaysConnectedNetworkStatus.Instance);
 
         // No-op stubs for outbox/cache so LocalDispatcher can be injected on the server too.
-        services.TryAddSingleton<IClientCache, InMemoryClientCache>();
-        services.TryAddSingleton<IClientStorage, InMemoryClientStorage>();
+        services.TryAddSingleton<ICache, InMemoryCache>();
+        services.TryAddSingleton<IKeyValueStore, MemoryKeyValueStore>();
         services.TryAddSingleton<IOutbox, InMemoryOutbox>();
 
         // Default server-side event bus (in-process; no RPC wrapping)
@@ -165,7 +167,7 @@ public static class RpcMessagingExtensions
                 sp.GetRequiredService<IHandlerInvoker>(),
                 sp.GetRequiredService<CompiledMessagingRegistry>(),
                 sp.GetRequiredService<INetworkStatus>(),
-                sp.GetRequiredService<IClientCache>(),
+                sp.GetRequiredService<ICache>(),
                 sp.GetRequiredService<IOutbox>(),
                 sp.GetRequiredService<IEventBus>(),
                 sp);

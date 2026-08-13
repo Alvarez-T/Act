@@ -1,9 +1,11 @@
 using System.Text.Json;
 
+using YFex.Persistence;
+
 namespace YFex.Messaging.Rpc;
 
 /// <summary>
-/// <see cref="IWritableSyncFailureLog"/> backed by any <see cref="IClientStorage"/> using the
+/// <see cref="IWritableSyncFailureLog"/> backed by any <see cref="IKeyValueStore"/> using the
 /// <c>failure:</c> key prefix (Option A). Each failure is stored at
 /// <c>failure:{idempotencyKey}</c> as a JSON blob.
 /// </summary>
@@ -11,13 +13,13 @@ public sealed class StorageBackedSyncFailureLog : IWritableSyncFailureLog
 {
     private const string Prefix = "failure:";
 
-    private readonly IClientStorage _storage;
+    private readonly IKeyValueStore _storage;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private IOutbox? _outbox;
 
     internal void SetOutbox(IOutbox outbox) => _outbox = outbox;
 
-    public StorageBackedSyncFailureLog(IClientStorage storage) => _storage = storage;
+    public StorageBackedSyncFailureLog(IKeyValueStore storage) => _storage = storage;
 
     public IReadOnlyList<SyncFailure> Failures =>
         ListAllAsync(default).AsTask().GetAwaiter().GetResult();

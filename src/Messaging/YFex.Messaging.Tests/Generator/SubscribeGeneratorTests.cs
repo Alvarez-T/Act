@@ -140,7 +140,7 @@ public sealed class SubscribeGeneratorTests : IDisposable
 
         // The VM is kept alive by the bus's strong ref (KeepAlive = true)
         weakRef!.TryGetTarget(out vm).Should().BeTrue("KeepAlive keeps the VM rooted");
-        vm!.CallCount.Should().BeGreaterOrEqualTo(1);
+        vm!.CallCount.Should().BeGreaterThanOrEqualTo(1);
         vm.Deactivate();
     }
 
