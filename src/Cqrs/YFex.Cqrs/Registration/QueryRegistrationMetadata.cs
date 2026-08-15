@@ -18,6 +18,7 @@ internal sealed record QueryRegistrationMetadata
     public CachePolicy?                        Cache        { get; init; }
     public CacheScope                          Scope        { get; init; } = CacheScope.Global;
     public Func<ICacheScopeContext, string>?   ScopeKey     { get; init; }
+    public Func<object, string>?               TagKey       { get; init; }
     public TimeSpan?                           StaleAfter   { get; init; }
     public TimeSpan?                           Timeout      { get; init; }
     public bool                                NotCacheable { get; init; }

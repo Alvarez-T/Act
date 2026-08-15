@@ -28,6 +28,7 @@ public sealed class CQRSGenerator : IIncrementalGenerator
     private const string ICommandTInterface     = "YFex.Cqrs.ICommand";   // generic variant, same base name
     private const string IEventInterface        = "YFex.Cqrs.IEvent";
     private const string IQueueableInterface    = "YFex.Cqrs.IQueueable";
+    private const string ICacheableInterface    = "YFex.Cqrs.ICacheable";
     private const string IAggregateConfigBase   = "YFex.Cqrs.Configuration.IAggregateConfiguration";
 
     private const string QueryClassName   = "Queries";
@@ -184,9 +185,15 @@ public sealed class CQRSGenerator : IIncrementalGenerator
             string methodName = CodeBuilder.GetQueryMethodName(member.Name);
             if (queryClass.GetMembers(methodName).Any(m => m.Kind == SymbolKind.Method)) continue;
 
+            // ICacheable marker → the query can be served from the offline cache, so the helper
+            // returns a provenance-bearing CacheableQueryResult<T>; otherwise a plain Result<T>.
+            bool isCacheable = member.AllInterfaces
+                .Any(i => !i.IsGenericType && GetBaseInterfaceName(i) == ICacheableInterface);
+
             output.Add(new QueryToGenerate(
                 member.Name, methodName, returnType,
-                new EquatableArray<ParameterInfo>(ExtractParameters(member))));
+                new EquatableArray<ParameterInfo>(ExtractParameters(member)),
+                isCacheable));
         }
     }
 

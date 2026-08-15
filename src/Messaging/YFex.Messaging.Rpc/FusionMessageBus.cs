@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
+using YFex;
 using YFex.Cqrs;
 using YFex.Messaging;
 
@@ -133,22 +134,29 @@ public sealed class FusionMessageBus : IDispatcher
         _sp = sp;
     }
 
-    public async ValueTask<Result<TResult>> QueryAsync<TQuery, TResult>(
+    public async ValueTask<CacheableQueryResult<TResult>> QueryAsync<TQuery, TResult>(
         TQuery query, CancellationToken ct = default)
         where TQuery : IQuery<TResult>
     {
         if (!_networkStatus.IsConnected)
         {
-            if (query is not ICacheable) return Result<TResult>.Fail("No network connectivity.");
-            var cacheKey = CacheKey<TQuery>(query);
-            var cached = await _cache.GetAsync<TResult>(cacheKey, ct).ConfigureAwait(false);
-            return cached is not null
-                ? Result<TResult>.Ok(cached)
-                : Result<TResult>.Fail("No cached value available offline.");
+            if (query is not ICacheable) return CacheableQueryResult<TResult>.Fail("No network connectivity.");
+            _registry.Queries.TryGetValue(typeof(TQuery), out var offlinePolicy);
+            var cacheKey = QueryCacheKey.For(typeof(TQuery), query!, offlinePolicy, _sp);
+            if (cacheKey is null) return CacheableQueryResult<TResult>.Fail("No cached value available offline.");
+
+            // Provenance-aware read: carry the stale bit (offline invalidation marks entries stale,
+            // not deleted) so the UI can badge it and refresh on reconnect.
+            var lookup = await _cache.TryGetAsync<TResult>(cacheKey, ct).ConfigureAwait(false);
+            if (!lookup.TryGetHit(out var cv))
+                return CacheableQueryResult<TResult>.Fail("No cached value available offline.");
+            return cv.IsStale
+                ? new Stale<TResult>(cv.GetValue(), cv.LastModified)
+                : new Cached<TResult>(cv.GetValue(), cv.LastModified);
         }
 
         if (!_queries.TryGetValue(typeof(TQuery), out var entry))
-            return Result<TResult>.Fail($"No Fusion route registered for {typeof(TQuery).Name}. Ensure the source generator has run.");
+            return CacheableQueryResult<TResult>.Fail($"No Fusion route registered for {typeof(TQuery).Name}. Ensure the source generator has run.");
 
         var raw = await entry.Dispatch(query!, ct).ConfigureAwait(false);
         var result = (TResult)raw!;
@@ -156,10 +164,11 @@ public sealed class FusionMessageBus : IDispatcher
         if (query is ICacheable)
         {
             _registry.Queries.TryGetValue(typeof(TQuery), out var policy);
-            await _cache.SetAsync(CacheKey<TQuery>(query), result, policy?.Cache?.AbsoluteExpiration, ct).ConfigureAwait(false);
+            var cacheKey = QueryCacheKey.For(typeof(TQuery), query!, policy, _sp)!;
+            await _cache.SetAsync(cacheKey, result, QueryCacheKey.Options(typeof(TQuery), policy, query!), ct).ConfigureAwait(false);
         }
 
-        return Result<TResult>.Ok(result);
+        return new Fresh<TResult>(result);
     }
 
     public async ValueTask<QueueableResult<TResult>> CommandAsync<TCommand, TResult>(
@@ -175,7 +184,7 @@ public sealed class FusionMessageBus : IDispatcher
         var raw = await entry.Dispatch(cmd!, ct).ConfigureAwait(false);
         var result = (TResult)raw!;
 
-        await InvalidateCachesAsync(typeof(TCommand), ct).ConfigureAwait(false);
+        await InvalidateCachesAsync(cmd!, typeof(TCommand), ct).ConfigureAwait(false);
         return QueueableResult<TResult>.Ok(result);
     }
 
@@ -190,7 +199,7 @@ public sealed class FusionMessageBus : IDispatcher
             return QueueableResult.Fail($"No Fusion route for {typeof(TCommand).Name}.");
 
         await entry.Dispatch(cmd!, ct).ConfigureAwait(false);
-        await InvalidateCachesAsync(typeof(TCommand), ct).ConfigureAwait(false);
+        await InvalidateCachesAsync(cmd!, typeof(TCommand), ct).ConfigureAwait(false);
         return QueueableResult.Ok();
     }
 
@@ -211,7 +220,7 @@ public sealed class FusionMessageBus : IDispatcher
 
         if (cmd is IQueueable)
         {
-            await MarkStaleAsync(typeof(TCommand), policy, ct).ConfigureAwait(false);
+            await MarkStaleAsync(cmd!, policy, ct).ConfigureAwait(false);
             var queued = await _outbox.EnqueueAsync(cmd, ct).ConfigureAwait(false);
             _eventBus.Publish(new CommandQueuedEvent(queued.IdempotencyKey, typeof(TCommand).Name, DateTimeOffset.UtcNow));
             return QueueableResult<TResult>.Queue(queued.IdempotencyKey);
@@ -228,7 +237,7 @@ public sealed class FusionMessageBus : IDispatcher
 
         if (cmd is IQueueable)
         {
-            await MarkStaleAsync(typeof(TCommand), policy, ct).ConfigureAwait(false);
+            await MarkStaleAsync(cmd!, policy, ct).ConfigureAwait(false);
             var queued = await _outbox.EnqueueAsync(cmd, ct).ConfigureAwait(false);
             _eventBus.Publish(new CommandQueuedEvent(queued.IdempotencyKey, typeof(TCommand).Name, DateTimeOffset.UtcNow));
             return QueueableResult.Queue(queued.IdempotencyKey);
@@ -260,34 +269,23 @@ public sealed class FusionMessageBus : IDispatcher
         else if (result is ValueTask vt) await vt.ConfigureAwait(false);
     }
 
-    private async ValueTask InvalidateCachesAsync(Type commandType, CancellationToken ct)
+    private async ValueTask InvalidateCachesAsync(object cmd, Type commandType, CancellationToken ct)
     {
         if (!_registry.Commands.TryGetValue(commandType, out var policy) || policy.InvalidationTargets is null)
             return;
+        // Tag-based, no key enumeration (works on FusionCache). Precise when the target declares an
+        // entity key (drops only en:{QueryType}:{key}); coarse otherwise (drops all variants).
         var targets = policy.InvalidationTargets;
         for (int i = 0; i < targets.Length; i++)
-        {
-            var prefix = $"query:{targets[i].QueryType.FullName}";
-            var keys = await _cache.GetKeysWithPrefixAsync(prefix, ct).ConfigureAwait(false);
-            for (int j = 0; j < keys.Count; j++)
-                await _cache.InvalidateAsync(keys[j], ct).ConfigureAwait(false);
-        }
+            await _cache.RemoveByTagAsync(QueryCacheKey.InvalidationTag(targets[i], cmd), ct).ConfigureAwait(false);
     }
 
     private async ValueTask MarkStaleAsync(
-        Type commandType, YFex.Cqrs.Runtime.CommandPolicy? policy, CancellationToken ct)
+        object cmd, YFex.Cqrs.Runtime.CommandPolicy? policy, CancellationToken ct)
     {
         if (policy?.InvalidationTargets is null) return;
         var targets = policy.InvalidationTargets;
         for (int i = 0; i < targets.Length; i++)
-        {
-            var prefix = $"query:{targets[i].QueryType.FullName}";
-            var keys = await _cache.GetKeysWithPrefixAsync(prefix, ct).ConfigureAwait(false);
-            for (int j = 0; j < keys.Count; j++)
-                await _cache.MarkStaleAsync(keys[j], ct).ConfigureAwait(false);
-        }
+            await _cache.ExpireByTagAsync(QueryCacheKey.InvalidationTag(targets[i], cmd), ct).ConfigureAwait(false);
     }
-
-    private static string CacheKey<TQuery>(TQuery query) =>
-        $"query:{typeof(TQuery).FullName}:{query!.GetHashCode()}";
 }

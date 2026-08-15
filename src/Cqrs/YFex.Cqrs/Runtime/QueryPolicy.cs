@@ -11,6 +11,9 @@ public sealed record QueryPolicy(
     CachePolicy?                                                  Cache,
     CacheScope                                                    Scope,
     Func<ICacheScopeContext, string>?                             ScopeKey,
+    /// <summary>Extracts the entity key from the query, tagging its cache entry <c>en:{QueryType}:{key}</c>
+    /// so a command can invalidate exactly that variant. Null = only the coarse type tag is written.</summary>
+    Func<object, string>?                                         TagKey,
     TimeSpan?                                                     StaleAfter,
     TimeSpan?                                                     Timeout,
     /// <summary>

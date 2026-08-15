@@ -66,6 +66,12 @@ public readonly struct InvalidationTarget
     /// <summary>Null = wildcard: invalidate all cached variants of this query type.</summary>
     public readonly Func<object, object, bool>? Match;
 
-    public InvalidationTarget(Type queryType, Func<object, object, bool>? match)
-    { QueryType = queryType; Match = match; }
+    /// <summary>
+    /// Extracts the entity key from the dispatched command for precise, tag-based invalidation:
+    /// only the query variant tagged with the same key is dropped. Null = coarse (drop all variants).
+    /// </summary>
+    public readonly Func<object, string>? TagKey;
+
+    public InvalidationTarget(Type queryType, Func<object, object, bool>? match, Func<object, string>? tagKey = null)
+    { QueryType = queryType; Match = match; TagKey = tagKey; }
 }

@@ -6,7 +6,7 @@ namespace YFex.Cqrs;
 /// </summary>
 public interface IDispatcher
 {
-    ValueTask<Result<TResult>> QueryAsync<TQuery, TResult>(TQuery query, CancellationToken ct = default)
+    ValueTask<CacheableQueryResult<TResult>> QueryAsync<TQuery, TResult>(TQuery query, CancellationToken ct = default)
         where TQuery : IQuery<TResult>;
 
     ValueTask<QueueableResult<TResult>> CommandAsync<TCommand, TResult>(TCommand cmd, CancellationToken ct = default)

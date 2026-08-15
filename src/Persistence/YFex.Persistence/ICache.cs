@@ -25,6 +25,14 @@ public interface ICache
     /// timeouts, L1 size/priority). Simpler backends honor <see cref="CacheEntryOptions.Duration"/> only.</summary>
     ValueTask SetAsync<T>(string key, T value, CacheEntryOptions options, CancellationToken ct = default);
 
+    /// <summary>
+    /// Returns the cached value, or produces it via <paramref name="factory"/> on a miss and caches it.
+    /// On FusionCache, concurrent misses for the same key collapse into a single factory call
+    /// (stampede protection) and fail-safe can serve a stale value if the factory throws; simpler
+    /// backends fall back to a plain get-miss-set.
+    /// </summary>
+    ValueTask<T> GetOrSetAsync<T>(string key, Func<CancellationToken, Task<T>> factory, CacheEntryOptions? options = null, CancellationToken ct = default);
+
     /// <summary>Removes the entry for <paramref name="key"/>.</summary>
     ValueTask InvalidateAsync(string key, CancellationToken ct = default);
 
@@ -33,6 +41,12 @@ public interface ICache
 
     /// <summary>Marks an entry stale without removing it — still served offline, refreshed on reconnect.</summary>
     ValueTask MarkStaleAsync(string key, CancellationToken ct = default);
+
+    /// <summary>Removes every entry carrying <paramref name="tag"/> (set via <see cref="CacheEntryOptions.Tags"/>).</summary>
+    ValueTask RemoveByTagAsync(string tag, CancellationToken ct = default);
+
+    /// <summary>Marks every entry carrying <paramref name="tag"/> stale (still served until refreshed).</summary>
+    ValueTask ExpireByTagAsync(string tag, CancellationToken ct = default);
 
     /// <summary>Returns cache keys beginning with <paramref name="prefix"/> (for batch invalidation).</summary>
     ValueTask<IReadOnlyList<string>> GetKeysWithPrefixAsync(string prefix, CancellationToken ct = default);

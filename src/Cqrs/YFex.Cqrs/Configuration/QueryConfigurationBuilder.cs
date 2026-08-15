@@ -21,6 +21,7 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
     private CachePolicy?                       _cache;
     private CacheScope                         _scope      = CacheScope.Global;
     private Func<ICacheScopeContext, string>?  _scopeKey;
+    private Func<object, string>?              _tagKey;
     private TimeSpan?                          _staleAfter;
     private TimeSpan?                          _timeout;
     private bool                               _notCacheable;
@@ -141,6 +142,17 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
 
     // ── Invalidation ──────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Declares the entity key that scopes this query's cache entries. The entry is tagged
+    /// <c>en:{QueryType}:{key}</c>, so a command declaring <c>Invalidates&lt;TQuery,TResult&gt;(cmd =&gt; cmd.Id)</c>
+    /// with the same key drops exactly that variant instead of every cached variant of the type.
+    /// </summary>
+    public QueryConfigurationBuilder<TQuery, TResult> TaggedBy(Func<TQuery, object> key)
+    {
+        _tagKey = q => key((TQuery)q)?.ToString() ?? string.Empty;
+        return this;
+    }
+
     /// <summary>Declares that dispatching <typeparamref name="TCommand"/> invalidates this query
     /// when the compiled <paramref name="match"/> predicate is satisfied.</summary>
     public QueryConfigurationBuilder<TQuery, TResult> InvalidatedBy<TCommand>(
@@ -191,6 +203,7 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
         Cache        = _cache,
         Scope        = _scope,
         ScopeKey     = _scopeKey,
+        TagKey       = _tagKey,
         StaleAfter   = _staleAfter,
         Timeout      = _timeout,
         NotCacheable = _notCacheable,

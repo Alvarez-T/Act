@@ -120,26 +120,55 @@ internal static class CodeBuilder
             string paramList = BuildParameterList(q.Parameters);
             string argList   = BuildArgumentList(q.Parameters);
 
-            // ValueTask<Result<TResult>> MethodName(params..., CancellationToken ct = default)
-            sb.Append("        public static System.Threading.Tasks.ValueTask<YFex.Cqrs.Result<");
-            sb.Append(q.ReturnType);
-            sb.Append(">> ");
-            sb.Append(q.MethodName);
-            sb.Append('(');
-            if (!string.IsNullOrEmpty(paramList)) { sb.Append(paramList); sb.Append(", "); }
-            sb.AppendLine("System.Threading.CancellationToken ct = default)");
-            sb.AppendLine("        {");
-            sb.Append("            var q = new ");
-            sb.Append(q.RecordName);
-            sb.Append('(');
-            sb.Append(argList);
-            sb.AppendLine(");");
-            sb.Append("            return YFex.Cqrs.YFexDispatcherProvider.Current.QueryAsync<");
-            sb.Append(q.RecordName);
-            sb.Append(", ");
-            sb.Append(q.ReturnType);
-            sb.AppendLine(">(q, ct);");
-            sb.AppendLine("        }");
+            if (q.IsCacheable)
+            {
+                // Cacheable → provenance-bearing CacheableQueryResult<TResult> (Fresh | Cached | Stale | Error).
+                // ValueTask<CacheableQueryResult<TResult>> MethodName(params..., CancellationToken ct = default)
+                sb.Append("        public static System.Threading.Tasks.ValueTask<YFex.Cqrs.CacheableQueryResult<");
+                sb.Append(q.ReturnType);
+                sb.Append(">> ");
+                sb.Append(q.MethodName);
+                sb.Append('(');
+                if (!string.IsNullOrEmpty(paramList)) { sb.Append(paramList); sb.Append(", "); }
+                sb.AppendLine("System.Threading.CancellationToken ct = default)");
+                sb.AppendLine("        {");
+                sb.Append("            var q = new ");
+                sb.Append(q.RecordName);
+                sb.Append('(');
+                sb.Append(argList);
+                sb.AppendLine(");");
+                sb.Append("            return YFex.Cqrs.YFexDispatcherProvider.Current.QueryAsync<");
+                sb.Append(q.RecordName);
+                sb.Append(", ");
+                sb.Append(q.ReturnType);
+                sb.AppendLine(">(q, ct);");
+                sb.AppendLine("        }");
+            }
+            else
+            {
+                // Non-cacheable → can only be live or error; unwrap the dispatcher's
+                // CacheableQueryResult<TResult> down to a plain Result<TResult>.
+                sb.Append("        public static async System.Threading.Tasks.ValueTask<YFex.Cqrs.Result<");
+                sb.Append(q.ReturnType);
+                sb.Append(">> ");
+                sb.Append(q.MethodName);
+                sb.Append('(');
+                if (!string.IsNullOrEmpty(paramList)) { sb.Append(paramList); sb.Append(", "); }
+                sb.AppendLine("System.Threading.CancellationToken ct = default)");
+                sb.AppendLine("        {");
+                sb.Append("            var q = new ");
+                sb.Append(q.RecordName);
+                sb.Append('(');
+                sb.Append(argList);
+                sb.AppendLine(");");
+                sb.Append("            var r = await YFex.Cqrs.YFexDispatcherProvider.Current.QueryAsync<");
+                sb.Append(q.RecordName);
+                sb.Append(", ");
+                sb.Append(q.ReturnType);
+                sb.AppendLine(">(q, ct).ConfigureAwait(false);");
+                sb.AppendLine("            return r.ToResult();");
+                sb.AppendLine("        }");
+            }
         }
 
         sb.AppendLine("    }");

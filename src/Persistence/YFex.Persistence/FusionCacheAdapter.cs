@@ -42,7 +42,16 @@ public sealed class FusionCacheAdapter : ICache
         => _cache.SetAsync(key, value, new FusionCacheEntryOptions { Duration = ttl ?? _defaultDuration }, token: ct);
 
     public ValueTask SetAsync<T>(string key, T value, CacheEntryOptions options, CancellationToken ct = default)
-        => _cache.SetAsync(key, value, ToFusion(options), token: ct);
+        => _cache.SetAsync(key, value, ToFusion(options), tags: options.Tags, token: ct);
+
+    public async ValueTask<T> GetOrSetAsync<T>(string key, Func<CancellationToken, Task<T>> factory,
+        CacheEntryOptions? options = null, CancellationToken ct = default)
+        => await _cache.GetOrSetAsync<T>(
+            key,
+            (_, token) => factory(token),
+            options is null ? new FusionCacheEntryOptions { Duration = _defaultDuration } : ToFusion(options),
+            tags: options?.Tags,
+            token: ct).ConfigureAwait(false);
 
     public ValueTask InvalidateAsync(string key, CancellationToken ct = default)
         => _cache.RemoveAsync(key, token: ct);
@@ -57,6 +66,18 @@ public sealed class FusionCacheAdapter : ICache
     /// <summary>Logically expires the entry (fail-safe keeps serving it until refreshed).</summary>
     public ValueTask MarkStaleAsync(string key, CancellationToken ct = default)
         => _cache.ExpireAsync(key, token: ct);
+
+    public ValueTask RemoveByTagAsync(string tag, CancellationToken ct = default)
+        => _cache.RemoveByTagAsync(tag, token: ct);
+
+    /// <summary>
+    /// FusionCache 2.6 has no expire-by-tag, only remove-by-tag — so this <b>removes</b> the tagged
+    /// entries rather than soft-expiring them. On this backend a tagged offline invalidation drops the
+    /// entries (they refetch) instead of serving them stale. Use <see cref="KeyValueCache"/> when
+    /// serve-stale-by-tag is required.
+    /// </summary>
+    public ValueTask ExpireByTagAsync(string tag, CancellationToken ct = default)
+        => _cache.RemoveByTagAsync(tag, token: ct);
 
     public ValueTask<IReadOnlyList<string>> GetKeysWithPrefixAsync(string prefix, CancellationToken ct = default)
         => throw new NotSupportedException(

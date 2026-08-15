@@ -16,6 +16,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\YFex\YFex.csproj" />
     <ProjectReference Include="..\YFex.Cqrs.SourceGenerator\YFex.Cqrs.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\YFex.Cqrs.Analyzer\YFex.Cqrs.Analyzer.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>

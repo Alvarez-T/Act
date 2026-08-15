@@ -12,23 +12,33 @@ namespace YFex.Cqrs.SourceGenerator
         public string ReturnType { get; }
         public EquatableArray<ParameterInfo> Parameters { get; }
 
+        /// <summary>
+        /// True when the query record implements <c>ICacheable</c>. Cacheable queries can be served
+        /// from the offline cache, so their helper returns a provenance-bearing
+        /// <c>CacheableQueryResult&lt;T&gt;</c>; non-cacheable queries return a plain <c>Result&lt;T&gt;</c>.
+        /// </summary>
+        public bool IsCacheable { get; }
+
         public QueryToGenerate(
             string recordName,
             string methodName,
             string returnType,
-            EquatableArray<ParameterInfo> parameters)
+            EquatableArray<ParameterInfo> parameters,
+            bool isCacheable)
         {
             RecordName = recordName;
             MethodName = methodName;
             ReturnType = returnType;
             Parameters = parameters;
+            IsCacheable = isCacheable;
         }
 
         public bool Equals(QueryToGenerate other)
             => RecordName == other.RecordName
             && MethodName == other.MethodName
             && ReturnType == other.ReturnType
-            && Parameters == other.Parameters;
+            && Parameters == other.Parameters
+            && IsCacheable == other.IsCacheable;
 
         public override bool Equals(object obj)
             => obj is QueryToGenerate other && Equals(other);
@@ -42,6 +52,7 @@ namespace YFex.Cqrs.SourceGenerator
                 h = h * 31 + (MethodName?.GetHashCode() ?? 0);
                 h = h * 31 + (ReturnType?.GetHashCode() ?? 0);
                 h = h * 31 + Parameters.GetHashCode();
+                h = h * 31 + IsCacheable.GetHashCode();
                 return h;
             }
         }

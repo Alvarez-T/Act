@@ -194,6 +194,7 @@ public sealed class CompiledMessagingRegistry
             acc.Cache,
             acc.Scope,
             acc.ScopeKey,
+            acc.TagKey,
             acc.StaleAfter,
             acc.Timeout,
             CompileQueryInvalidators(acc.InvalidatedBy));
@@ -317,7 +318,7 @@ public sealed class CompiledMessagingRegistry
                 var del = rule.MatchExpression.Compile();
                 match = (q, cmd) => (bool)del.DynamicInvoke(q, cmd)!;
             }
-            result[i] = new InvalidationTarget(rule.TargetType, match);
+            result[i] = new InvalidationTarget(rule.TargetType, match, rule.KeySelector);
         }
         return result;
     }
@@ -359,6 +360,7 @@ public sealed class CompiledMessagingRegistry
         public CachePolicy?                      Cache;
         public CacheScope                        Scope      = CacheScope.Global;
         public Func<ICacheScopeContext, string>? ScopeKey;
+        public Func<object, string>?             TagKey;
         public TimeSpan?                         StaleAfter;
         public TimeSpan?                         Timeout;
         public List<InvalidationRuleDescriptor>? InvalidatedBy;
@@ -372,6 +374,7 @@ public sealed class CompiledMessagingRegistry
             if (m.StaleAfter is not null) StaleAfter = m.StaleAfter;
             if (m.Timeout    is not null) Timeout    = m.Timeout;
             if (m.ScopeKey   is not null) ScopeKey   = m.ScopeKey;
+            if (m.TagKey     is not null) TagKey     = m.TagKey;
             Scope = m.Scope;
         }
     }

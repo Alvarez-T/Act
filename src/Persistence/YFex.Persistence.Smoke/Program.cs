@@ -234,6 +234,62 @@ await Scenario("ICache: AddYFexFusionCache DI (bounded L1, #7)", async () =>
     A((await cache.GetAsync<Person>("s:sized"))?.Name == "Sized", "sized SetAsync against SizeLimit L1");
 });
 
+// ── 2b. Tag-based invalidation (Phase 0 of CQRS work) ───────────────────────────
+
+async Task CacheTagsAsync(ICache cache, bool expireIsRemove)
+{
+    await cache.SetAsync("t:1", new Person("One", 1), new CacheEntryOptions { Tags = ["red"] });
+    await cache.SetAsync("t:2", new Person("Two", 2), new CacheEntryOptions { Tags = ["red", "blue"] });
+    await cache.SetAsync("t:3", new Person("Three", 3), new CacheEntryOptions { Tags = ["blue"] });
+
+    await cache.ExpireByTagAsync("blue");
+    var r2 = await cache.TryGetAsync<Person>("t:2");
+    var r3 = await cache.TryGetAsync<Person>("t:3");
+    if (expireIsRemove)
+    {
+        A(r2.IsMiss && r3.IsMiss, "ExpireByTag('blue') removes tagged entries (FusionCache: no soft-expire)");
+    }
+    else
+    {
+        A(r2.IsHit && r2.IsStale, "ExpireByTag('blue') → t:2 stale (still served)");
+        A(r3.IsHit && r3.IsStale, "ExpireByTag('blue') → t:3 stale (still served)");
+    }
+
+    await cache.RemoveByTagAsync("red");
+    A((await cache.TryGetAsync<Person>("t:1")).IsMiss, "RemoveByTag('red') → t:1 gone");
+    A((await cache.TryGetAsync<Person>("t:2")).IsMiss, "RemoveByTag('red') → t:2 gone");
+}
+
+await Scenario("Tags: InMemoryCache", async () => await CacheTagsAsync(new InMemoryCache(), expireIsRemove: false));
+await Scenario("Tags: KeyValueCache", async () => await CacheTagsAsync(new KeyValueCache(new MemoryKeyValueStore()), expireIsRemove: false));
+await Scenario("Tags: FusionCacheAdapter", async () =>
+{
+    using var fusion = new FusionCache(new FusionCacheOptions());
+    await CacheTagsAsync(new FusionCacheAdapter(fusion), expireIsRemove: true);
+});
+
+// ── 2c. GetOrSet (Phase 3) ──────────────────────────────────────────────────────
+
+async Task CacheGetOrSetAsync(ICache cache)
+{
+    int factoryCalls = 0;
+    Task<Person> Factory(CancellationToken _) { factoryCalls++; return Task.FromResult(new Person("Made", 1)); }
+
+    var first = await cache.GetOrSetAsync("g:1", Factory);
+    A(first.Name == "Made" && factoryCalls == 1, "GetOrSet miss → factory runs once");
+
+    var second = await cache.GetOrSetAsync("g:1", Factory);
+    A(second.Name == "Made" && factoryCalls == 1, "GetOrSet hit → factory not called again");
+}
+
+await Scenario("GetOrSet: InMemoryCache", async () => await CacheGetOrSetAsync(new InMemoryCache()));
+await Scenario("GetOrSet: KeyValueCache", async () => await CacheGetOrSetAsync(new KeyValueCache(new MemoryKeyValueStore())));
+await Scenario("GetOrSet: FusionCacheAdapter", async () =>
+{
+    using var fusion = new FusionCache(new FusionCacheOptions());
+    await CacheGetOrSetAsync(new FusionCacheAdapter(fusion));
+});
+
 // ── 3. Union types (CacheValue / CacheResult) ───────────────────────────────────
 
 await Scenario("Unions: CacheValue<T> and CacheResult<T>", async () =>

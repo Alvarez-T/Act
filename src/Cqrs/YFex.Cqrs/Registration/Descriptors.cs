@@ -65,9 +65,14 @@ internal readonly struct InvalidationRuleDescriptor
     public readonly LambdaExpression? MatchExpression;
     /// <summary>True when TargetType is a marker interface (IInvalidationGroup) or union type.</summary>
     public readonly bool IsGroup;
+    /// <summary>Extracts the entity key from the source message for precise tag invalidation. Null = coarse.</summary>
+    public readonly Func<object, string>? KeySelector;
 
     public InvalidationRuleDescriptor(Type targetType, LambdaExpression? match, bool isGroup = false)
-    { TargetType = targetType; MatchExpression = match; IsGroup = isGroup; }
+    { TargetType = targetType; MatchExpression = match; IsGroup = isGroup; KeySelector = null; }
+
+    public InvalidationRuleDescriptor(Type targetType, Func<object, string> keySelector)
+    { TargetType = targetType; MatchExpression = null; IsGroup = false; KeySelector = keySelector; }
 }
 
 // ── Optimistic update rule ────────────────────────────────────────────────────

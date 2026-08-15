@@ -30,4 +30,11 @@ public sealed record CacheEntryOptions
 
     /// <summary>Eviction priority when L1 is under memory pressure.</summary>
     public CacheItemPriority Priority { get; init; } = CacheItemPriority.Normal;
+
+    /// <summary>
+    /// Tags attached to the entry for group invalidation via <see cref="ICache.RemoveByTagAsync"/> /
+    /// <see cref="ICache.ExpireByTagAsync"/>. FusionCache invalidates by tag natively; other backends
+    /// store tags per entry and enumerate.
+    /// </summary>
+    public IReadOnlyList<string>? Tags { get; init; }
 }

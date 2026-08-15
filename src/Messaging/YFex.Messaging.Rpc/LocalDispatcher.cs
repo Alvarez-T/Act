@@ -1,6 +1,7 @@
 ﻿using System.Security.Claims;
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;
+using YFex;
 using YFex.Cqrs;
 using YFex.Cqrs.Runtime;
 using YFex.Messaging;
@@ -48,7 +49,7 @@ public sealed class LocalDispatcher : IDispatcher
 
     // â”€â”€ Query â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    public async ValueTask<Result<TResult>> QueryAsync<TQuery, TResult>(
+    public async ValueTask<CacheableQueryResult<TResult>> QueryAsync<TQuery, TResult>(
         TQuery query, CancellationToken ct = default)
         where TQuery : IQuery<TResult>
     {
@@ -61,45 +62,55 @@ public sealed class LocalDispatcher : IDispatcher
             ? await policy.Validate(query!, ct).ConfigureAwait(false)
             : ValidationResult.Success();
         if (!validationResult.IsValid)
-            return Result<TResult>.ValidationProblem(FormatErrors(validationResult));
+            return CacheableQueryResult<TResult>.ValidationProblem(FormatErrors(validationResult));
 
         if (policy?.Authorize is not null && !policy.Authorize(ClaimsPrincipal.Current ?? new(), query!))
-            return Result<TResult>.Unauthorized();
+            return CacheableQueryResult<TResult>.Unauthorized();
 
-        var cacheKey = CacheKey<TQuery>(query);
-        if (cacheKey is not null)
-        {
-            var cached = await _cache.GetAsync<TResult>(cacheKey, ct).ConfigureAwait(false);
-            if (cached is not null) return Result<TResult>.Ok(cached);
-        }
+        var cacheKey = QueryCacheKey.For(typeof(TQuery), query!, policy, _sp);
+        if (cacheKey is null)
+            return new Fresh<TResult>(await InvokeQueryAsync<TResult>(query!, policy, ct).ConfigureAwait(false));
 
-        TResult result;
+        // Stampede-safe read-through: concurrent misses collapse into one factory call on FusionCache.
+        var result = await _cache.GetOrSetAsync<TResult>(
+            cacheKey,
+            innerCt => InvokeQueryAsync<TResult>(query!, policy, innerCt),
+            QueryCacheKey.Options(typeof(TQuery), policy, query!),
+            ct).ConfigureAwait(false);
+
+        // Online read-through — authoritative, regardless of whether L1 served it within TTL.
+        return new Fresh<TResult>(result);
+    }
+
+    private async Task<TResult> InvokeQueryAsync<TResult>(object query, QueryPolicy? policy, CancellationToken ct)
+    {
         using var cts = policy?.Timeout.HasValue == true
             ? CancellationTokenSource.CreateLinkedTokenSource(ct)
             : null;
         if (cts is not null) cts.CancelAfter(policy!.Timeout!.Value);
         var effectiveCt = cts?.Token ?? ct;
 
-        result = await _invoker.InvokeAsync<TResult>(query!, effectiveCt).ConfigureAwait(false);
-
-        if (cacheKey is not null)
-            await _cache.SetAsync(cacheKey, result, policy?.Cache?.AbsoluteExpiration, ct).ConfigureAwait(false);
-
-        return Result<TResult>.Ok(result);
+        return await _invoker.InvokeAsync<TResult>(query, effectiveCt).ConfigureAwait(false);
     }
 
-    private async ValueTask<Result<TResult>> OfflineQueryAsync<TQuery, TResult>(
+    private async ValueTask<CacheableQueryResult<TResult>> OfflineQueryAsync<TQuery, TResult>(
         TQuery query, CancellationToken ct) where TQuery : IQuery<TResult>
     {
-        if (query is not ICacheable) return Result<TResult>.Fail("No network connectivity.");
+        if (query is not ICacheable) return CacheableQueryResult<TResult>.Fail("No network connectivity.");
 
-        var cacheKey = CacheKey<TQuery>(query);
-        if (cacheKey is null) return Result<TResult>.Fail("No network connectivity.");
+        _registry.Queries.TryGetValue(typeof(TQuery), out var policy);
+        var cacheKey = QueryCacheKey.For(typeof(TQuery), query!, policy, _sp);
+        if (cacheKey is null) return CacheableQueryResult<TResult>.Fail("No network connectivity.");
 
-        var cached = await _cache.GetAsync<TResult>(cacheKey, ct).ConfigureAwait(false);
-        return cached is not null
-            ? Result<TResult>.Ok(cached)
-            : Result<TResult>.Fail("No cached value available offline.");
+        // Provenance-aware read: keep the stale bit the cache tracked (offline invalidation marks
+        // entries stale, not deleted) so the UI can badge it and refresh on reconnect.
+        var lookup = await _cache.TryGetAsync<TResult>(cacheKey, ct).ConfigureAwait(false);
+        if (!lookup.TryGetHit(out var cv))
+            return CacheableQueryResult<TResult>.Fail("No cached value available offline.");
+
+        return cv.IsStale
+            ? new Stale<TResult>(cv.GetValue(), cv.LastModified)
+            : new Cached<TResult>(cv.GetValue(), cv.LastModified);
     }
 
     // â”€â”€ Command (with result) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -131,7 +142,7 @@ public sealed class LocalDispatcher : IDispatcher
         var result = await _invoker.InvokeAsync<TResult>(cmd!, effectiveCt).ConfigureAwait(false);
 
         await ApplyOptimisticUpdatesAsync(cmd!, policy, ct).ConfigureAwait(false);
-        await InvalidateCachesAsync(policy, ct).ConfigureAwait(false);
+        await InvalidateCachesAsync(cmd!, policy, ct).ConfigureAwait(false);
 
         return QueueableResult<TResult>.Ok(result);
     }
@@ -155,7 +166,7 @@ public sealed class LocalDispatcher : IDispatcher
 
         if (cmd is IQueueable)
         {
-            await MarkInvalidationTargetsStaleAsync(policy, ct).ConfigureAwait(false);
+            await MarkInvalidationTargetsStaleAsync(cmd!, policy, ct).ConfigureAwait(false);
             var queued = await _outbox.EnqueueAsync(cmd, ct).ConfigureAwait(false);
             _eventBus.Publish(new CommandQueuedEvent(queued.IdempotencyKey, typeof(TCommand).Name, DateTimeOffset.UtcNow));
             return QueueableResult<TResult>.Queue(queued.IdempotencyKey);
@@ -193,7 +204,7 @@ public sealed class LocalDispatcher : IDispatcher
         var effectiveCt = cts?.Token ?? ct;
 
         await _invoker.InvokeAsync(cmd!, effectiveCt).ConfigureAwait(false);
-        await InvalidateCachesAsync(policy, ct).ConfigureAwait(false);
+        await InvalidateCachesAsync(cmd!, policy, ct).ConfigureAwait(false);
 
         return QueueableResult.Ok();
     }
@@ -213,7 +224,7 @@ public sealed class LocalDispatcher : IDispatcher
 
         if (cmd is IQueueable)
         {
-            await MarkInvalidationTargetsStaleAsync(policy, ct).ConfigureAwait(false);
+            await MarkInvalidationTargetsStaleAsync(cmd!, policy, ct).ConfigureAwait(false);
             var queued = await _outbox.EnqueueAsync(cmd, ct).ConfigureAwait(false);
             _eventBus.Publish(new CommandQueuedEvent(queued.IdempotencyKey, typeof(TCommand).Name, DateTimeOffset.UtcNow));
             return QueueableResult.Queue(queued.IdempotencyKey);
@@ -235,41 +246,27 @@ public sealed class LocalDispatcher : IDispatcher
 
     // â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    private static string? CacheKey<TQuery>(TQuery query)
+    private async ValueTask InvalidateCachesAsync(object cmd, CommandPolicy? policy, CancellationToken ct)
     {
-        if (query is not ICacheable) return null;
-        // Key: "query:{TypeName}:{HashCode}" â€” cheap deterministic key for in-memory cache.
-        // Persistent backends (Plan 4) use a stable content-hash via MemoryPack.
-        return $"query:{typeof(TQuery).FullName}:{query!.GetHashCode()}";
+        if (policy?.InvalidationTargets is null) return;
+        // Tag-based, no key enumeration (works on FusionCache). Precise when the target declares an
+        // entity key (drops only en:{QueryType}:{key}); coarse otherwise (drops all variants).
+        var targets = policy.InvalidationTargets;
+        for (int i = 0; i < targets.Length; i++)
+            await _cache.RemoveByTagAsync(QueryCacheKey.InvalidationTag(targets[i], cmd), ct).ConfigureAwait(false);
     }
 
-    private async ValueTask InvalidateCachesAsync(CommandPolicy? policy, CancellationToken ct)
+    private async ValueTask MarkInvalidationTargetsStaleAsync(object cmd, CommandPolicy? policy, CancellationToken ct)
     {
         if (policy?.InvalidationTargets is null) return;
         var targets = policy.InvalidationTargets;
         for (int i = 0; i < targets.Length; i++)
-        {
-            // Invalidate all cache entries whose key starts with the target query type prefix.
-            var prefix = $"query:{targets[i].QueryType.FullName}";
-            var keys = await _cache.GetKeysWithPrefixAsync(prefix, ct).ConfigureAwait(false);
-            for (int j = 0; j < keys.Count; j++)
-                await _cache.InvalidateAsync(keys[j], ct).ConfigureAwait(false);
-        }
+            await _cache.ExpireByTagAsync(QueryCacheKey.InvalidationTag(targets[i], cmd), ct).ConfigureAwait(false);
     }
 
-    private async ValueTask MarkInvalidationTargetsStaleAsync(CommandPolicy? policy, CancellationToken ct)
-    {
-        if (policy?.InvalidationTargets is null) return;
-        var targets = policy.InvalidationTargets;
-        for (int i = 0; i < targets.Length; i++)
-        {
-            var prefix = $"query:{targets[i].QueryType.FullName}";
-            var keys = await _cache.GetKeysWithPrefixAsync(prefix, ct).ConfigureAwait(false);
-            for (int j = 0; j < keys.Count; j++)
-                await _cache.MarkStaleAsync(keys[j], ct).ConfigureAwait(false);
-        }
-    }
-
+    // NOTE: optimistic updates mutate cached entries in place, which needs key enumeration — so this
+    // path requires an enumerable ICache (InMemoryCache / KeyValueCache) and throws NotSupported on
+    // FusionCacheAdapter. Tags can evict but not mutate; a tag-native design would invalidate + refetch.
     private async ValueTask ApplyOptimisticUpdatesAsync<TCommand>(
         TCommand cmd, CommandPolicy? policy, CancellationToken ct)
     {

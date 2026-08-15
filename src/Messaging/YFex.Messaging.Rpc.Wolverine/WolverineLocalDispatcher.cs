@@ -29,12 +29,13 @@ public sealed class WolverineLocalDispatcher : YFex.Cqrs.IDispatcher
         _eventBus = eventBus;
     }
 
-    public async ValueTask<YFex.Cqrs.Result<TResult>> QueryAsync<TQuery, TResult>(
+    public async ValueTask<YFex.Cqrs.CacheableQueryResult<TResult>> QueryAsync<TQuery, TResult>(
         TQuery query, CancellationToken ct = default)
         where TQuery : YFex.Cqrs.IQuery<TResult>
     {
+        // Server-side: always live/authoritative, no cache or offline path.
         var result = await _bus.InvokeAsync<TResult>(query!, ct).ConfigureAwait(false);
-        return YFex.Cqrs.Result<TResult>.Ok(result);
+        return new YFex.Fresh<TResult>(result);
     }
 
     public async ValueTask<YFex.Cqrs.QueueableResult<TResult>> CommandAsync<TCommand, TResult>(

@@ -8,7 +8,7 @@ namespace YFex.Persistence;
 /// </summary>
 public sealed class InMemoryCache : ICache
 {
-    private sealed record CacheEntry(object? Value, bool IsStale, DateTimeOffset? ExpiresAt, DateTimeOffset StoredAt);
+    private sealed record CacheEntry(object? Value, bool IsStale, DateTimeOffset? ExpiresAt, DateTimeOffset StoredAt, IReadOnlyList<string>? Tags);
 
     private readonly Dictionary<string, CacheEntry> _cache = new(StringComparer.Ordinal);
     private readonly object _lock = new();
@@ -49,13 +49,29 @@ public sealed class InMemoryCache : ICache
     public ValueTask SetAsync<T>(string key, T value, TimeSpan? ttl = null, CancellationToken ct = default)
     {
         var expiresAt = ttl.HasValue ? DateTimeOffset.UtcNow + ttl.Value : (DateTimeOffset?)null;
-        lock (_lock) _cache[key] = new CacheEntry(value, false, expiresAt, DateTimeOffset.UtcNow);
+        lock (_lock) _cache[key] = new CacheEntry(value, false, expiresAt, DateTimeOffset.UtcNow, null);
         return ValueTask.CompletedTask;
     }
 
-    /// <summary>Honors <see cref="CacheEntryOptions.Duration"/>; other options are ignored (single-process, unbounded).</summary>
+    /// <summary>Honors <see cref="CacheEntryOptions.Duration"/> and <see cref="CacheEntryOptions.Tags"/>;
+    /// size/priority/timeout options are ignored (single-process, unbounded).</summary>
     public ValueTask SetAsync<T>(string key, T value, CacheEntryOptions options, CancellationToken ct = default)
-        => SetAsync(key, value, options.Duration, ct);
+    {
+        var expiresAt = options.Duration.HasValue ? DateTimeOffset.UtcNow + options.Duration.Value : (DateTimeOffset?)null;
+        lock (_lock) _cache[key] = new CacheEntry(value, false, expiresAt, DateTimeOffset.UtcNow, options.Tags);
+        return ValueTask.CompletedTask;
+    }
+
+    /// <summary>Best-effort get-miss-set (no cross-caller stampede lock; single process).</summary>
+    public async ValueTask<T> GetOrSetAsync<T>(string key, Func<CancellationToken, Task<T>> factory,
+        CacheEntryOptions? options = null, CancellationToken ct = default)
+    {
+        var hit = await GetAsync<T>(key, ct).ConfigureAwait(false);
+        if (hit is not null) return hit;
+        var produced = await factory(ct).ConfigureAwait(false);
+        await SetAsync(key, produced, options ?? new CacheEntryOptions(), ct).ConfigureAwait(false);
+        return produced;
+    }
 
     public ValueTask InvalidateAsync(string key, CancellationToken ct = default)
     {
@@ -79,6 +95,31 @@ public sealed class InMemoryCache : ICache
         {
             if (_cache.TryGetValue(key, out var e))
                 _cache[key] = e with { IsStale = true };
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask RemoveByTagAsync(string tag, CancellationToken ct = default)
+    {
+        lock (_lock)
+        {
+            var toRemove = new List<string>();
+            foreach (var (k, e) in _cache)
+                if (e.Tags is not null && e.Tags.Contains(tag)) toRemove.Add(k);
+            foreach (var k in toRemove) _cache.Remove(k);
+        }
+        return ValueTask.CompletedTask;
+    }
+
+    public ValueTask ExpireByTagAsync(string tag, CancellationToken ct = default)
+    {
+        lock (_lock)
+        {
+            var keys = new List<string>();
+            foreach (var (k, e) in _cache)
+                if (e.Tags is not null && e.Tags.Contains(tag)) keys.Add(k);
+            foreach (var k in keys)
+                _cache[k] = _cache[k] with { IsStale = true };
         }
         return ValueTask.CompletedTask;
     }

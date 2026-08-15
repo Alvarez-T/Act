@@ -9,7 +9,7 @@ namespace YFex.Persistence;
 /// New members are appended so MemoryPack reads pre-versioning bytes as <c>Schema = 0</c> (dropped).
 /// </summary>
 [MemoryPackable]
-internal partial record CacheEnvelope(byte[] Payload, bool IsStale, int Schema, long StoredAtTicks);
+internal partial record CacheEnvelope(byte[] Payload, bool IsStale, int Schema, long StoredAtTicks, string[]? Tags);
 
 /// <summary>
 /// Backend-agnostic <see cref="ICache"/> implemented over an <see cref="IKeyValueStore"/>.
@@ -53,14 +53,29 @@ public sealed class KeyValueCache : ICache
     }
 
     public ValueTask SetAsync<T>(string key, T value, TimeSpan? ttl = null, CancellationToken ct = default)
+        => SetCore(key, value, ttl, tags: null, ct);
+
+    /// <summary>Honors <see cref="CacheEntryOptions.Duration"/> and <see cref="CacheEntryOptions.Tags"/>;
+    /// size/priority/timeout options are ignored (durable store, no L1 bound).</summary>
+    public ValueTask SetAsync<T>(string key, T value, CacheEntryOptions options, CancellationToken ct = default)
+        => SetCore(key, value, options.Duration, options.Tags is { Count: > 0 } t ? [.. t] : null, ct);
+
+    private ValueTask SetCore<T>(string key, T value, TimeSpan? ttl, string[]? tags, CancellationToken ct)
     {
-        var env = new CacheEnvelope(_serializer.Serialize(value), IsStale: false, _schema, DateTimeOffset.UtcNow.UtcTicks);
+        var env = new CacheEnvelope(_serializer.Serialize(value), IsStale: false, _schema, DateTimeOffset.UtcNow.UtcTicks, tags);
         return _store.SetAsync(key, MemoryPackSerializer.Serialize(env), ttl, ct);
     }
 
-    /// <summary>Honors <see cref="CacheEntryOptions.Duration"/>; other options are ignored (durable store, no L1 bound).</summary>
-    public ValueTask SetAsync<T>(string key, T value, CacheEntryOptions options, CancellationToken ct = default)
-        => SetAsync(key, value, options.Duration, ct);
+    /// <summary>Best-effort get-miss-set (no cross-caller stampede lock).</summary>
+    public async ValueTask<T> GetOrSetAsync<T>(string key, Func<CancellationToken, Task<T>> factory,
+        CacheEntryOptions? options = null, CancellationToken ct = default)
+    {
+        var hit = await GetAsync<T>(key, ct).ConfigureAwait(false);
+        if (hit is not null) return hit;
+        var produced = await factory(ct).ConfigureAwait(false);
+        await SetAsync(key, produced, options ?? new CacheEntryOptions(), ct).ConfigureAwait(false);
+        return produced;
+    }
 
     public ValueTask InvalidateAsync(string key, CancellationToken ct = default)
         => _store.DeleteAsync(key, ct);
@@ -82,6 +97,32 @@ public sealed class KeyValueCache : ICache
 
     public ValueTask<IReadOnlyList<string>> GetKeysWithPrefixAsync(string prefix, CancellationToken ct = default)
         => _store.GetKeysWithPrefixAsync(prefix, ct);
+
+    public async ValueTask RemoveByTagAsync(string tag, CancellationToken ct = default)
+    {
+        foreach (var key in await AllKeysAsync(ct).ConfigureAwait(false))
+        {
+            var env = await ReadEnvelopeAsync(key, ct).ConfigureAwait(false);
+            if (env?.Tags is not null && Array.IndexOf(env.Tags, tag) >= 0)
+                await _store.DeleteAsync(key, ct).ConfigureAwait(false);
+        }
+    }
+
+    public async ValueTask ExpireByTagAsync(string tag, CancellationToken ct = default)
+    {
+        foreach (var key in await AllKeysAsync(ct).ConfigureAwait(false))
+        {
+            var env = await ReadEnvelopeAsync(key, ct).ConfigureAwait(false);
+            if (env?.Tags is not null && Array.IndexOf(env.Tags, tag) >= 0)
+            {
+                var stale = env with { IsStale = true };
+                await _store.SetAsync(key, MemoryPackSerializer.Serialize(stale), ct: ct).ConfigureAwait(false);
+            }
+        }
+    }
+
+    private ValueTask<IReadOnlyList<string>> AllKeysAsync(CancellationToken ct)
+        => _store.GetKeysWithPrefixAsync(string.Empty, ct);
 
     /// <summary>Reads and validates the envelope, dropping entries whose schema stamp no longer matches.</summary>
     private async ValueTask<CacheEnvelope?> ReadEnvelopeAsync(string key, CancellationToken ct)

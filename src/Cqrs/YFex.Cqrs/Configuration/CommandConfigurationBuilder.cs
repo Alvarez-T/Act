@@ -102,6 +102,16 @@ public sealed class CommandConfigurationBuilder<TCommand>
         return this;
     }
 
+    /// <summary>Precise invalidation: drops only the <typeparamref name="TQuery"/> variant whose entity
+    /// key (declared on the query via <c>TaggedBy</c>) equals <paramref name="key"/> for this command.</summary>
+    public CommandConfigurationBuilder<TCommand> Invalidates<TQuery, TResult>(Func<TCommand, object> key)
+        where TQuery : IQuery<TResult>
+    {
+        (_invalidates ??= []).Add(new InvalidationRuleDescriptor(
+            typeof(TQuery), c => key((TCommand)c)?.ToString() ?? string.Empty));
+        return this;
+    }
+
     public CommandConfigurationBuilder<TCommand> InvalidatesGroup<TGroup>()
         where TGroup : IInvalidationGroup
     {
@@ -287,6 +297,16 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
         where TQuery : IQuery<TQueryResult>
     {
         (_invalidates ??= []).Add(new InvalidationRuleDescriptor(typeof(TQuery), null));
+        return this;
+    }
+
+    /// <summary>Precise invalidation: drops only the <typeparamref name="TQuery"/> variant whose entity
+    /// key (declared on the query via <c>TaggedBy</c>) equals <paramref name="key"/> for this command.</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> Invalidates<TQuery, TQueryResult>(Func<TCommand, object> key)
+        where TQuery : IQuery<TQueryResult>
+    {
+        (_invalidates ??= []).Add(new InvalidationRuleDescriptor(
+            typeof(TQuery), c => key((TCommand)c)?.ToString() ?? string.Empty));
         return this;
     }
 
