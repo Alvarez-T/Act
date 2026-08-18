@@ -36,20 +36,19 @@
     <Project Path="../YFex.Data/src/YFex.Sqlite/YFex.Sqlite.csproj" />
   </Folder>
   <Folder Name="/Security/">
-    <Project Path="src/Security/YFex.Security.Analysis/YFex.Security.Analysis.csproj" />
-    <Project Path="src/Security/YFex.Security.ApiReverser/YFex.Security.ApiReverser.csproj" />
-    <Project Path="src/Security/YFex.Security.Capture/YFex.Security.Capture.csproj" />
-    <Project Path="src/Security/YFex.Security.Cli/YFex.Security.Cli.csproj" />
-    <Project Path="src/Security/YFex.Security.Hooking/YFex.Security.Hooking.csproj" />
-    <Project Path="src/Security/YFex.Security.Proxy/YFex.Security.Proxy.csproj" />
-    <Project Path="src/Security/YFex.Security.Service/YFex.Security.Service.csproj" />
-    <Project Path="src/Security/YFex.Security.Storage/YFex.Security.Storage.csproj" />
-    <Project Path="src/Security/YFex.Security/YFex.Security.csproj" />
-    <Project Path="src/Security/YFex.Windows.Security/YFex.Windows.Security.csproj" />
+    <Project Path="../YFex.Security/YFex.Security/YFex.Security.csproj" />
+    <Project Path="../YFex.Security/YFex.Security.Analysis/YFex.Security.Analysis.csproj" />
+    <Project Path="../YFex.Security/YFex.Security.Windows/YFex.Security.Windows.csproj" />
+    <Project Path="../YFex.Security/YFex.Security.Windows.Interception/YFex.Security.Windows.Interception.csproj" />
+    <Project Path="../YFex.Security/YFex.Security.Service/YFex.Security.Service.csproj" />
+    <Project Path="../YFex.Security/YFex.Security.Cli/YFex.Security.Cli.csproj" />
+    <Project Path="../YFex.Security/YFex.Security.Tests/YFex.Security.Tests.csproj" />
+    <Project Path="../YFex.Security/YFex.Security.Windows.Interception.Tests/YFex.Security.Windows.Interception.Tests.csproj" />
   </Folder>
   <Folder Name="/System/">
-    <Project Path="src/System/YFex.System.Windows/YFex.System.Windows.csproj" />
-    <Project Path="src/System/YFex.System/YFex.System.csproj" />
+    <Project Path="../YFex.System/YFex.System/YFex.System.csproj" />
+    <Project Path="../YFex.System/YFex.System.Windows/YFex.System.Windows.csproj" />
+    <Project Path="../YFex.System/YFex.System.Tests/YFex.System.Tests.csproj" />
   </Folder>
   <Folder Name="/State/">
     <Project Path="src/State/YFex.State.Blazor/YFex.State.Blazor.csproj" />
