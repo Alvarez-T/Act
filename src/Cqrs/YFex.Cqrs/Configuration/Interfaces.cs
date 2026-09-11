@@ -26,6 +26,26 @@ public interface ICommandAuthorizer<TCommand>
     bool Authorize(ClaimsPrincipal user, TCommand command);
 }
 
+// ── Reverse (compensation) handlers ──────────────────────────────────────────
+
+/// <summary>
+/// Custom reverse handler for a void command. Wired via <c>.ReversibleWith&lt;THandler&gt;()</c>.
+/// Executed by YFex.Cqrs.Compensation when the original command is undone.
+/// </summary>
+public interface IReverseHandler<in TCommand>
+{
+    ValueTask CompensateAsync(TCommand original, CancellationToken ct);
+}
+
+/// <summary>
+/// Custom reverse handler for a result-bearing command. Receives the original command and the
+/// result it produced (null when the result was not journaled).
+/// </summary>
+public interface IReverseHandler<in TCommand, in TResult>
+{
+    ValueTask CompensateAsync(TCommand original, TResult? result, CancellationToken ct);
+}
+
 // ── Telemetry ────────────────────────────────────────────────────────────────
 
 public sealed class TelemetryConfigurationBuilder

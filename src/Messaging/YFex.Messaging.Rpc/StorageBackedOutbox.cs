@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using YFex.Cqrs;
 
 using YFex.Persistence;
@@ -17,15 +18,18 @@ public sealed class StorageBackedOutbox : IOutbox
     private readonly IKeyValueStore _storage;
     private readonly OutboxOptions _options;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
+    private readonly JsonSerializerContext? _commandJsonContext;
     private IWritableSyncFailureLog? _failureLog;
     private int _pendingCount = -1; // -1 = needs scan
 
     internal void SetFailureLog(IWritableSyncFailureLog log) => _failureLog = log;
 
-    public StorageBackedOutbox(IKeyValueStore storage, OutboxOptions options)
+    public StorageBackedOutbox(IKeyValueStore storage, OutboxOptions options,
+        JsonSerializerContext? commandJsonContext = null)
     {
         _storage = storage;
         _options = options;
+        _commandJsonContext = commandJsonContext;
     }
 
     public int PendingCount
@@ -45,7 +49,7 @@ public sealed class StorageBackedOutbox : IOutbox
     public async ValueTask<Queued> EnqueueAsync<T>(T command, CancellationToken ct = default) where T : ICommand
     {
         var key = Guid.NewGuid();
-        var payload = JsonSerializer.SerializeToUtf8Bytes(command, typeof(T));
+        var payload = OutboxCommandPayload.Serialize(command, _commandJsonContext);
         var entry = new OutboxEntry(key, typeof(T).AssemblyQualifiedName ?? typeof(T).FullName!,
             payload, DateTimeOffset.UtcNow, 0, null, null);
 
@@ -88,7 +92,7 @@ public sealed class StorageBackedOutbox : IOutbox
             var bytes = await _storage.GetAsync(keys[i], ct);
             if (bytes is not null)
             {
-                var e = JsonSerializer.Deserialize<OutboxEntryDto>(bytes);
+                var e = JsonSerializer.Deserialize(bytes, RpcInternalJsonContext.Default.OutboxEntryDto);
                 if (e is not null) entries.Add(e.ToEntry());
             }
         }
@@ -101,13 +105,13 @@ public sealed class StorageBackedOutbox : IOutbox
         var storageKey = Prefix + key.ToString();
         var bytes = await _storage.GetAsync(storageKey, ct);
         if (bytes is null) return;
-        var dto = JsonSerializer.Deserialize<OutboxEntryDto>(bytes);
+        var dto = JsonSerializer.Deserialize(bytes, RpcInternalJsonContext.Default.OutboxEntryDto);
         if (dto is null) return;
         dto.AttemptCount++;
         dto.LastFailure = failure;
         dto.LastAttemptAtMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         await _writeLock.WaitAsync(ct);
-        try { await _storage.SetAsync(storageKey, JsonSerializer.SerializeToUtf8Bytes(dto), ct: ct); }
+        try { await _storage.SetAsync(storageKey, JsonSerializer.SerializeToUtf8Bytes(dto, RpcInternalJsonContext.Default.OutboxEntryDto), ct: ct); }
         finally { _writeLock.Release(); }
     }
 
@@ -124,7 +128,7 @@ public sealed class StorageBackedOutbox : IOutbox
     {
         var dto = OutboxEntryDto.From(e);
         await _storage.SetAsync(Prefix + e.IdempotencyKey.ToString(),
-            JsonSerializer.SerializeToUtf8Bytes(dto), ct: ct);
+            JsonSerializer.SerializeToUtf8Bytes(dto, RpcInternalJsonContext.Default.OutboxEntryDto), ct: ct);
     }
 
     private async ValueTask<OutboxEntry?> EvictOldestAsync(IReadOnlyList<string> keys, CancellationToken ct)
@@ -134,7 +138,7 @@ public sealed class StorageBackedOutbox : IOutbox
         {
             var bytes = await _storage.GetAsync(keys[i], ct);
             if (bytes is null) continue;
-            var e = JsonSerializer.Deserialize<OutboxEntryDto>(bytes)?.ToEntry();
+            var e = JsonSerializer.Deserialize(bytes, RpcInternalJsonContext.Default.OutboxEntryDto)?.ToEntry();
             if (e is null) continue;
             if (oldest is null || e.EnqueuedAt < oldest.EnqueuedAt) oldest = e;
         }
@@ -143,7 +147,7 @@ public sealed class StorageBackedOutbox : IOutbox
         return oldest;
     }
 
-    private sealed class OutboxEntryDto
+    internal sealed class OutboxEntryDto
     {
         public string Key { get; set; } = "";
         public string TypeName { get; set; } = "";

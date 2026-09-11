@@ -29,6 +29,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization\YFex.Authorization.csproj" />
     <ProjectReference Include="..\YFex.Messaging\YFex.Messaging.csproj" />
     <ProjectReference Include="..\YFex.Messaging.Fusion\YFex.Messaging.Fusion.csproj" />
     <ProjectReference Include="..\..\Persistence\YFex.Persistence\YFex.Persistence.csproj" />

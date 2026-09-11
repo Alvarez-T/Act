@@ -49,7 +49,7 @@ public sealed class TestDispatcherFixture
         var sp = services.BuildServiceProvider();
 
         Dispatcher = new LocalDispatcher(
-            new LocalHandlerInvoker(sp),
+            new LocalHandlerInvoker(sp, YFexLocalHandlerRegistrations.BuildLocalHandlerInvokerRegistry()),
             Registry,
             Network,
             Cache,

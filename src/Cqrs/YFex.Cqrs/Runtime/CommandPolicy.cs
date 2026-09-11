@@ -46,7 +46,46 @@ public sealed record CommandPolicy(
     /// Null when no invalidation rules are declared.
     /// Each entry was expanded from group/union tokens at Build time.
     /// </summary>
-    InvalidationTarget[]? InvalidationTargets);
+    InvalidationTarget[]? InvalidationTargets,
+
+    /// <summary>
+    /// Single pre-compiled reverse (compensation) plan. Null when the command is not reversible.
+    /// Read by YFex.Cqrs.Compensation to journal + dispatch the reverse command.
+    /// </summary>
+    ReversePolicy? Reverse = null,
+
+    /// <summary>
+    /// Strongly-typed resolve + invoke for the type-ref offline handler (<see cref="OnOfflineHandlerType"/>),
+    /// captured at registration where the handler/command[/result] are compile-time generic parameters — so
+    /// the offline dispatch path needs no reflection. Null for the inline form or when no offline handler is
+    /// declared. When set, resolves the handler from the supplied provider and calls its typed <c>HandleAsync</c>.
+    /// </summary>
+    Func<IServiceProvider, object, CancellationToken, ValueTask>? OnOfflineHandlerInvoke = null);
+
+/// <summary>
+/// Pre-compiled reverse (compensation) plan for one command type. Either a typed map to a
+/// registered reverse command, or a custom handler type resolved from DI.
+/// </summary>
+public sealed record ReversePolicy(
+    /// <summary>The reverse command's CLR type. Non-null for the map form; null for the handler form.</summary>
+    Type? ReverseCommandType,
+    /// <summary>Compiled map: (erased original command, erased result-or-null) → erased reverse command.
+    /// For no-result / command-only maps the second argument is ignored. Null for the handler form.</summary>
+    Func<object, object?, object>? Map,
+    /// <summary>Custom reverse handler type (IReverseHandler&lt;TCommand&gt; / &lt;TCommand,TResult&gt;),
+    /// resolved from DI at compensation time. Null for the map form.</summary>
+    Type? HandlerType,
+    /// <summary>Strongly-typed dispatch of the materialized reverse command through the
+    /// <see cref="IDispatcher"/>. Captured at registration where <c>TReverse</c> is a compile-time
+    /// generic parameter, so the undo path needs no <c>MakeGenericMethod</c>. Non-null for the map form.</summary>
+    Func<IDispatcher, object, CancellationToken, ValueTask>? DispatchReverse = null,
+    /// <summary>Strongly-typed invocation of the custom <c>IReverseHandler</c> resolved from the supplied
+    /// <see cref="IServiceProvider"/>. Captured at registration where the handler/command/result are
+    /// compile-time generic parameters, so the undo path needs no reflection. Non-null for the handler form.</summary>
+    Func<IServiceProvider, object, object?, CancellationToken, ValueTask>? InvokeHandler = null,
+    /// <summary>Declared result type (<c>typeof(TResult)</c>) of the reversed command; null for void
+    /// commands. Lets the compensation journal deserialize the stored result without <c>Type.GetType</c>.</summary>
+    Type? ResultType = null);
 
 /// <summary>Pre-compiled optimistic update plan for one (command, query) pairing.</summary>
 public sealed record OptimisticPolicy(

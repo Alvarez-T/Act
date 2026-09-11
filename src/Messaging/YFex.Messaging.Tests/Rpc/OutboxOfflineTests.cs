@@ -146,7 +146,8 @@ public sealed class OutboxOfflineTests
             scanForImplementers: [typeof(OutboxOfflineTests).Assembly]);
 
         var dispatcher = new LocalDispatcher(
-            new LocalHandlerInvoker(sp), registry, network, cache, outbox, bus, sp);
+            new LocalHandlerInvoker(sp, YFexLocalHandlerRegistrations.BuildLocalHandlerInvokerRegistry()),
+            registry, network, cache, outbox, bus, sp);
 
         var result = await dispatcher.CommandAsync<TestAggregate.Commands.CreateCommand, TestItem>(
             new TestAggregate.Commands.CreateCommand(77, "TypeHandler"));
@@ -154,6 +155,43 @@ public sealed class OutboxOfflineTests
         RecordingOfflineHandler.WasCalled.Should().BeTrue(
             "IOfflineHandler<TCommand, TResult> must be resolved from DI and called");
         result.IsQueued.Should().BeTrue("IQueueable command still enqueues after handler runs");
+    }
+
+    // â”€â”€ FusionMessageBus offline type-handler (formerly the reflective IL2075 site) â”€â”€
+
+    [Fact]
+    public async Task Fusion_OnOffline_TypeForm_ResolvesHandlerFromDI_AndEnqueues()
+    {
+        RecordingOfflineHandler.Reset();
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddTransient<IOfflineHandler<TestAggregate.Commands.CreateCommand, TestItem>,
+            RecordingOfflineHandler>();
+        var sp = services.BuildServiceProvider();
+
+        var network = new ManualNetworkStatus(connected: false);
+        var cache = new InMemoryCache();
+        var outbox = new InMemoryOutbox(new OutboxOptions());
+        outbox.SetFailureLog(new InMemorySyncFailureLog());
+        var bus = new DefaultEventBus();
+        var registry = CompiledMessagingRegistry.Build(
+            baseline: [new OnOfflineTypeConfig()],
+            scanForImplementers: [typeof(OutboxOfflineTests).Assembly]);
+
+        // Offline, so the Fusion proxy call is never invoked — a throwing stub proves that.
+        var fusion = new FusionMessageBusBuilder()
+            .AddCommand<TestAggregate.Commands.CreateCommand, TestItem>(
+                (_, _) => throw new InvalidOperationException("proxy must not run while offline"))
+            .Build(registry, network, cache, outbox, bus, sp);
+
+        var result = await fusion.CommandAsync<TestAggregate.Commands.CreateCommand, TestItem>(
+            new TestAggregate.Commands.CreateCommand(88, "FusionTypeHandler"));
+
+        RecordingOfflineHandler.WasCalled.Should().BeTrue(
+            "FusionMessageBus must resolve IOfflineHandler<TCommand, TResult> from DI via the typed delegate (no reflection)");
+        result.IsQueued.Should().BeTrue("IQueueable command still enqueues after the offline handler runs");
+        outbox.PendingCount.Should().Be(1);
     }
 
     // â”€â”€ Private configurations (skipped by Pipeline B) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

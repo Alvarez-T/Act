@@ -803,7 +803,9 @@ public async Task Offline_command_is_queued()
     var outbox = new InMemoryOutbox();
 
     var dispatcher = new LocalDispatcher(
-        new LocalHandlerInvoker(sp), registry, offlineStatus,
+        // LocalHandlerInvoker needs the source-generated registry (or call AddYFexLocalHandlers() in DI).
+        new LocalHandlerInvoker(sp, YFexLocalHandlerRegistrations.BuildLocalHandlerInvokerRegistry()),
+        registry, offlineStatus,
         new InMemoryClientCache(), outbox, new DefaultEventBus(), sp);
     YFexDispatcherProvider.Set(dispatcher);
 

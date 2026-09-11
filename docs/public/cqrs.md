@@ -611,7 +611,9 @@ public async Task GetById_returns_customer()
     var registry = CompiledMessagingRegistry.Build(
         new IAggregateConfiguration[] { new CustomerConfiguration() });
     var dispatcher = new LocalDispatcher(
-        new LocalHandlerInvoker(sp),
+        // LocalHandlerInvoker needs the source-generated registry; call the generated
+        // AddYFexLocalHandlers() in DI, or build it directly as shown here.
+        new LocalHandlerInvoker(sp, YFexLocalHandlerRegistrations.BuildLocalHandlerInvokerRegistry()),
         registry,
         AlwaysConnectedNetworkStatus.Instance,
         new InMemoryClientCache(),

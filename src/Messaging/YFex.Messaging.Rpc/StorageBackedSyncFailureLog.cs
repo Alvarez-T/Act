@@ -35,7 +35,7 @@ public sealed class StorageBackedSyncFailureLog : IWritableSyncFailureLog
         try
         {
             await _storage.SetAsync(Prefix + id.ToString(),
-                JsonSerializer.SerializeToUtf8Bytes(failure with { IsAcknowledged = true }), ct: ct);
+                JsonSerializer.SerializeToUtf8Bytes(failure with { IsAcknowledged = true }, RpcInternalJsonContext.Default.SyncFailure), ct: ct);
         }
         finally { _writeLock.Release(); }
     }
@@ -59,7 +59,7 @@ public sealed class StorageBackedSyncFailureLog : IWritableSyncFailureLog
         try
         {
             await _storage.SetAsync(Prefix + failure.IdempotencyKey.ToString(),
-                JsonSerializer.SerializeToUtf8Bytes(failure), ct: ct);
+                JsonSerializer.SerializeToUtf8Bytes(failure, RpcInternalJsonContext.Default.SyncFailure), ct: ct);
         }
         finally { _writeLock.Release(); }
         FailureAdded?.Invoke(failure);
@@ -78,7 +78,7 @@ public sealed class StorageBackedSyncFailureLog : IWritableSyncFailureLog
             var bytes = await _storage.GetAsync(keys[i], ct);
             if (bytes is not null)
             {
-                var f = JsonSerializer.Deserialize<SyncFailure>(bytes);
+                var f = JsonSerializer.Deserialize(bytes, RpcInternalJsonContext.Default.SyncFailure);
                 if (f is not null) list.Add(f);
             }
         }
@@ -88,6 +88,6 @@ public sealed class StorageBackedSyncFailureLog : IWritableSyncFailureLog
     private async ValueTask<SyncFailure?> FindAsync(Guid id, CancellationToken ct)
     {
         var bytes = await _storage.GetAsync(Prefix + id.ToString(), ct);
-        return bytes is null ? null : JsonSerializer.Deserialize<SyncFailure>(bytes);
+        return bytes is null ? null : JsonSerializer.Deserialize(bytes, RpcInternalJsonContext.Default.SyncFailure);
     }
 }

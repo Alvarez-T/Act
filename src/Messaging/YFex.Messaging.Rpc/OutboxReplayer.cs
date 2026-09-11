@@ -1,8 +1,9 @@
-using System.Text.Json;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using YFex.Cqrs;
+using YFex.Cqrs.Runtime;
 using YFex.Messaging;
+using YFex.Persistence;
 
 namespace YFex.Messaging.Rpc;
 
@@ -11,6 +12,18 @@ namespace YFex.Messaging.Rpc;
 /// Uses exponential backoff per-entry (max 5 min). Entries older than
 /// <see cref="YFexMessagingRpcClientOptions.OutboxEntryTtl"/> are moved to
 /// <see cref="ISyncFailureLog"/> with reason "expired".
+/// <para>
+/// A replayed command that the server <b>rejects</b> (a business-level conflict, surfaced as a
+/// failed <see cref="QueueableResult"/> carrying an <see cref="Error"/> — not a transient network
+/// exception) is resolved via the command's conflict policy
+/// (<see cref="IConflictResolver{TCommand}"/> in DI, else the static
+/// <see cref="CommandPolicy.Conflict"/>): <see cref="ConflictPolicy.RetryLater"/> keeps the
+/// backoff/retry path; <see cref="ConflictPolicy.Discard"/> drops the entry; and
+/// <see cref="ConflictPolicy.Escalate"/> dead-letters it to <see cref="ISyncFailureLog"/>.
+/// Because the rejection means nothing was committed server-side, Discard/Escalate also <b>undo the
+/// local optimistic effect</b> by invalidating the command's optimistically-updated caches so they
+/// refetch authoritative state — <b>not</b> by dispatching a reverse command.
+/// </para>
 /// </summary>
 public sealed class OutboxReplayer : BackgroundService
 {
@@ -20,6 +33,10 @@ public sealed class OutboxReplayer : BackgroundService
     private readonly INetworkStatus _networkStatus;
     private readonly SyncStatus _syncStatus;
     private readonly IEventBus _eventBus;
+    private readonly OutboxCommandRegistry _commandRegistry;
+    private readonly ICache _cache;
+    private readonly CompiledMessagingRegistry _messagingRegistry;
+    private readonly IServiceProvider _services;
     private readonly TimeSpan _entryTtl;
     private readonly ILogger<OutboxReplayer> _logger;
     private readonly SemaphoreSlim _trigger = new(0, 1);
@@ -31,6 +48,10 @@ public sealed class OutboxReplayer : BackgroundService
         INetworkStatus networkStatus,
         SyncStatus syncStatus,
         IEventBus eventBus,
+        OutboxCommandRegistry commandRegistry,
+        ICache cache,
+        CompiledMessagingRegistry messagingRegistry,
+        IServiceProvider services,
         YFexMessagingRpcClientOptions options,
         ILogger<OutboxReplayer> logger)
     {
@@ -40,6 +61,10 @@ public sealed class OutboxReplayer : BackgroundService
         _networkStatus = networkStatus;
         _syncStatus = syncStatus;
         _eventBus = eventBus;
+        _commandRegistry = commandRegistry;
+        _cache = cache;
+        _messagingRegistry = messagingRegistry;
+        _services = services;
         _entryTtl = options.OutboxEntryTtl;
         _logger = logger;
 
@@ -111,22 +136,89 @@ public sealed class OutboxReplayer : BackgroundService
             return;
         }
 
+        ReplayOutcome outcome;
         try
         {
-            await ReplayAsync(entry, ct).ConfigureAwait(false);
-            await _outbox.RemoveAsync(entry.IdempotencyKey, ct).ConfigureAwait(false);
-            _eventBus.Publish(new CommandReplayedEvent(entry.IdempotencyKey, entry.CommandTypeName, true, null));
+            outcome = await ReplayAsync(entry, ct).ConfigureAwait(false);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
-            var delay = BackoffDelay(entry.AttemptCount);
-            _logger.LogWarning(ex, "Replay failed for {Key} (attempt {N}), retrying in {S}s.",
-                entry.IdempotencyKey, entry.AttemptCount + 1, delay.TotalSeconds);
-            await _outbox.MarkAttemptedAsync(entry.IdempotencyKey, ex.Message, ct).ConfigureAwait(false);
-            _eventBus.Publish(new CommandReplayedEvent(entry.IdempotencyKey, entry.CommandTypeName, false, ex.Message));
-            await Task.Delay(delay, ct).ConfigureAwait(false);
+            // TRANSIENT failure (connection drop / handler exception): keep the entry and back off.
+            // This is NOT a business conflict — the conflict resolvers are never consulted here.
+            await RetryLaterAsync(entry, ex.Message, ct).ConfigureAwait(false);
+            return;
+        }
+
+        if (!outcome.IsRejected)
+        {
+            await _outbox.RemoveAsync(entry.IdempotencyKey, ct).ConfigureAwait(false);
+            _eventBus.Publish(new CommandReplayedEvent(entry.IdempotencyKey, entry.CommandTypeName, true, null));
+            return;
+        }
+
+        // SERVER REJECTION (permanent, business-level): resolve via the command's conflict policy.
+        await HandleConflictAsync(entry, outcome, ct).ConfigureAwait(false);
+    }
+
+    private async Task HandleConflictAsync(OutboxEntry entry, ReplayOutcome outcome, CancellationToken ct)
+    {
+        var reason = ConflictReason(outcome);
+        switch (outcome.Policy)
+        {
+            case ConflictPolicy.RetryLater:
+                // Treat like a transient miss: keep the entry and retry with backoff.
+                await RetryLaterAsync(entry, reason, ct).ConfigureAwait(false);
+                break;
+
+            case ConflictPolicy.Discard:
+                // Drop the command AND undo the local optimistic effect (invalidate → refetch).
+                _logger.LogInformation("Replay of {Key} rejected; discarding per conflict policy. {Reason}",
+                    entry.IdempotencyKey, reason);
+                await _outbox.RemoveAsync(entry.IdempotencyKey, ct).ConfigureAwait(false);
+                await UndoOptimisticEffectAsync(outcome, ct).ConfigureAwait(false);
+                _eventBus.Publish(new CommandReplayedEvent(entry.IdempotencyKey, entry.CommandTypeName, false, reason));
+                break;
+
+            case ConflictPolicy.Escalate:
+            default:
+                // Dead-letter the command AND undo the local optimistic effect (invalidate → refetch).
+                _logger.LogWarning("Replay of {Key} rejected; escalating to the sync failure log. {Reason}",
+                    entry.IdempotencyKey, reason);
+                await MoveToFailureLogAsync(entry, "conflict", ct).ConfigureAwait(false);
+                await UndoOptimisticEffectAsync(outcome, ct).ConfigureAwait(false);
+                break;
         }
     }
+
+    // Common backoff/retry path shared by transient failures and the RetryLater conflict policy.
+    // Increments the attempt count (so the next backoff grows) and leaves the entry in the outbox.
+    private async Task RetryLaterAsync(OutboxEntry entry, string reason, CancellationToken ct)
+    {
+        var delay = BackoffDelay(entry.AttemptCount);
+        _logger.LogWarning("Replay failed for {Key} (attempt {N}), retrying in {S}s. {Reason}",
+            entry.IdempotencyKey, entry.AttemptCount + 1, delay.TotalSeconds, reason);
+        await _outbox.MarkAttemptedAsync(entry.IdempotencyKey, reason, ct).ConfigureAwait(false);
+        _eventBus.Publish(new CommandReplayedEvent(entry.IdempotencyKey, entry.CommandTypeName, false, reason));
+        await Task.Delay(delay, ct).ConfigureAwait(false);
+    }
+
+    // Undo the optimistic effect of a rejected command: because the server rejected it, nothing was
+    // committed server-side, so the correct rollback is to invalidate the caches the command
+    // optimistically touched (its declared invalidation targets) and let them refetch authoritative
+    // state — NOT to dispatch a reverse command (that is for undoing a command that SUCCEEDED).
+    private async ValueTask UndoOptimisticEffectAsync(ReplayOutcome outcome, CancellationToken ct)
+    {
+        if (outcome.Command is null || outcome.CommandType is null) return;
+        if (!_messagingRegistry.Commands.TryGetValue(outcome.CommandType, out var policy)) return;
+        if (policy.InvalidationTargets is not { } targets) return;
+
+        for (int i = 0; i < targets.Length; i++)
+            await _cache.RemoveByTagAsync(QueryCacheKey.InvalidationTag(targets[i], outcome.Command), ct)
+                .ConfigureAwait(false);
+    }
+
+    private static string ConflictReason(in ReplayOutcome outcome)
+        => string.IsNullOrEmpty(outcome.Error.Message) ? "conflict" : outcome.Error.Message;
 
     private async Task MoveToFailureLogAsync(OutboxEntry entry, string reason, CancellationToken ct)
     {
@@ -137,24 +229,20 @@ public sealed class OutboxReplayer : BackgroundService
         _eventBus.Publish(new SyncFailureEvent(entry.IdempotencyKey, entry.CommandTypeName, reason));
     }
 
-    [System.Diagnostics.CodeAnalysis.RequiresUnreferencedCode("Replay resolves command types by name.")]
-    [System.Diagnostics.CodeAnalysis.RequiresDynamicCode("Replay invokes generic CommandAsync via reflection.")]
-    private async Task ReplayAsync(OutboxEntry entry, CancellationToken ct)
+    // Source-generated, reflection-free replay: the generated OutboxCommandRegistry maps the stored
+    // command type name to a strongly-typed materialize+dispatch delegate (no Type.GetType, no
+    // MakeGenericMethod). The delegate also resolves the conflict policy for a rejected command,
+    // where the command type is a compile-time generic (no reflection). Populate it at startup via
+    // the generated AddYFexOutboxCommands().
+    private async ValueTask<ReplayOutcome> ReplayAsync(OutboxEntry entry, CancellationToken ct)
     {
-        var commandType = Type.GetType(entry.CommandTypeName)
-            ?? throw new InvalidOperationException($"Cannot resolve command type '{entry.CommandTypeName}'.");
+        if (!_commandRegistry.TryGetHandler(entry.CommandTypeName, out var handler))
+            throw new InvalidOperationException(
+                $"No replay handler registered for command '{entry.CommandTypeName}'. " +
+                "Ensure the generated AddYFexOutboxCommands() is called at startup so the command " +
+                "type is included in the OutboxCommandRegistry.");
 
-        var command = JsonSerializer.Deserialize(entry.Payload, commandType)
-            ?? throw new InvalidOperationException($"Failed to deserialize '{entry.CommandTypeName}'.");
-
-        // CommandAsync<TCommand>(cmd, ct) — call via reflection since we don't have TCommand at compile time.
-        // This is the recovery path, not the hot dispatch path.
-        var method = typeof(IDispatcher).GetMethod(nameof(IDispatcher.CommandAsync), 1, [commandType, typeof(CancellationToken)])
-            ?? throw new InvalidOperationException($"IDispatcher.CommandAsync not found for {commandType}.");
-
-        var genericMethod = method.MakeGenericMethod(commandType);
-        var task = (ValueTask<QueueableResult>)genericMethod.Invoke(_dispatcher, [command, ct])!;
-        await task.ConfigureAwait(false);
+        return await handler(entry.Payload, _dispatcher, _services, ct).ConfigureAwait(false);
     }
 
     private static TimeSpan BackoffDelay(int attempt) =>

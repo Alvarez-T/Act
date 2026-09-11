@@ -143,6 +143,7 @@ public sealed class LocalDispatcher : IDispatcher
 
         await ApplyOptimisticUpdatesAsync(cmd!, policy, ct).ConfigureAwait(false);
         await InvalidateCachesAsync(cmd!, policy, ct).ConfigureAwait(false);
+        await NotifyExecutedAsync(cmd!, result, ct).ConfigureAwait(false);
 
         return QueueableResult<TResult>.Ok(result);
     }
@@ -154,15 +155,9 @@ public sealed class LocalDispatcher : IDispatcher
 
         if (policy?.OnOfflineHandler is not null)
             await policy.OnOfflineHandler(cmd!, ct).ConfigureAwait(false);
-        else if (policy?.OnOfflineHandlerType is not null)
-        {
-            // Resolve by the interface first (typical DI registration pattern);
-            // fall back to the concrete type if the interface isn't registered.
-            var ifaceType = typeof(IOfflineHandler<TCommand, TResult>);
-            var handlerObj = _sp.GetService(ifaceType) ?? _sp.GetRequiredService(policy.OnOfflineHandlerType);
-            var handler = (IOfflineHandler<TCommand, TResult>)handlerObj;
-            await handler.HandleAsync(cmd, ct).ConfigureAwait(false);
-        }
+        else if (policy?.OnOfflineHandlerInvoke is not null)
+            // Typed resolve + invoke captured at registration (interface-first, concrete fallback); no reflection.
+            await policy.OnOfflineHandlerInvoke(_sp, cmd!, ct).ConfigureAwait(false);
 
         if (cmd is IQueueable)
         {
@@ -205,8 +200,19 @@ public sealed class LocalDispatcher : IDispatcher
 
         await _invoker.InvokeAsync(cmd!, effectiveCt).ConfigureAwait(false);
         await InvalidateCachesAsync(cmd!, policy, ct).ConfigureAwait(false);
+        await NotifyExecutedAsync(cmd!, result: null, ct).ConfigureAwait(false);
 
         return QueueableResult.Ok();
+    }
+
+    // â”€â”€ Post-execution seam (reversible commands / command journal) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    private async ValueTask NotifyExecutedAsync(object command, object? result, CancellationToken ct)
+    {
+        // Optional — fires only when a consumer (e.g. YFex.Cqrs.Compensation) has registered an
+        // observer. Runs only on the successful online path; never for queued/failed commands.
+        var observer = _sp.GetService<ICommandExecutedObserver>();
+        if (observer is not null)
+            await observer.OnExecutedAsync(command, result, ct).ConfigureAwait(false);
     }
 
     private async ValueTask<QueueableResult> OfflineCommandVoidAsync<TCommand>(
@@ -216,11 +222,9 @@ public sealed class LocalDispatcher : IDispatcher
 
         if (policy?.OnOfflineHandler is not null)
             await policy.OnOfflineHandler(cmd!, ct).ConfigureAwait(false);
-        else if (policy?.OnOfflineHandlerType is not null)
-        {
-            var handler = (IOfflineHandler<TCommand>)_sp.GetRequiredService(policy.OnOfflineHandlerType);
-            await handler.HandleAsync(cmd, ct).ConfigureAwait(false);
-        }
+        else if (policy?.OnOfflineHandlerInvoke is not null)
+            // Typed resolve + invoke captured at registration (interface-first, concrete fallback); no reflection.
+            await policy.OnOfflineHandlerInvoke(_sp, cmd!, ct).ConfigureAwait(false);
 
         if (cmd is IQueueable)
         {

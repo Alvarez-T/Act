@@ -1,23 +1,17 @@
-using P = YFex.UI.Public;
+using YFex.UI.Public;
 
 namespace YFex.Mvvm;
 
-// The notification contract types are qualified through the `P` alias because this project also
-// sees an older duplicate copy of them transitively (YFex.NavigatR -> YFex.UI.Abstractions).
-// Without the alias, `INotificationHandle` binds to the wrong assembly and the explicit interface
-// implementations below fail to match. (Dialogs happen to resolve cleanly, hence DialogViewModel
-// stays unqualified.) The real fix is migrating INavigation off YFex.UI.Abstractions.
-
 /// <summary>
 /// Base for a ViewModel hosted in a result-less notification. Implements
-/// <see cref="P.INotificationAware"/> and exposes <see cref="Dismiss"/>.
+/// <see cref="INotificationAware"/> and exposes <see cref="Dismiss"/>.
 /// </summary>
-public abstract class NotificationViewModel : ViewModel, P.INotificationAware
+public abstract class NotificationViewModel : ViewModel, INotificationAware
 {
     /// <summary>The handle to this notification, available from <see cref="OnOpened"/> onward.</summary>
-    protected P.INotificationHandle? Handle { get; private set; }
+    protected INotificationHandle? Handle { get; private set; }
 
-    void P.INotificationAware.OnNotificationOpened(P.INotificationHandle handle)
+    void INotificationAware.OnNotificationOpened(INotificationHandle handle)
     {
         Handle = handle;
         OnOpened();
@@ -32,15 +26,15 @@ public abstract class NotificationViewModel : ViewModel, P.INotificationAware
 
 /// <summary>
 /// Base for a ViewModel hosted in a result-producing notification. Implements
-/// <see cref="P.INotificationAware{TResult}"/> and exposes <see cref="Dismiss(TResult)"/> /
+/// <see cref="INotificationAware{TResult}"/> and exposes <see cref="Dismiss(TResult)"/> /
 /// <see cref="Dismiss"/>.
 /// </summary>
-public abstract class NotificationViewModel<TResult> : ViewModel, P.INotificationAware<TResult>
+public abstract class NotificationViewModel<TResult> : ViewModel, INotificationAware<TResult>
 {
     /// <summary>The handle to this notification, available from <see cref="OnOpened"/> onward.</summary>
-    protected P.INotificationHandle<TResult>? Handle { get; private set; }
+    protected INotificationHandle<TResult>? Handle { get; private set; }
 
-    void P.INotificationAware<TResult>.OnNotificationOpened(P.INotificationHandle<TResult> handle)
+    void INotificationAware<TResult>.OnNotificationOpened(INotificationHandle<TResult> handle)
     {
         Handle = handle;
         OnOpened();
@@ -63,18 +57,18 @@ public abstract class NotificationViewModel<TResult> : ViewModel, P.INotificatio
 /// Complete the awaiting caller with <see cref="Returns"/> / <see cref="Cancel"/>.
 /// </summary>
 public abstract class NotificationViewModel<TParameter, TResult>
-    : ViewModel, P.INotificationOpening<TParameter>, P.INotificationAware<TResult>
+    : ViewModel, INotificationOpening<TParameter>, INotificationAware<TResult>
 {
     /// <summary>The handle to this notification, available from <see cref="OnOpened"/> onward.</summary>
-    protected P.INotificationHandle<TResult>? Handle { get; private set; }
+    protected INotificationHandle<TResult>? Handle { get; private set; }
 
     /// <summary>
     /// Called before the card is shown. Seed state from <paramref name="parameter"/>;
     /// call <c>context.Deny(...)</c> to refuse.
     /// </summary>
-    public abstract void OnOpening(TParameter parameter, P.NotificationContext context);
+    public abstract void OnOpening(TParameter parameter, NotificationContext context);
 
-    void P.INotificationAware<TResult>.OnNotificationOpened(P.INotificationHandle<TResult> handle)
+    void INotificationAware<TResult>.OnNotificationOpened(INotificationHandle<TResult> handle)
     {
         Handle = handle;
         OnOpened();

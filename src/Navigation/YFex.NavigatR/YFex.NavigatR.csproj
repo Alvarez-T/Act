@@ -13,7 +13,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\UI\YFex.UI.Abstractions\YFex.UI.Abstractions.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.UI\src\Core\YFex.UI.Public\YFex.UI.Public.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization.Public\YFex.Authorization.Public.csproj" />
   </ItemGroup>
 
 </Project>

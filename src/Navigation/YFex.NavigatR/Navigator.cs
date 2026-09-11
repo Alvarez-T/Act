@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using YFex.Authorization.Public;
 
 namespace YFex.NavigatR;
 
@@ -9,6 +10,12 @@ public sealed class Navigator : IDisposable
     private readonly NavigablePool _pool;
     private readonly List<NavigationEntry> _history = new();
     private int _cursor = -1;
+
+    // Gate 2 — optional whole-screen navigation authorization. Null when authorization is not
+    // wired into the scope, in which case navigation is never gated (back-compatible).
+    private readonly IViewModelPolicyProvider? _authPolicies;
+    private readonly IPolicyEvaluator? _authEvaluator;
+    private readonly IPrincipalAccessor? _authPrincipal;
 
     internal Guid Id { get; } = Guid.NewGuid();
     public NavigationHistoryPolicy HistoryPolicy { get; internal set; } = NavigationHistoryPolicy.PruneForwardOnBranch;
@@ -55,6 +62,28 @@ public sealed class Navigator : IDisposable
         _pool = new NavigablePool(poolCapacity, suspendedTimeout);
         _prefetchPolicy = prefetchPolicy;
         _prefetchTimeout = prefetchTimeout ?? TimeSpan.FromSeconds(30);
+
+        // Optional authorization services — present only when YFex.Authorization is wired.
+        _authPolicies = scope.ServiceProvider.GetService<IViewModelPolicyProvider>();
+        _authEvaluator = scope.ServiceProvider.GetService<IPolicyEvaluator>();
+        _authPrincipal = scope.ServiceProvider.GetService<IPrincipalAccessor>();
+    }
+
+    // Gate 2 — sync visibility check run after the ViewModel TYPE is resolved and BEFORE the
+    // ViewModel is constructed, so a denied route never builds (or prefetches) its VM. Returns true
+    // (allowed) when authorization is not wired or the VM has no navigation policy.
+    private bool IsNavigationAllowed(Type viewModelType, out string? deniedReason)
+    {
+        deniedReason = null;
+        if (_authPolicies is null || _authEvaluator is null || _authPrincipal is null) return true;
+        if (!_authPolicies.TryGetPolicy(viewModelType, out var policy)) return true;
+        if (_authEvaluator.IsAllowed(policy, _authPrincipal.Current)) return true;
+
+        deniedReason = policy.Requirements.Length > 0
+            && policy.Requirements[0].Kind == RequirementKind.Permission
+                ? $"Requires {policy.Requirements[0].Permission.Value}"
+                : "Not authorized.";
+        return false;
     }
 
     public NavigationTask NavigateTo(IRoute route, CancellationToken ct = default)
@@ -115,6 +144,15 @@ public sealed class Navigator : IDisposable
             try
             {
                 var vmType = ResolveViewModelType(route);
+
+                // Gate 2 — do not prefetch (construct the VM for) a route the user may not open.
+                if (!IsNavigationAllowed(vmType, out _))
+                {
+                    token.Cancel();
+                    _activePrefetches.Remove(token);
+                    return;
+                }
+
                 var navigable = ResolveNavigable(vmType);
                 var ctx = BuildContext(route, NavigationDirection.Forward);
 
@@ -426,6 +464,14 @@ public sealed class Navigator : IDisposable
         IRoute route, CancellationToken ct, NavigationEntry? prefetchedEntry = null)
     {
         var vmType = prefetchedEntry?.ResolvedViewModelType ?? ResolveViewModelType(route);
+
+        // Gate 2 — sync permission check before the ViewModel is resolved/created.
+        if (!IsNavigationAllowed(vmType, out var denyReason))
+        {
+            _navPane?.OnNavigationDenied();
+            return NavigationResult.Deny(denyReason);
+        }
+
         var navigable = prefetchedEntry?.NavigableInstance ?? ResolveNavigable(vmType);
 
         var ctx = BuildContext(route, NavigationDirection.Forward);
@@ -464,6 +510,14 @@ public sealed class Navigator : IDisposable
         IRoute route, CancellationToken ct, NavigationEntry? prefetchedEntry = null)
     {
         var vmType = prefetchedEntry?.ResolvedViewModelType ?? ResolveViewModelType(route);
+
+        // Gate 2 — sync permission check before the ViewModel is resolved/created.
+        if (!IsNavigationAllowed(vmType, out var denyReason))
+        {
+            _navPane?.OnNavigationDenied();
+            return NavigationResult.Deny(denyReason);
+        }
+
         var navigable = prefetchedEntry?.NavigableInstance ?? ResolveNavigable(vmType);
 
         // Skip OnNavigation if already called during prefetch
@@ -530,6 +584,14 @@ public sealed class Navigator : IDisposable
         IRoute route, CancellationToken ct, NavigationEntry? prefetchedEntry = null)
     {
         var vmType = prefetchedEntry?.ResolvedViewModelType ?? ResolveViewModelType(route);
+
+        // Gate 2 — sync permission check before the ViewModel is resolved/created.
+        if (!IsNavigationAllowed(vmType, out var denyReason))
+        {
+            _navPane?.OnNavigationDenied();
+            return new NavigationDenied(denyReason);
+        }
+
         var navigable = prefetchedEntry?.NavigableInstance ?? ResolveNavigable(vmType);
 
         if (navigable is not INavigable<TResult> producer)

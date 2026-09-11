@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using YFex.NavigatR;
-using YFex.UI.Abstractions;
+using YFex.UI.Public;
 
 namespace YFex.NavigatR.Tests;
 

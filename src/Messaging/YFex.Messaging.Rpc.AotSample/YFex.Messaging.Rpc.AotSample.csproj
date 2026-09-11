@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- Enables the trim + AOT (ILLink) analyzers at BUILD time so any IL2xxx / IL3xxx
+         warning on the outbox replay/dispatch path surfaces as a build warning. -->
+    <IsAotCompatible>true</IsAotCompatible>
+    <!-- Fail loudly if the refactored dispatch path is ever not AOT-clean. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Messaging.Rpc\YFex.Messaging.Rpc.csproj" />
+    <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
+  </ItemGroup>
+
+</Project>

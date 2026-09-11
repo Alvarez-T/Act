@@ -1,5 +1,6 @@
 using System.Linq.Expressions;
 using System.Security.Claims;
+using YFex.Authorization.Public;
 using YFex.Cqrs.Registration;
 
 namespace YFex.Cqrs.Configuration;
@@ -25,6 +26,8 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
     private TimeSpan?                          _staleAfter;
     private TimeSpan?                          _timeout;
     private bool                               _notCacheable;
+    private string?                            _description;
+    private string[]?                          _keywords;
 
     // ── Validation ────────────────────────────────────────────────────────────
 
@@ -69,6 +72,18 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
     public QueryConfigurationBuilder<TQuery, TResult> RequireRoles(params string[] roles)
     {
         (_authorizers ??= []).Add(AuthorizerDescriptor.MustHaveRoles(roles));
+        return this;
+    }
+
+    public QueryConfigurationBuilder<TQuery, TResult> RequireRoles(params Role[] roles)
+    {
+        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHaveRoles(Array.ConvertAll(roles, static r => r.Value)));
+        return this;
+    }
+
+    public QueryConfigurationBuilder<TQuery, TResult> RequirePermission(Permission permission)
+    {
+        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHavePermission(permission));
         return this;
     }
 
@@ -175,6 +190,25 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
         return this;
     }
 
+    // ── Capability metadata (surfaced via CqrsCapabilityInfo) ─────────────────
+    //
+    // Authoring-only: consumed by the capabilities bridge, never on the dispatch hot path.
+    // Single-value, last-write-wins (mirrors _optimistic / _reverse).
+
+    /// <summary>Authors an AI/human-facing description for this query (surfaced to the capabilities bridge).</summary>
+    public QueryConfigurationBuilder<TQuery, TResult> Describe(string ai)
+    {
+        _description = ai;
+        return this;
+    }
+
+    /// <summary>Authors search keywords for this query (surfaced to the capabilities bridge).</summary>
+    public QueryConfigurationBuilder<TQuery, TResult> Keywords(params string[] keywords)
+    {
+        _keywords = keywords;
+        return this;
+    }
+
     // ── Retry / Timeout / Telemetry ───────────────────────────────────────────
 
     public QueryConfigurationBuilder<TQuery, TResult> Retry(Action<RetryConfigurationBuilder> configure)
@@ -208,5 +242,7 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
         Timeout      = _timeout,
         NotCacheable = _notCacheable,
         InvalidatedBy = _invalidatedBy?.ToArray(),
+        Description  = _description,
+        Keywords     = _keywords,
     };
 }

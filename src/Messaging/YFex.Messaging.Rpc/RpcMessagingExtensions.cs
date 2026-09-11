@@ -5,7 +5,10 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using YFex.Authorization;
+using YFex.Authorization.Public;
 using YFex.Cqrs;
+using YFex.Cqrs.Configuration;
 using YFex.Messaging;
 using YFex.Messaging.Fusion;
 
@@ -113,6 +116,10 @@ public static class RpcMessagingExtensions
             return bus;
         });
 
+        // Source-generated command replay map. Empty fallback so OutboxReplayer always resolves;
+        // the generated AddYFexOutboxCommands() (call at startup) replaces this with the populated map.
+        services.TryAddSingleton(OutboxCommandRegistry.Empty);
+
         // OutboxReplayer (hosted service)
         services.AddHostedService<OutboxReplayer>();
 
@@ -136,7 +143,12 @@ public static class RpcMessagingExtensions
 
         services.AddFusion();
 
-        // Default invoker resolves handlers from DI; Wolverine adapter replaces this.
+        // Source-generated typed handler-invoke map. Empty fallback so LocalHandlerInvoker always
+        // resolves; the generated AddYFexLocalHandlers() (call at startup) replaces this with the
+        // populated map so handler resolution is reflection-free (no MakeGenericType).
+        services.TryAddSingleton(LocalHandlerInvokerRegistry.Empty);
+
+        // Default invoker resolves handlers from DI via the typed map; Wolverine adapter replaces this.
         services.TryAddSingleton<IHandlerInvoker, LocalHandlerInvoker>();
 
         // Server is always "connected" from its own perspective.
@@ -175,6 +187,32 @@ public static class RpcMessagingExtensions
             return dispatcher;
         });
 
+        return services;
+    }
+
+    // ── CQRS authorization wiring (Gate 1) ─────────────────────────────────────
+
+    /// <summary>
+    /// Rebuilds the <see cref="CompiledMessagingRegistry"/> with YFex.Authorization plugged in, so
+    /// command/query authorizers declared via <c>RequirePermission</c> / <c>RequireRoles</c> /
+    /// <c>RequireAuthorization</c> actually evaluate through <see cref="IPolicyEvaluator"/> instead of
+    /// failing closed. Without this call, any command carrying such an authorizer is denied.
+    ///
+    /// <para>
+    /// Call this in the composition root <b>after</b> <c>AddYFexAuthorization(...)</c> (which registers
+    /// the evaluator + <see cref="IAuthContextFactory"/>) and after the generated
+    /// <c>AddYFexConfigurations()</c> (which registers the <see cref="IAggregateConfiguration"/> classes).
+    /// Aggregate configurations are resolved from the container; the registry is (re)registered as the
+    /// authoritative singleton regardless of call order relative to the RPC client/server helpers.
+    /// </para>
+    /// </summary>
+    public static IServiceCollection AddYFexCqrsAuthorization(this IServiceCollection services)
+    {
+        services.RemoveAll<CompiledMessagingRegistry>();
+        services.AddSingleton(sp => CompiledMessagingRegistry.Build(
+            baseline: sp.GetServices<IAggregateConfiguration>(),
+            policyEvaluator: sp.GetRequiredService<IPolicyEvaluator>(),
+            principalFactory: principal => sp.GetRequiredService<IAuthContextFactory>().Create(principal)));
         return services;
     }
 

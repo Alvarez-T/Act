@@ -30,12 +30,10 @@ public sealed class RpcEventBus : IEventBus, IAsyncDisposable
     private readonly IEventBus _local;
     private readonly IRemoteEventBus _remote;
 
-    // ── Dispatch registries ───────────────────────────────────────────────────
-    // Primary: string-keyed, populated by RegisterEventType<T>() — fully AOT-safe.
+    // ── Dispatch registry ─────────────────────────────────────────────────────
+    // String-keyed, populated by RegisterEventType<T>() — fully AOT-safe. There is no
+    // reflection-based fallback: an unregistered incoming type is dropped (see DispatchEnvelopeAsync).
     private readonly ConcurrentDictionary<string, Func<byte[], PublishOptions, ValueTask>> _namedDispatchers = new();
-
-    // Fallback: type-keyed, populated lazily by BuildDispatcher() — requires reflection.
-    private readonly ConcurrentDictionary<Type, Func<byte[], PublishOptions, ValueTask>> _reflectionDispatchers = new();
 
     private CancellationTokenSource? _serverListenCts;
     private Task? _serverListenTask;
@@ -137,47 +135,14 @@ public sealed class RpcEventBus : IEventBus, IAsyncDisposable
     {
         var opts = new PublishOptions { TargetId = envelope.TargetId, GroupId = envelope.GroupId };
 
-        // Fast path: pre-registered AOT-safe dispatcher (no reflection)
+        // AOT-safe typed dispatch via the pre-registered map (RegisterEventType<T>()). Types that were
+        // never registered are dropped rather than resolved by reflection (Type.GetType /
+        // MakeGenericMethod) — pre-register every server-push event type at startup. The generated
+        // RegisterYFexRpcEventTypes(this RpcEventBus) helper (YFex.Messaging.Rpc.Generator) registers
+        // all event types discovered in the consuming assembly for you.
         if (_namedDispatchers.TryGetValue(envelope.TypeName, out var dispatcher))
-        {
             await dispatcher(envelope.Payload, opts).ConfigureAwait(false);
-            return;
-        }
-
-        // Slow path: reflection-based fallback for un-registered types
-        await DispatchViaReflectionAsync(envelope, opts, ct).ConfigureAwait(false);
     }
-
-    [RequiresUnreferencedCode("Resolves event type by name at runtime. Pre-register with RegisterEventType<T>() for AOT.")]
-    [RequiresDynamicCode("Uses MakeGenericMethod. Pre-register with RegisterEventType<T>() for AOT.")]
-    private async ValueTask DispatchViaReflectionAsync(RpcEventEnvelope envelope, PublishOptions opts, CancellationToken ct)
-    {
-        Type? type = Type.GetType(envelope.TypeName);
-        if (type is null) return;
-
-        // Reflection cost paid once per type; delegate cached for subsequent calls.
-        var reflectionDispatcher = _reflectionDispatchers.GetOrAdd(type, BuildReflectionDispatcher);
-        await reflectionDispatcher(envelope.Payload, opts).ConfigureAwait(false);
-    }
-
-    [RequiresUnreferencedCode("Reflection-based dispatch")]
-    [RequiresDynamicCode("Uses MakeGenericMethod")]
-    private Func<byte[], PublishOptions, ValueTask> BuildReflectionDispatcher(Type eventType)
-    {
-        var method = typeof(RpcEventBus)
-            .GetMethod(nameof(PublishObjectAsync), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .MakeGenericMethod(eventType);
-
-        return (payload, opts) =>
-        {
-            object? boxed = MemoryPackSerializer.Deserialize(eventType, payload);
-            if (boxed is null) return ValueTask.CompletedTask;
-            return (ValueTask)method.Invoke(this, [boxed, opts, CancellationToken.None])!;
-        };
-    }
-
-    private ValueTask PublishObjectAsync<T>(object @event, PublishOptions opts, CancellationToken ct)
-        => _local.PublishAsync((T)@event, opts, ct);
 
     // ── Disposal ──────────────────────────────────────────────────────────────
 

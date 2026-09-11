@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/Cqrs/">
     <Project Path="src/Cqrs/YFex.Cqrs.Analyzer/YFex.Cqrs.Analyzer.csproj" />
+    <Project Path="src/Cqrs/YFex.Cqrs.Compensation/YFex.Cqrs.Compensation.csproj" />
+    <Project Path="src/Cqrs/YFex.Cqrs.Compensation.Tests/YFex.Cqrs.Compensation.Tests.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs.SourceGenerator.Test/YFex.Cqrs.SourceGenerator.Test.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs.SourceGenerator/YFex.Cqrs.SourceGenerator.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj" />
@@ -8,6 +10,8 @@
   <Folder Name="/Messaging/">
     <Project Path="src/Messaging/YFex.Messaging.Fusion/YFex.Messaging.Fusion.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Generator/YFex.Messaging.Generator.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Rpc.AotSample/YFex.Messaging.Rpc.AotSample.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Rpc.Generator/YFex.Messaging.Rpc.Generator.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc.Wolverine/YFex.Messaging.Rpc.Wolverine.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Tests/YFex.Messaging.Tests.csproj" />
@@ -49,6 +53,15 @@
     <Project Path="../YFex.System/YFex.System/YFex.System.csproj" />
     <Project Path="../YFex.System/YFex.System.Windows/YFex.System.Windows.csproj" />
     <Project Path="../YFex.System/YFex.System.Tests/YFex.System.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Authorization/">
+    <Project Path="../YFex.Authorization/src/YFex.Authorization.Public/YFex.Authorization.Public.csproj" />
+    <Project Path="../YFex.Authorization/src/YFex.Authorization/YFex.Authorization.csproj" />
+    <Project Path="../YFex.Authorization/src/YFex.Authorization.Generator/YFex.Authorization.Generator.csproj" />
+    <Project Path="../YFex.Authorization/src/YFex.Authorization.AspNetCore/YFex.Authorization.AspNetCore.csproj" />
+    <Project Path="../YFex.Authorization/src/YFex.Authorization.Http/YFex.Authorization.Http.csproj" />
+    <Project Path="../YFex.Authorization/tests/YFex.Authorization.Tests/YFex.Authorization.Tests.csproj" />
+    <Project Path="../YFex.Authorization/tests/YFex.Authorization.AspNetCore.Tests/YFex.Authorization.AspNetCore.Tests.csproj" />
   </Folder>
   <Folder Name="/State/">
     <Project Path="src/State/YFex.State.Blazor/YFex.State.Blazor.csproj" />

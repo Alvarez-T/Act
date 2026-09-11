@@ -1,23 +1,30 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using YFex.Cqrs;
 
 namespace YFex.Messaging.Rpc;
 
 /// <summary>
 /// Volatile in-memory <see cref="IOutbox"/>. Serializes commands with System.Text.Json so the
-/// payload byte[] is valid for future persistent backends (Plan 4).
+/// payload byte[] is valid for future persistent backends (Plan 4). Supply a source-generated
+/// <see cref="JsonSerializerContext"/> covering the command types for AOT / trim-safe serialization.
 /// </summary>
 public sealed class InMemoryOutbox : IOutbox
 {
     private readonly List<OutboxEntry> _entries = [];
     private readonly OutboxOptions _options;
     private readonly object _lock = new();
+    private readonly JsonSerializerContext? _commandJsonContext;
 
     // Injected to handle overflow → failure log
     private IWritableSyncFailureLog? _failureLog;
     public void SetFailureLog(IWritableSyncFailureLog log) => _failureLog = log;
 
-    public InMemoryOutbox(OutboxOptions options) => _options = options;
+    public InMemoryOutbox(OutboxOptions options, JsonSerializerContext? commandJsonContext = null)
+    {
+        _options = options;
+        _commandJsonContext = commandJsonContext;
+    }
 
     public int PendingCount
     {
@@ -30,7 +37,7 @@ public sealed class InMemoryOutbox : IOutbox
     public async ValueTask<Queued> EnqueueAsync<T>(T command, CancellationToken ct = default) where T : ICommand
     {
         var key = Guid.NewGuid();
-        var payload = JsonSerializer.SerializeToUtf8Bytes(command, typeof(T));
+        var payload = OutboxCommandPayload.Serialize(command, _commandJsonContext);
         var entry = new OutboxEntry(key, typeof(T).AssemblyQualifiedName ?? typeof(T).FullName!, payload,
             DateTimeOffset.UtcNow, 0, null, null);
 

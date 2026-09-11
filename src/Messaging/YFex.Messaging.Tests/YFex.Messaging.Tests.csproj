@@ -40,9 +40,11 @@
     <ProjectReference Include="..\..\Persistence\YFex.Persistence.Sqlite\YFex.Persistence.Sqlite.csproj" />
     <ProjectReference Include="..\..\Persistence\YFex.Persistence.Encryption\YFex.Persistence.Encryption.csproj" />
     <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization\YFex.Authorization.csproj" />
     <ProjectReference Include="..\..\State\YFex.State\YFex.State.csproj" />
     <!-- Generators referenced as Analyzers for source generation in this project -->
     <ProjectReference Include="..\YFex.Messaging.Generator\YFex.Messaging.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\YFex.Messaging.Rpc.Generator\YFex.Messaging.Rpc.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\State\YFex.State.Generator\YFex.State.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\Cqrs\YFex.Cqrs.SourceGenerator\YFex.Cqrs.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>

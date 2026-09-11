@@ -1,5 +1,4 @@
 using System.Collections.Frozen;
-using System.Reflection;
 using Microsoft.Extensions.DependencyInjection;
 using YFex;
 using YFex.Cqrs;
@@ -254,19 +253,12 @@ public sealed class FusionMessageBus : IDispatcher
             await policy.OnOfflineHandler(cmd, ct).ConfigureAwait(false);
             return;
         }
-        if (policy?.OnOfflineHandlerType is null) return;
 
-        var handler = _sp.GetService(policy.OnOfflineHandlerType);
-        if (handler is null) return;
-
-        // Invoke HandleAsync via reflection — this is the offline error path, not the hot path.
-        var method = policy.OnOfflineHandlerType.GetMethod("HandleAsync",
-            BindingFlags.Public | BindingFlags.Instance);
-        if (method is null) return;
-
-        var result = method.Invoke(handler, [cmd, ct]);
-        if (result is Task t) await t.ConfigureAwait(false);
-        else if (result is ValueTask vt) await vt.ConfigureAwait(false);
+        // Strongly-typed resolve + invoke captured at registration where the handler/command[/result] are
+        // generic parameters — no reflection (was GetMethod/Invoke, an IL2075 site). The delegate resolves
+        // the handler from DI (interface first, concrete fallback) and calls the typed HandleAsync.
+        if (policy?.OnOfflineHandlerInvoke is not null)
+            await policy.OnOfflineHandlerInvoke(_sp, cmd, ct).ConfigureAwait(false);
     }
 
     private async ValueTask InvalidateCachesAsync(object cmd, Type commandType, CancellationToken ct)

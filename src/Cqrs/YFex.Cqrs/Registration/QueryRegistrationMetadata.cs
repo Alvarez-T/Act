@@ -12,6 +12,12 @@ internal sealed record QueryRegistrationMetadata
     public required Type QueryType  { get; init; }
     public required Type ResultType { get; init; }
 
+    // ── Capability metadata (authored on the builder, surfaced via CqrsCapabilityInfo) ──
+    /// <summary>AI/human-facing description authored via <c>.Describe(...)</c>. Null when unset.</summary>
+    public string?   Description { get; init; }
+    /// <summary>Search keywords authored via <c>.Keywords(...)</c>. Null when unset.</summary>
+    public string[]? Keywords    { get; init; }
+
     public ValidatorDescriptor[]?              Validators   { get; init; }
     public AuthorizerDescriptor[]?             Authorizers  { get; init; }
 
