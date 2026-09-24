@@ -23,6 +23,7 @@
   <Folder Name="/Navigation/">
     <Project Path="src/Navigation/YFex.NavigatR.SourceGenerator/YFex.NavigatR.SourceGenerator.csproj" />
     <Project Path="src/Navigation/YFex.NavigatR.Tests/YFex.NavigatR.Tests.csproj" />
+    <Project Path="src/Navigation/YFex.NavigatR.Tenancy.Tests/YFex.NavigatR.Tenancy.Tests.csproj" />
     <Project Path="src/Navigation/YFex.NavigatR/YFex.NavigatR.csproj" />
   </Folder>
   <Folder Name="/Persistence/">
@@ -76,6 +77,13 @@
     <Project Path="src/State/YFex.State.Smoke/YFex.State.Smoke.csproj" />
     <Project Path="src/State/YFex.State.Tests/YFex.State.Tests.csproj" />
     <Project Path="src/State/YFex.State/YFex.State.csproj" />
+  </Folder>
+  <Folder Name="/Tenancy/">
+    <Project Path="../YFex.Tenancy/src/YFex.Tenancy/YFex.Tenancy.csproj" />
+    <Project Path="../YFex.CustomLogic/src/YFex.CustomLogic/YFex.CustomLogic.csproj" />
+    <Project Path="../YFex.CustomLogic/src/YFex.CustomLogic.Generator/YFex.CustomLogic.Generator.csproj" />
+    <Project Path="../YFex.CustomLogic/src/YFex.CustomLogic.Cqrs/YFex.CustomLogic.Cqrs.csproj" />
+    <Project Path="../YFex.CustomLogic/tests/YFex.CustomLogic.Tests/YFex.CustomLogic.Tests.csproj" />
   </Folder>
   <Project Path="src/YFex/YFex.csproj" />
 </Solution>

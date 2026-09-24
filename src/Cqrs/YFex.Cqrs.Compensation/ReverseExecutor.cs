@@ -103,4 +103,35 @@ public sealed class ReverseExecutor : ICommandReverser
         await _journal.MarkReversedAsync(entry.Seq, ct).ConfigureAwait(false);
         return true;
     }
+
+    /// <summary>
+    /// Reverses a command from an <b>explicit</b> <see cref="ReverseSpec"/> — the entry point used by the
+    /// saga/orchestration compensation path (design §11/§14). Unlike the journal overloads this does not
+    /// touch the command journal, does not require the command to carry a CQRS <c>ReversePolicy</c>, and
+    /// works with a step- or registry-declared reverse. Fully reflection-free: <paramref name="spec"/>'s
+    /// <c>Map</c> materializes the typed reverse command and <c>Dispatch</c> dispatches it through the
+    /// generic <see cref="IDispatcher.CommandAsync{TCommand}"/> — both captured where the reverse command
+    /// type was a compile-time generic parameter.
+    /// </summary>
+    /// <returns><see langword="true"/> when a reverse command was dispatched; <see langword="false"/> when
+    /// the spec carries no dispatch delegate (e.g. a handler-only spec, unsupported on this path).</returns>
+    public static ValueTask<bool> ReverseAsync(
+        object cmd, object? result, in ReverseSpec spec, IDispatcher dispatcher, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(cmd);
+        ArgumentNullException.ThrowIfNull(dispatcher);
+
+        if (spec.Dispatch is not { } dispatch) return new ValueTask<bool>(false); // handler-only spec
+
+        var reverseCommand = spec.Map is { } map ? map(cmd, result) : cmd;
+        return DispatchReverseAsync(dispatch, dispatcher, reverseCommand, ct);
+    }
+
+    private static async ValueTask<bool> DispatchReverseAsync(
+        Func<IDispatcher, object, CancellationToken, ValueTask> dispatch,
+        IDispatcher dispatcher, object reverseCommand, CancellationToken ct)
+    {
+        await dispatch(dispatcher, reverseCommand, ct).ConfigureAwait(false);
+        return true;
+    }
 }

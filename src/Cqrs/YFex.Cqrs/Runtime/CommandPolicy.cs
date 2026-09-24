@@ -60,7 +60,15 @@ public sealed record CommandPolicy(
     /// the offline dispatch path needs no reflection. Null for the inline form or when no offline handler is
     /// declared. When set, resolves the handler from the supplied provider and calls its typed <c>HandleAsync</c>.
     /// </summary>
-    Func<IServiceProvider, object, CancellationToken, ValueTask>? OnOfflineHandlerInvoke = null);
+    Func<IServiceProvider, object, CancellationToken, ValueTask>? OnOfflineHandlerInvoke = null,
+
+    /// <summary>
+    /// Unified resilience spec composed from the command builder's policy verbs (<c>.Retry</c>, <c>.Timeout</c>,
+    /// <c>.UseResource</c>, <c>.Fallback</c>, <c>.Hedging</c>) at Build time (design §1 L2, §14.6). When an
+    /// <c>IResiliencePipelineFactory</c> is registered, the dispatcher executes the command's invoke through the
+    /// pipeline for this spec; otherwise the legacy <see cref="Timeout"/> path applies. Null when no verbs are set.
+    /// </summary>
+    global::YFex.Resilience.ResilienceSpec? Resilience = null);
 
 /// <summary>
 /// Pre-compiled reverse (compensation) plan for one command type. Either a typed map to a
@@ -86,6 +94,27 @@ public sealed record ReversePolicy(
     /// <summary>Declared result type (<c>typeof(TResult)</c>) of the reversed command; null for void
     /// commands. Lets the compensation journal deserialize the stored result without <c>Type.GetType</c>.</summary>
     Type? ResultType = null);
+
+/// <summary>
+/// A value-type reverse (compensation) declaration usable <b>outside</b> <see cref="CommandPolicy"/>: by a
+/// saga step (<c>.CompensateWith&lt;TReverse&gt;</c>) or a standalone reverse registry
+/// (<c>AddYFexReversals</c>). Sits beside <see cref="ReversePolicy"/> (design §11/§14, decision 1) so the
+/// same shape is reused by command config, the registry, and saga steps.
+///
+/// Both delegates are captured where the reverse command type is a compile-time generic parameter, so the
+/// reverse path stays reflection-free and AoT-clean (no <c>MakeGenericMethod</c>, no <c>Activator</c>).
+/// </summary>
+public readonly record struct ReverseSpec(
+    /// <summary>The reverse command's CLR type (the map form).</summary>
+    Type ReverseCommandType,
+    /// <summary>Compiled map: (erased original command, erased result-or-null) → erased reverse command.
+    /// When null, the supplied command instance is dispatched as-is.</summary>
+    Func<object, object?, object>? Map,
+    /// <summary>Strongly-typed dispatch of the materialized reverse command through the
+    /// <see cref="IDispatcher"/>. Captured where <c>TReverse</c> is a compile-time generic parameter.</summary>
+    Func<IDispatcher, object, CancellationToken, ValueTask>? Dispatch,
+    /// <summary>Custom reverse handler type, resolved from DI when the map form is not used. Optional.</summary>
+    Type? HandlerType = null);
 
 /// <summary>Pre-compiled optimistic update plan for one (command, query) pairing.</summary>
 public sealed record OptimisticPolicy(

@@ -34,6 +34,12 @@ internal sealed record CommandRegistrationMetadata
     public TimeSpan?    Timeout     { get; init; }
 
     /// <summary>
+    /// Unified resilience spec composed from the builder's policy verbs at BuildMetadata time (design §1 L2).
+    /// Folds <see cref="RetryPolicy"/> + <see cref="Timeout"/> together with resource/fallback/hedging verbs.
+    /// </summary>
+    public global::YFex.Resilience.ResilienceSpec? Resilience { get; init; }
+
+    /// <summary>
     /// At most one optimistic rule per command (per plan spec).
     /// Multiple calls to .Optimistic() on the fluent builder replace the previous entry.
     /// </summary>

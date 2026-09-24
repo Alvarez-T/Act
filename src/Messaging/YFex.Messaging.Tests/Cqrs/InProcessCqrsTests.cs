@@ -74,6 +74,18 @@ public sealed class InProcessCqrsTests
             "CreateCommand.Invalidates<GetByIdQuery, TestItem>() was registered");
     }
 
+    [Fact]
+    public void Registry_CommandPolicy_ComposesResilienceSpec_FromVerbs()
+    {
+        var fx = new TestDispatcherFixture(configurations: [new TestAggregateConfiguration()]);
+
+        var policy = fx.Registry.Commands[typeof(TestAggregate.Commands.CreateCommand)];
+        policy.Resilience.Should().NotBeNull(".UseResource(...) + .Timeout(...) fold into a ResilienceSpec (design §1 L2)");
+        policy.Resilience!.Value.ResourceName.Should().Be("sefaz");
+        policy.Resilience.Value.Timeout.Should().NotBeNull();
+        policy.Resilience.Value.Timeout!.Value.Timeout.Should().Be(TimeSpan.FromSeconds(8));
+    }
+
     // â”€â”€ Helper configuration (internal to this file â€” skipped by Pipeline B) â”€â”€
 
     private sealed class TestAggregateConfiguration : IAggregateConfiguration<TestAggregate>
@@ -84,7 +96,9 @@ public sealed class InProcessCqrsTests
                 .Cacheable();
 
             b.Command<TestAggregate.Commands.CreateCommand, TestItem>()
-                .Invalidates<TestAggregate.Queries.GetByIdQuery, TestItem>();
+                .Invalidates<TestAggregate.Queries.GetByIdQuery, TestItem>()
+                .UseResource("sefaz")
+                .Timeout(TimeSpan.FromSeconds(8));
 
             b.Command<TestAggregate.Commands.DeleteCommand>()
                 .Invalidates<TestAggregate.Queries.GetByIdQuery, TestItem>()

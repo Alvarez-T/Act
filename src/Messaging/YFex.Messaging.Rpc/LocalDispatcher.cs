@@ -28,6 +28,7 @@ public sealed class LocalDispatcher : IDispatcher
     private readonly IOutbox _outbox;
     private readonly IEventBus _eventBus;
     private readonly IServiceProvider _sp;
+    private readonly YFex.Resilience.IResiliencePipelineFactory? _pipelineFactory;
 
     public LocalDispatcher(
         IHandlerInvoker invoker,
@@ -36,7 +37,10 @@ public sealed class LocalDispatcher : IDispatcher
         ICache cache,
         IOutbox outbox,
         IEventBus eventBus,
-        IServiceProvider sp)
+        IServiceProvider sp,
+        // Optional: only present when AddYFexResiliencePolly (or another factory) is registered. When absent,
+        // dispatch keeps its legacy behaviour (the CommandPolicy.Timeout CTS path).
+        YFex.Resilience.IResiliencePipelineFactory? pipelineFactory = null)
     {
         _invoker = invoker;
         _registry = registry;
@@ -45,6 +49,7 @@ public sealed class LocalDispatcher : IDispatcher
         _outbox = outbox;
         _eventBus = eventBus;
         _sp = sp;
+        _pipelineFactory = pipelineFactory;
     }
 
     // â”€â”€ Query â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -133,13 +138,22 @@ public sealed class LocalDispatcher : IDispatcher
         if (policy?.Authorize is not null && !policy.Authorize(ClaimsPrincipal.Current ?? new(), cmd!))
             return QueueableResult<TResult>.Fail("Unauthorized.");
 
-        using var cts = policy?.Timeout.HasValue == true
-            ? CancellationTokenSource.CreateLinkedTokenSource(ct)
-            : null;
-        if (cts is not null) cts.CancelAfter(policy!.Timeout!.Value);
-        var effectiveCt = cts?.Token ?? ct;
-
-        var result = await _invoker.InvokeAsync<TResult>(cmd!, effectiveCt).ConfigureAwait(false);
+        // Scope-specific override (YFex.CustomLogic). Optional seam — absent unless the CustomLogic.Cqrs
+        // bridge is registered. A handled override replaces the default handler but still flows through the
+        // rest of the pipeline (optimistic update, invalidation, executed-observer/journal).
+        var customLogic = _sp.GetService<ICommandCustomLogic>();
+        TResult result;
+        if (customLogic is not null)
+        {
+            var over = await customLogic.TryHandleAsync(typeof(TCommand), cmd!, ct).ConfigureAwait(false);
+            result = over.IsHandled
+                ? (TResult)over.Result!
+                : await InvokeCommandAsync<TResult>(cmd!, policy, ct).ConfigureAwait(false);
+        }
+        else
+        {
+            result = await InvokeCommandAsync<TResult>(cmd!, policy, ct).ConfigureAwait(false);
+        }
 
         await ApplyOptimisticUpdatesAsync(cmd!, policy, ct).ConfigureAwait(false);
         await InvalidateCachesAsync(cmd!, policy, ct).ConfigureAwait(false);
@@ -192,13 +206,11 @@ public sealed class LocalDispatcher : IDispatcher
         if (policy?.Authorize is not null && !policy.Authorize(ClaimsPrincipal.Current ?? new(), cmd!))
             return QueueableResult.Fail("Unauthorized.");
 
-        using var cts = policy?.Timeout.HasValue == true
-            ? CancellationTokenSource.CreateLinkedTokenSource(ct)
-            : null;
-        if (cts is not null) cts.CancelAfter(policy!.Timeout!.Value);
-        var effectiveCt = cts?.Token ?? ct;
-
-        await _invoker.InvokeAsync(cmd!, effectiveCt).ConfigureAwait(false);
+        // Scope-specific override (YFex.CustomLogic). Optional seam; a handled override replaces the
+        // default handler, then invalidation + executed-observer run exactly as for the default path.
+        var customLogic = _sp.GetService<ICommandCustomLogic>();
+        if (customLogic is null || !(await customLogic.TryHandleAsync(typeof(TCommand), cmd!, ct).ConfigureAwait(false)).IsHandled)
+            await InvokeCommandVoidAsync(cmd!, policy, ct).ConfigureAwait(false);
         await InvalidateCachesAsync(cmd!, policy, ct).ConfigureAwait(false);
         await NotifyExecutedAsync(cmd!, result: null, ct).ConfigureAwait(false);
 
@@ -286,6 +298,51 @@ public sealed class LocalDispatcher : IDispatcher
                 return current;
             }, ct).ConfigureAwait(false);
         }
+    }
+
+    // ── Resilience-aware command invoke (design §1 L4) ───────────────────────
+    //
+    // When a resilience pipeline factory is registered and the command carries a non-empty spec (composed
+    // from .Retry/.Timeout/.UseResource/.Fallback/.Hedging), the invoke runs through the pipeline (retry,
+    // timeout, circuit breaker, etc.). Otherwise the legacy per-attempt Timeout CTS path is preserved, so
+    // apps without a registered factory keep their exact prior behaviour.
+
+    private async ValueTask<TResult> InvokeCommandAsync<TResult>(object cmd, CommandPolicy? policy, CancellationToken ct)
+    {
+        if (_pipelineFactory is not null && policy?.Resilience is { } spec && !spec.IsEmpty)
+        {
+            var pipeline = _pipelineFactory.Get(spec);
+            var invoker = _invoker;
+            return await pipeline.ExecuteAsync(
+                innerCt => new ValueTask<TResult>(invoker.InvokeAsync<TResult>(cmd, innerCt)), ct).ConfigureAwait(false);
+        }
+
+        using var cts = policy?.Timeout.HasValue == true
+            ? CancellationTokenSource.CreateLinkedTokenSource(ct)
+            : null;
+        if (cts is not null) cts.CancelAfter(policy!.Timeout!.Value);
+        return await _invoker.InvokeAsync<TResult>(cmd, cts?.Token ?? ct).ConfigureAwait(false);
+    }
+
+    private async ValueTask InvokeCommandVoidAsync(object cmd, CommandPolicy? policy, CancellationToken ct)
+    {
+        if (_pipelineFactory is not null && policy?.Resilience is { } spec && !spec.IsEmpty)
+        {
+            var pipeline = _pipelineFactory.Get(spec);
+            var invoker = _invoker;
+            await pipeline.ExecuteAsync(async innerCt =>
+            {
+                await invoker.InvokeAsync(cmd, innerCt).ConfigureAwait(false);
+                return true; // sentinel — the generic pipeline has no void overload
+            }, ct).ConfigureAwait(false);
+            return;
+        }
+
+        using var cts = policy?.Timeout.HasValue == true
+            ? CancellationTokenSource.CreateLinkedTokenSource(ct)
+            : null;
+        if (cts is not null) cts.CancelAfter(policy!.Timeout!.Value);
+        await _invoker.InvokeAsync(cmd, cts?.Token ?? ct).ConfigureAwait(false);
     }
 
     private static string FormatErrors(ValidationResult result)

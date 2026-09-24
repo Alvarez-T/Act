@@ -67,7 +67,13 @@ public sealed class Navigator : IDisposable
         _authPolicies = scope.ServiceProvider.GetService<IViewModelPolicyProvider>();
         _authEvaluator = scope.ServiceProvider.GetService<IPolicyEvaluator>();
         _authPrincipal = scope.ServiceProvider.GetService<IPrincipalAccessor>();
+
+        // Optional scope context — present only when YFex.Tenancy is wired. Drives per-tenant/org/user
+        // route overrides (design §4). Absent → base route resolution, unchanged.
+        _scopeContext = scope.ServiceProvider.GetService<YFex.Tenancy.IScopeContext>();
     }
+
+    private readonly YFex.Tenancy.IScopeContext? _scopeContext;
 
     // Gate 2 — sync visibility check run after the ViewModel TYPE is resolved and BEFORE the
     // ViewModel is constructed, so a denied route never builds (or prefetches) its VM. Returns true
@@ -428,10 +434,7 @@ public sealed class Navigator : IDisposable
         {
             // Pinned = mid-await, never call OnResume.
             // But we still need to restore the view so the platform shows the correct screen.
-            var vmType = entry.ResolvedViewModelType
-                ??= (entry.Route is AnonymousRoute anon
-                    ? anon.ViewModelType
-                    : _routeRegistry.ResolveViewModel(entry.Route));
+            var vmType = entry.ResolvedViewModelType ??= ResolveViewModelType(entry.Route);
             _navPane?.PerformNavigation(_scope.Resolve(vmType));
             return;
         }
@@ -687,10 +690,7 @@ public sealed class Navigator : IDisposable
 
     private async Task ResumeEntryAsync(NavigationEntry entry, CancellationToken ct, NavigationDirection direction)
     {
-        var vmType = entry.ResolvedViewModelType
-            ??= (entry.Route is AnonymousRoute anon
-                ? anon.ViewModelType
-                : _routeRegistry.ResolveViewModel(entry.Route));
+        var vmType = entry.ResolvedViewModelType ??= ResolveViewModelType(entry.Route);
 
         switch (entry.State)
         {
@@ -743,9 +743,14 @@ public sealed class Navigator : IDisposable
     }
 
     private Type ResolveViewModelType(IRoute route)
-        => route is AnonymousRoute anon
-            ? anon.ViewModelType
+    {
+        if (route is AnonymousRoute anon)
+            return anon.ViewModelType;
+
+        return _scopeContext is not null
+            ? _routeRegistry.ResolveViewModel(route, _scopeContext.Current)   // per-scope override, else base
             : _routeRegistry.ResolveViewModel(route);
+    }
 
     private INavigable ResolveNavigable(Type viewModelType)
     {

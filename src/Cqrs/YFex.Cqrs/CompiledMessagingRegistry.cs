@@ -300,7 +300,8 @@ public sealed class CompiledMessagingRegistry
             acc.Optimistic.HasValue ? CompileOptimistic(acc.Optimistic.Value) : null,
             CompileInvalidationTargets(acc.Invalidates),
             acc.Reverse.HasValue ? CompileReverse(acc.Reverse.Value) : null,
-            acc.OfflineHandler?.Invoke);
+            acc.OfflineHandler?.Invoke,
+            acc.Resilience);
 
     private static QueryPolicy CompileQueryPolicy(
         QueryAccumulator acc,
@@ -586,6 +587,7 @@ public sealed class CompiledMessagingRegistry
         public OfflineHandlerDescriptor?         OfflineHandler;
         public RetryPolicy?                      RetryPolicy;
         public TimeSpan?                         Timeout;
+        public global::YFex.Resilience.ResilienceSpec? Resilience;
         public OptimisticRuleDescriptor?         Optimistic;
         public ReverseRuleDescriptor?            Reverse;
         public string?                           Description;
@@ -602,6 +604,7 @@ public sealed class CompiledMessagingRegistry
             if (m.OfflineHandler       is not null) OfflineHandler    = m.OfflineHandler;
             if (m.RetryPolicy          is not null) RetryPolicy       = m.RetryPolicy;
             if (m.Timeout              is not null) Timeout           = m.Timeout;
+            if (m.Resilience           is not null) Resilience        = m.Resilience;
             if (m.Optimistic           is not null) Optimistic        = m.Optimistic;
             if (m.Reverse              is not null) Reverse           = m.Reverse;
             if (m.Description          is not null) Description        = m.Description;

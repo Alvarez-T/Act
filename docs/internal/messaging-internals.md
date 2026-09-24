@@ -82,6 +82,8 @@ while running:
 
 > **⚠️ Warning:** The 30s heartbeat is a fallback. The primary trigger is `INetworkStatus.Changed`. If the network status implementation doesn't fire events reliably (e.g., in some Blazor WASM scenarios), the heartbeat ensures the queue is eventually drained.
 
+> **📌 Note:** `SyncFailure` was generalized (additive `init` properties `SagaId` / `StepIndex` / `Category`, defaulting to `Category = "outbox"`) so `ISyncFailureLog` is the shared dead-letter store for both the outbox and `YFex.Orchestration`. The orchestration DLQ (`SyncFailureDeadLetterSink` in `YFex.Orchestration.Rpc`) writes here via `IWritableSyncFailureLog.AddAsync` with `Category` set to `"saga-escalate"` / `"saga-compensation"` / `"broker"`. The additive properties keep every existing outbox construction call source-compatible.
+
 ---
 
 ## LocalDispatcher Pipeline
@@ -112,7 +114,8 @@ while running:
    - Apply the Optimistic.Apply delegate to produce predicted result
    - Write updated values to IClientCache
 5. Check INetworkStatus:
-   - Online: invoke handler → on success: invalidate cache targets
+   - Online: invoke handler (through the resilience pipeline if configured — see note) →
+             on success: invalidate cache targets
              → on failure: rollback optimistic updates (restore pre-mutation snapshot)
    - Offline:
      a. Run OnOfflineHandler (if configured) — lambda or DI-resolved type
@@ -122,6 +125,23 @@ while running:
 ```
 
 > **📌 Note:** Optimistic updates apply both online and offline. They're about UI snappiness, not network state. The rollback path differs: online failures restore the snapshot; offline failures leave the optimistic value in place (it will be corrected when the outbox replays on reconnect).
+
+### Resilience Execution
+
+`LocalDispatcher` takes an optional `IResiliencePipelineFactory?` (present only when `AddYFexResiliencePolly()` is registered). The online command invoke is routed through a helper:
+
+```
+if _pipelineFactory != null && policy.Resilience is non-empty:
+    pipeline = _pipelineFactory.Get(policy.Resilience)
+    result = await pipeline.ExecuteAsync(innerCt => invoker.InvokeAsync<T>(cmd, innerCt), ct)
+else:
+    // legacy path — a linked CTS applies policy.Timeout, no retry/breaker/etc.
+    result = await invoker.InvokeAsync<T>(cmd, timeoutCt)
+```
+
+The void overload uses a `bool` sentinel to fit the generic `ExecuteAsync<T>` seam. `policy.Resilience` is composed from the command builder's verbs (see [CQRS Internals](cqrs-internals.md#resilience-wiring)).
+
+> **Why keep the legacy path?** So apps that never register a resilience factory get **exactly** their prior dispatch behaviour — the change is additive and opt-in. Existing Cqrs/Outbox dispatch tests pass unchanged.
 
 ---
 

@@ -41,6 +41,51 @@ public sealed class RouteRegistry
             $"Ensure [Route] is applied and NavigatRRegistration.RegisterAll() is called at startup.");
     }
 
+    // -----------------------------------------------------------------------
+    // Scope-specific route overlay (design §4) — additive; single-tenant apps
+    // pay nothing (the overlay dictionary stays null until RegisterFor is used).
+    // Keyed by string value (route resolution is infrequent, so no interning).
+    // -----------------------------------------------------------------------
+
+    private Dictionary<(Type Route, YFex.Tenancy.Scope Kind, string Value), Type>? _scopedRouteToViewModel;
+
+    /// <summary>
+    /// Registers a scope-specific route → ViewModel override. When the current identity matches
+    /// <paramref name="scope"/>/<paramref name="value"/>, <see cref="ResolveViewModel(IRoute, in YFex.Tenancy.ScopeIdentity)"/>
+    /// returns <typeparamref name="TViewModel"/> instead of the base mapping. Most-specific wins
+    /// (User → Tenant → Organization).
+    /// </summary>
+    public void RegisterFor<TRoute, TViewModel>(YFex.Tenancy.Scope scope, string value)
+        where TRoute : IRoute
+        where TViewModel : INavigable
+    {
+        (_scopedRouteToViewModel ??= new())[(typeof(TRoute), scope, value)] = typeof(TViewModel);
+    }
+
+    /// <summary>
+    /// Scope-aware resolution: returns the most-specific override for <paramref name="identity"/>
+    /// (User → Tenant → Organization), falling back to the base <see cref="ResolveViewModel(IRoute)"/>
+    /// mapping when no override matches. Rungs absent on the identity are skipped.
+    /// </summary>
+    public Type ResolveViewModel(IRoute route, in YFex.Tenancy.ScopeIdentity identity)
+    {
+        if (_scopedRouteToViewModel is { } scoped)
+        {
+            var t = route.GetType();
+            if (identity.UserId is { } user &&
+                scoped.TryGetValue((t, YFex.Tenancy.Scope.User, user), out var vm))
+                return vm;
+            if (identity.TenantId is { } tenant &&
+                scoped.TryGetValue((t, YFex.Tenancy.Scope.Tenant, tenant), out vm))
+                return vm;
+            if (identity.OrganizationId is { } org &&
+                scoped.TryGetValue((t, YFex.Tenancy.Scope.Organization, org), out vm))
+                return vm;
+        }
+
+        return ResolveViewModel(route);
+    }
+
     /// <summary>
     /// Resolves the Route type for the given ViewModel type.
     /// Used by string route resolution to find the typed route to construct.

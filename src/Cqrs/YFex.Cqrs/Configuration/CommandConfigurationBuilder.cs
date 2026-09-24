@@ -21,6 +21,9 @@ public sealed class CommandConfigurationBuilder<TCommand>
     private OfflineHandlerDescriptor?           _offlineHandler;
     private RetryPolicy?                        _retry;
     private TimeSpan?                           _timeout;
+    private string?                             _resourceName;
+    private YFex.Resilience.FallbackPolicy?     _fallback;
+    private YFex.Resilience.HedgingPolicy?      _hedging;
     private OptimisticRuleDescriptor?           _optimistic;
     private ReverseRuleDescriptor?              _reverse;
     private string?                             _description;
@@ -277,6 +280,15 @@ public sealed class CommandConfigurationBuilder<TCommand>
 
     public CommandConfigurationBuilder<TCommand> Timeout(TimeSpan timeout) { _timeout = timeout; return this; }
 
+    /// <summary>References a named, stateful resilience resource (circuit breaker / rate limiter / bulkhead).</summary>
+    public CommandConfigurationBuilder<TCommand> UseResource(string resourceName) { _resourceName = resourceName; return this; }
+
+    /// <summary>Sets a fallback policy handle (a token into the resilience fallback table).</summary>
+    public CommandConfigurationBuilder<TCommand> Fallback(YFex.Resilience.FallbackPolicy fallback) { _fallback = fallback; return this; }
+
+    /// <summary>Fires parallel hedged attempts after a delay; takes the first success (latency-sensitive).</summary>
+    public CommandConfigurationBuilder<TCommand> Hedging(YFex.Resilience.HedgingPolicy hedging) { _hedging = hedging; return this; }
+
     public CommandConfigurationBuilder<TCommand> Telemetry(Action<TelemetryConfigurationBuilder> configure)
         => this;
 
@@ -296,6 +308,7 @@ public sealed class CommandConfigurationBuilder<TCommand>
         OfflineHandler       = _offlineHandler,
         RetryPolicy          = _retry,
         Timeout              = _timeout,
+        Resilience           = ResilienceMapping.Compose(_retry, _timeout, _resourceName, _fallback, _hedging),
         Optimistic           = _optimistic,
         Reverse              = _reverse,
         Description          = _description,
@@ -320,6 +333,9 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
     private OfflineHandlerDescriptor?           _offlineHandler;
     private RetryPolicy?                        _retry;
     private TimeSpan?                           _timeout;
+    private string?                             _resourceName;
+    private YFex.Resilience.FallbackPolicy?     _fallback;
+    private YFex.Resilience.HedgingPolicy?      _hedging;
     private OptimisticRuleDescriptor?           _optimistic;
     private ReverseRuleDescriptor?              _reverse;
     private string?                             _description;
@@ -570,6 +586,15 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
         return this;
     }
 
+    /// <summary>References a named, stateful resilience resource (circuit breaker / rate limiter / bulkhead).</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> UseResource(string resourceName) { _resourceName = resourceName; return this; }
+
+    /// <summary>Sets a fallback policy handle (a token into the resilience fallback table).</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> Fallback(YFex.Resilience.FallbackPolicy fallback) { _fallback = fallback; return this; }
+
+    /// <summary>Fires parallel hedged attempts after a delay; takes the first success (latency-sensitive).</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> Hedging(YFex.Resilience.HedgingPolicy hedging) { _hedging = hedging; return this; }
+
     public CommandConfigurationBuilder<TCommand, TResult> Telemetry(Action<TelemetryConfigurationBuilder> configure)
         => this;
 
@@ -587,6 +612,7 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
         OfflineHandler       = _offlineHandler,
         RetryPolicy          = _retry,
         Timeout              = _timeout,
+        Resilience           = ResilienceMapping.Compose(_retry, _timeout, _resourceName, _fallback, _hedging),
         Optimistic           = _optimistic,
         Reverse              = _reverse,
         Description          = _description,

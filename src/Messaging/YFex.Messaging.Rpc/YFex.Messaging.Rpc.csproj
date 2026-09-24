@@ -30,6 +30,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
     <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization\YFex.Authorization.csproj" />
+    <!-- Resilience pipeline execution for command dispatch + outbox replay (design §1 L4). -->
+    <ProjectReference Include="..\..\..\..\YFex.Resilience\src\YFex.Resilience\YFex.Resilience.csproj" />
     <ProjectReference Include="..\YFex.Messaging\YFex.Messaging.csproj" />
     <ProjectReference Include="..\YFex.Messaging.Fusion\YFex.Messaging.Fusion.csproj" />
     <ProjectReference Include="..\..\Persistence\YFex.Persistence\YFex.Persistence.csproj" />

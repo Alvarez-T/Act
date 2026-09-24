@@ -441,8 +441,16 @@ public sealed record SyncFailure(
     byte[] Payload,
     string Reason,              // "max-retries", "expired", "conflict-escalated", "outbox-overflow"
     DateTimeOffset FailedAt,
-    bool IsAcknowledged);
+    bool IsAcknowledged)
+{
+    // Orchestration provenance (default to the outbox path; populated when a saga/PM dead-letters).
+    public string? SagaId    { get; init; }
+    public int?    StepIndex { get; init; }
+    public string  Category  { get; init; } = "outbox";   // e.g. "saga-escalate", "saga-compensation", "broker"
+}
 ```
+
+> **Note:** `ISyncFailureLog` is the shared dead-letter store for both the offline outbox **and** [YFex.Orchestration](orchestration.md). A saga that escalates or a compensation that fails routes into the same log (via `AddYFexOrchestrationDeadLettering()`), tagged by `Category` — so one UI surfaces both outbox-expiry failures and orchestration dead-letters, with the same ack/retry controls.
 
 ### SyncStatus (Bindable UI State)
 

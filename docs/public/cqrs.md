@@ -355,15 +355,24 @@ b.Command<TCommand, TResult>()         // or b.Command<TCommand>() for void comm
         match: (result, cmd) => result.Id == cmd.Id,
         apply: (result, cmd) => new TQueryResult(cmd.Id, cmd.NewName)) // Must use ctor, not `with`
 
-    // ── Runtime ─────────────────────────────────────────────────────────
+    // ── Runtime / Resilience ────────────────────────────────────────────
     .Retry(r => r.MaxAttempts(5).Backoff(BackoffStrategy.Linear)
                  .InitialDelay(TimeSpan.FromMilliseconds(200))
                  .MaxDelay(TimeSpan.FromSeconds(10)))
     .Timeout(TimeSpan.FromSeconds(60))
+    .UseResource("payments")                                          // named breaker/limiter/bulkhead
+    .Fallback(new FallbackPolicy(token))                             // degraded result on failure
+    .Hedging(new HedgingPolicy(MaxAttempts: 2, TimeSpan.FromMilliseconds(200)))
     .Telemetry(t => t.TraceEnabled());
 ```
 
 > **Warning:** The `apply` expression in `.Optimistic()` must use explicit constructors. C# `with` expressions are not supported in expression trees and will fail at runtime.
+
+### Resilience Policies
+
+The command builder's `.Retry`, `.Timeout`, `.UseResource`, `.Fallback`, and `.Hedging` verbs are folded at build time into a single [`ResilienceSpec`](resilience.md) stored on the command's policy. When an `IResiliencePipelineFactory` is registered (`AddYFexResiliencePolly()`), the dispatcher executes the command's handler **through the resilience pipeline** — retry, timeout, circuit breaker, rate limiter, bulkhead, fallback, and hedging. Without a registered factory, dispatch keeps its legacy behaviour (only the `.Timeout` cancellation applies), so adding a factory is opt-in and non-breaking.
+
+`.UseResource("name")` references a named, stateful resource declared with `AddYFexResilience(r => r.Resource("name")...)`. Stateful policies (breaker / rate limiter / bulkhead) are shared per resource across every command that names them. See the [Resilience](resilience.md) guide for the full policy vocabulary. Saga steps reuse these exact verbs and overlay them onto the command's spec — see [Orchestration](orchestration.md).
 
 ### Three-Tier Configuration Override
 

@@ -60,12 +60,15 @@ record CommandPolicy(
     IdempotencyKey?,        // Key factory: command → string
     Conflict,               // ConflictPolicy enum
     ConflictResolverType?,  // Type for DI resolution
-    Retry?,                 // RetryPolicy (max attempts, backoff)
-    Timeout?,               // TimeSpan
+    Retry?,                 // RetryPolicy (max attempts, backoff) — legacy, declarative
+    Timeout?,               // TimeSpan — consumed by the dispatcher's per-attempt CTS
     OnOfflineHandler?,      // Inline lambda for offline handling
     OnOfflineHandlerType?,  // Type for DI resolution (mutually exclusive with lambda)
     Optimistic?,            // OptimisticPolicy (match + apply delegates)
-    InvalidationTargets?    // InvalidationTarget[] (query types + optional predicates)
+    InvalidationTargets?,   // InvalidationTarget[] (query types + optional predicates)
+    Reverse?,               // ReversePolicy (map/handler + typed dispatch) — read by YFex.Cqrs.Compensation
+    OnOfflineHandlerInvoke?,// Typed resolve+invoke for the offline handler (reflection-free)
+    Resilience?             // YFex.Resilience.ResilienceSpec — the unified policy spec (see below)
 );
 
 record QueryPolicy(
@@ -81,6 +84,17 @@ record QueryPolicy(
 ```
 
 > **Why `Func<object, ...>` instead of generic delegates?** The registry is type-erased (`FrozenDictionary<Type, Policy>`) for O(1) lookup by message type. Generic delegates would require per-type dictionaries, multiplying the number of frozen collections. The one-time boxing cost of wrapping typed lambdas in `object`-based delegates is negligible compared to the per-call cost of maintaining multiple dispatch tables.
+
+---
+
+## Resilience Wiring
+
+`YFex.Cqrs` references `YFex.Resilience` (design §1 L2). The builder verbs `.Retry` / `.Timeout` / `.UseResource` / `.Fallback` / `.Hedging` are folded at `BuildMetadata` time by `ResilienceMapping.Compose` into a single `ResilienceSpec` stored on `CommandRegistrationMetadata.Resilience`, then compiled onto `CommandPolicy.Resilience`. The legacy `RetryPolicy`/`Timeout` fields are kept alongside for backward compatibility.
+
+- **Name shadowing.** `YFex.Cqrs` has its own `RetryPolicy` and `BackoffStrategy`, which shadow the `YFex.Resilience` ones. `ResilienceMapping` fully-qualifies every resilience type (`YFex.Resilience.RetryPolicy`, etc.) to disambiguate. The legacy `RetryPolicy(MaxAttempts, Backoff, InitialDelay?, MaxDelay?)` maps to `YFex.Resilience.RetryPolicy` with `InitialDelay`/`MaxDelay` defaulted (100ms / 5s) and `Jitter: true`.
+- **Execution.** `LocalDispatcher` takes an optional `IResiliencePipelineFactory?`. When it's registered and `policy.Resilience` is non-empty, the online command invoke runs through `factory.Get(spec).ExecuteAsync(...)`; otherwise the legacy per-attempt `Timeout` CTS path applies. This makes resilience opt-in and zero-behaviour-change without a factory. See [Messaging Internals](messaging-internals.md#localdispatcher-pipeline).
+
+> **📌 Note:** `ReverseSpec` (a `readonly record struct`) also lives in `YFex.Cqrs` beside `ReversePolicy`, reused by the command builder, the standalone `IReverseRegistry` (`AddYFexReversals`), and saga steps — see [Orchestration Internals](orchestration-internals.md). `ReverseExecutor.ReverseAsync(cmd, result, in ReverseSpec, dispatcher, ct)` in `YFex.Cqrs.Compensation` reverses from an explicit spec.
 
 ---
 

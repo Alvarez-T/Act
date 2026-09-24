@@ -1,13 +1,28 @@
 namespace YFex.Messaging.Rpc;
 
-/// <summary>A command that could not be replayed after exhausting retries or TTL.</summary>
+/// <summary>
+/// A command (or orchestration step) that could not be completed after exhausting retries or TTL.
+/// The three trailing properties (design §8.1) generalize the log to carry orchestration provenance:
+/// they stay at their defaults for the original outbox-expiry path and are populated when a saga/PM
+/// dead-letters a step.
+/// </summary>
 public sealed record SyncFailure(
     Guid IdempotencyKey,
     string CommandTypeName,
     byte[] Payload,
     string Reason,
     DateTimeOffset FailedAt,
-    bool IsAcknowledged);
+    bool IsAcknowledged)
+{
+    /// <summary>Originating saga/PM identity (design §8.1). Null for outbox-origin failures.</summary>
+    public string? SagaId { get; init; }
+
+    /// <summary>The failing step's index within a saga, when applicable (design §8.1).</summary>
+    public int? StepIndex { get; init; }
+
+    /// <summary>Failure category — e.g. <c>"outbox"</c>, <c>"saga-compensation"</c>, <c>"saga-escalate"</c> (design §8.1).</summary>
+    public string Category { get; init; } = "outbox";
+}
 
 /// <summary>
 /// Read-only view of commands that permanently failed to sync.

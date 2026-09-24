@@ -18,6 +18,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\YFex\YFex.csproj" />
     <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization.Public\YFex.Authorization.Public.csproj" />
+    <!-- Resilience vocabulary for the command builder's policy verbs → ResilienceSpec (design §1 L2). -->
+    <ProjectReference Include="..\..\..\..\YFex.Resilience\src\YFex.Resilience\YFex.Resilience.csproj" />
     <ProjectReference Include="..\YFex.Cqrs.SourceGenerator\YFex.Cqrs.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\YFex.Cqrs.Analyzer\YFex.Cqrs.Analyzer.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
