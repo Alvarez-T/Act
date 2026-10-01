@@ -1,0 +1,5 @@
+{
+  // module catalog (invariant)
+  "customer.minor-cnpj": "Minors cannot have a CNPJ",
+  "fields": { "CustomerDto.Name": "Full name" }
+}

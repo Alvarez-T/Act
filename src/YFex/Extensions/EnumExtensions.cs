@@ -271,11 +271,11 @@ internal static class EnumCache<TEnum> where TEnum : struct, Enum
 
     // Two FrozenDictionaries cover both ordinal cases without runtime branching.
     // FrozenDictionary uses a perfect hash — O(1) with near-zero overhead.
-    private static readonly FrozenDictionary<string, TEnum> _codeToValueOrdinal =
-        _codePairs.ToFrozenDictionary(x => x.Code, x => x.Value, StringComparer.Ordinal);
+    // Lookups accept what GetCode produces: the [EnumCode] of coded members AND the member name of un-coded ones
+    // (GetCode falls back to the name), so every value written with GetCode reads back with FromCode.
+    private static readonly FrozenDictionary<string, TEnum> _codeToValueOrdinal = BuildLookup(StringComparer.Ordinal);
 
-    private static readonly FrozenDictionary<string, TEnum> _codeToValueIgnoreCase =
-        _codePairs.ToFrozenDictionary(x => x.Code, x => x.Value, StringComparer.OrdinalIgnoreCase);
+    private static readonly FrozenDictionary<string, TEnum> _codeToValueIgnoreCase = BuildLookup(StringComparer.OrdinalIgnoreCase);
 
     private static readonly FrozenDictionary<TEnum, string> _codeByValue =
         _codePairs.ToFrozenDictionary(x => x.Value, x => x.Code);
@@ -329,6 +329,19 @@ internal static class EnumCache<TEnum> where TEnum : struct, Enum
 
     internal static string GetLabel(TEnum value)
         => _labels.TryGetValue(value, out var l) ? l : value.ToString();
+
+    private static FrozenDictionary<string, TEnum> BuildLookup(StringComparer comparer)
+    {
+        var map = new Dictionary<string, TEnum>(comparer);
+        foreach (var (value, code) in _codePairs) map.TryAdd(code, value);
+        foreach (var value in Values)
+        {
+            bool coded = false;
+            foreach (var (v, _) in _codePairs) if (EqualityComparer<TEnum>.Default.Equals(v, value)) { coded = true; break; }
+            if (!coded) map.TryAdd(value.ToString(), value);   // codes win over names on a clash
+        }
+        return map.ToFrozenDictionary(comparer);
+    }
 
     private static (TEnum Value, string Code)[] BuildCodePairs()
     {

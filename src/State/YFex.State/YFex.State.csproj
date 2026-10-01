@@ -12,6 +12,11 @@
     <AssemblyName>YFex.State</AssemblyName>
   </PropertyGroup>
 
+  <!-- Layer 1 → Layer 0.5: violations, rule contracts and the result type come from YFex.Validation (D2). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\Validation\YFex.Validation\YFex.Validation.csproj" />
+  </ItemGroup>
+
   <!-- Bundle generator: consumers get runtime + codegen from one package reference -->
   <ItemGroup>
     <ProjectReference Include="..\YFex.State.Generator\YFex.State.Generator.csproj"

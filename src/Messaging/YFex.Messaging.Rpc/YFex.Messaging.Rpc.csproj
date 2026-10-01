@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
@@ -35,6 +35,8 @@
     <ProjectReference Include="..\YFex.Messaging\YFex.Messaging.csproj" />
     <ProjectReference Include="..\YFex.Messaging.Fusion\YFex.Messaging.Fusion.csproj" />
     <ProjectReference Include="..\..\Persistence\YFex.Persistence\YFex.Persistence.csproj" />
+    <!-- Tenancy core: server-pushed event audiences (EventChannelHost). Runtime-optional: no scope => every event is global. -->
+    <ProjectReference Include="..\..\..\..\YFex.Tenancy\src\YFex.Tenancy\YFex.Tenancy.csproj" />
   </ItemGroup>
 
 </Project>

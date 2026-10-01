@@ -1,5 +1,6 @@
 ﻿using YFex.Cqrs;
 using YFex.Cqrs.Configuration;
+using YFex.Validation;
 using YFex.Messaging.Tests.Fixtures;
 
 namespace YFex.Messaging.Tests.Compliance;
@@ -72,8 +73,8 @@ public sealed class ComplianceTests
             baseline: [new BaselineOnlyConfig()],
             serverOverrides: [new ServerOnlyConfig()]);
 
-        registry.Commands[typeof(TestAggregate.Commands.CreateCommand)].Validate
-            .Should().NotBeNull("server override must apply its validator");
+        registry.Commands[typeof(TestAggregate.Commands.CreateCommand)].Validation
+            .Should().NotBeNull("server override must apply its context rule");
     }
 
     // â”€â”€ Private configurations (skipped by Pipeline B) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -117,7 +118,7 @@ public sealed class ComplianceTests
             => b.Command<TestAggregate.Commands.CreateCommand, TestItem>()
                 .Validate((cmd, ct) => ValueTask.FromResult(
                     cmd.Name.Length > 0
-                        ? ValidationResult.Success()
-                        : ValidationResult.Failure("Name", "Name is required")));
+                        ? ValidationResult.Valid
+                        : ValidationResult.Of(new Violation(FieldPath.Of("Name"), "required", detail: "Name is required"))));
     }
 }

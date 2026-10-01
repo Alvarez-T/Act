@@ -33,7 +33,9 @@ For each invalidation rule where the target is a group:
 
 For each `QueryRegistrationMetadata` / `CommandRegistrationMetadata`:
 
-1. **Validators**: Compose N validators into one composite delegate. Fast path: if all validators complete synchronously (`ValueTask` with result), no state machine is allocated.
+1. **Validation** (see [validation 09](validation/09-cqrs-messaging.md)): shape rules come from `.Validation(...)` / attributes and run
+   through `ValidationSlot<T>` (no policy involved); `.Validate(...)` / `.Validate<TRule>()` context rules are `ContextRuleFactory<T>`s,
+   compiled into ONE typed `MessageValidator<T>` per message (baseline + overrides, in order). `MessagePipeline` runs the stages.
 
 2. **Authorizers**: Fuse into single `Func<ClaimsPrincipal, object, bool>` predicate. Short-circuit: `RequireAuthenticated` is checked first (cheapest check).
 
@@ -55,7 +57,7 @@ After Phase 3, the registry stores pre-compiled policy records:
 
 ```csharp
 record CommandPolicy(
-    Validate?,              // Composite validator delegate (N validators → 1 delegate)
+    Validation?,            // MessageValidator<T>: stage-5 context rules (N factories → 1 typed validator); stage 1 needs no policy
     Authorize?,             // Fused authorizer predicate (N checks → 1 delegate)
     IdempotencyKey?,        // Key factory: command → string
     Conflict,               // ConflictPolicy enum
@@ -72,7 +74,7 @@ record CommandPolicy(
 );
 
 record QueryPolicy(
-    Validate?,          // Composite validator
+    Validation?,        // MessageValidator<T> (stage-5 context rules)
     Authorize?,         // Fused authorizer
     Cache?,             // CachePolicy (sliding/absolute expiration, stale threshold)
     Scope,              // CacheScope enum (Global, User, Tenant, Session, Custom)
@@ -104,7 +106,7 @@ Mutable metadata collected during the `Configure()` call, before compilation:
 
 | Descriptor | Variants | Purpose |
 |---|---|---|
-| `ValidatorDescriptor` | `Inline` (delegate), `TypeRef` (DI-resolved), `FluentTypeRef` (FluentValidation adapter) | Records how validation should be performed |
+| `ContextRuleFactory` | `ContextRuleFactory<T>` (`Shared` instance, `FromServices<TRule>` = DI or `ActivatorUtilities`) | Stage-5 context rules (FluentValidation lives in `YFex.Cqrs.FluentValidation`) |
 | `AuthorizerDescriptor` | `RequireAuthenticated`, `Roles(string[])`, `PolicyName(string)`, `Inline(predicate)`, `TypeRef(Type)` | Records authorization requirements |
 | `InvalidationRuleDescriptor` | `TargetType` + optional `MatchExpression` + `IsGroup` flag | Records which queries to invalidate |
 | `OptimisticRuleDescriptor` | `QueryType` + `MatchExpression` + `ApplyExpression` | Records optimistic update logic |
@@ -152,12 +154,29 @@ Gated on the `YFEX_RPC` preprocessor symbol (injected by `YFex.Messaging.Rpc.tar
 
 ```
 Same ClassToGenerate model
-  → RpcContractCodeBuilder.GenerateInterface()      → I{Aggregate}RpcContract : IComputeService
+  → RpcContractCodeBuilder.GenerateInterface()      → I{Aggregate}RpcContract : IComputeService (+ I{Aggregate}RpcClient view)
   → RpcContractCodeBuilder.GenerateServerImpl()      → {Aggregate}RpcContractImpl
-  → RpcContractCodeBuilder.GenerateRegistrations()   → fusion.AddServer<>() / FusionMessageBusBuilder
+  → RpcContractCodeBuilder.GenerateRegistrations()   → fusion.AddServer<>() / rpc.AddClient<IClient>(nameof(IContract)) / FusionMessageBusBuilder
+  → RpcProxyCodeBuilder.Generate*Proxy()             → {Ns}.ActualLabProxies.{Type}Proxy for the contract, the client view and the impl
 ```
 
-Server impl wraps each method with `IHandlerInvoker.InvokeAsync<T>()` and checks `Invalidation.IsActive` for Fusion cache invalidation.
+Server impl wraps each method with `IHandlerInvoker.InvokeAsync<T>()` and checks `Invalidation.IsActive` for Fusion cache invalidation. Record types are fully qualified; `YFex.Cqrs.ErrorResultException` (server validation rejections, Wolverine's
+`ResultConversionException`) is caught for commands and queries and returned as the typed error. A `{Aggregate}RpcFormatters`
+module initializer registers the MemoryPack formatters of every result type (AOT). `RegisterRoutes` uses the typed-result routes.
+
+Query methods: `Task<Result<T>> Name(TQuery q, string? variant = null, CancellationToken ct = default)` — `variant` is filled by
+the server's `CallContextMiddleware` (per-tenant/user compute-cache key, validation D29); routes pass null. Command methods are
+regular RPC methods — NOT CommandR `[CommandHandler]`s (CommandR rejects arguments that aren't ActualLab `ICommand<T>`); the impl
+invalidates with `Invalidation.Begin()` + `OnInvalidate(cmd)` after success.
+
+> **⚠️ Fusion 13 proxies (validation D30):** ActualLab.Generators is syntax-only and cannot see generated types, and Fusion finds
+> proxies only by convention (`{Namespace}.ActualLabProxies.{Name}Proxy`, no runtime fallback). So `RpcProxyCodeBuilder` emits them
+> with ActualLab 13.0.12's exact template: `I{Aggregate}RpcContractProxy`, `I{Aggregate}RpcClientProxy` (interface proxies) and
+> `{Aggregate}RpcContractImplProxy` (class proxy). The model carries result types in ActualLab's display formats
+> (`ProxyReturnType`/`KeepReturnType`). `YFex.Messaging.Rpc.Tests/ProxyGoldenTests` runs the real ActualLab generator on a source
+> copy of the generated contract and must stay green — re-run it on every Fusion upgrade.
+
+> **📌 Helper names:** a record without the `Query`/`Command` suffix gets a `{Name}Async` helper (its own name would clash).
 
 > **⚠️ Warning:** The RPC pipeline depends on ActualLab.Fusion types (`IComputeService`, `[ComputeMethod]`, `[CommandHandler]`). If the Fusion package isn't referenced in the consumer project, the gating on `YFEX_RPC` prevents the pipeline from emitting — but if someone manually defines the symbol without the package, they'll get compile errors in the generated code.
 

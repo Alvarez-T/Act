@@ -55,7 +55,8 @@ public readonly record struct Mass :
     IDivisionOperators<Mass, decimal, Mass>,
     IComparisonOperators<Mass, Mass, bool>,
     IMinMaxValue<Mass>,
-    IAdditiveIdentity<Mass, Mass>
+    IAdditiveIdentity<Mass, Mass>,
+    IAmount<Mass>
 {
     /// <summary>Canonical scale (grams, 4 decimal places → 0.1&#160;mg resolution).</summary>
     public const int Scale = 4;
@@ -123,6 +124,19 @@ public readonly record struct Mass :
     static Mass IMinMaxValue<Mass>.MinValue => MinValue;
     static Mass IMinMaxValue<Mass>.MaxValue => MaxValue;
     static Mass IAdditiveIdentity<Mass, Mass>.AdditiveIdentity => Zero;
+
+    /// <summary>Raw type <c>"mass"</c> (decimal storage, grams).</summary>
+    public static RawType RawType { get; } = RawType.Define<Mass>("mass", ValueKind.Decimal);
+
+    public RawValue ToRaw() => RawValue.Typed(RawType, _grams);
+
+    /// <summary>Reads Mass (plain numbers are grams).</summary>
+    public static bool TryFromRaw(in RawValue raw, out Mass value)
+    {
+        bool ok = raw.TryRead(RawType, out decimal d);
+        value = ok ? FromGrams(d) : default;
+        return ok;
+    }
 
     // ── Operators ────────────────────────────────────────────────────────────
     public static Mass operator +(Mass a, Mass b) => new(a._grams + b._grams);

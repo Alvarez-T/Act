@@ -159,16 +159,18 @@ internal static class ObservableEmitter
             sb.AppendLine("    }");
         }
 
-        // ── Validation helpers ───────────────────────────────────────────────
-        var validatedProps = FilterProperties(model.Properties,
-            static p => !p.ValidatorTypes.IsEmpty || !p.AsyncValidatorTypes.IsEmpty);
-        if (validatedProps.Count > 0)
-        {
-            sb.AppendLine();
-            sb.AppendLine("    // ── Validation helpers ───────────────────────────────────────────────");
-            foreach (var vp in validatedProps)
-                EmitValidationHelper(sb, vp);
-        }
+        // ── Validation coordination (D22) ─────────────────────────────────────
+        // YFex.Validation.Generator implements __OnBatchValidated (deferred invariants) and the per-property
+        // __OnValidate_X hooks when the class has rules; unimplemented partial void methods and their calls
+        // are removed by the compiler, so classes without validation pay nothing.
+        sb.AppendLine();
+        sb.AppendLine("    // ── Validation hooks (implemented by YFex.Validation.Generator when the class has rules) ──");
+        sb.AppendLine("    protected override void OnUpdateCompleted()");
+        sb.AppendLine("    {");
+        sb.AppendLine("        base.OnUpdateCompleted();");
+        sb.AppendLine("        __OnBatchValidated();");
+        sb.AppendLine("    }");
+        sb.AppendLine("    partial void __OnBatchValidated();");
 
         // ── Property implementations ─────────────────────────────────────────
         foreach (var prop in model.Properties)
@@ -188,8 +190,9 @@ internal static class ObservableEmitter
 
     private static void EmitProperty(StringBuilder sb, ObservablePropertyModel prop)
     {
+        // Field form has no partial declaration to inherit from — take the docs from the user's field.
         if (!string.IsNullOrWhiteSpace(prop.XmlDoc))
-            sb.AppendLine("    /// <inheritdoc/>");
+            sb.AppendLine(prop.IsFieldBacked ? $"    /// <inheritdoc cref=\"{prop.FieldName}\"/>" : "    /// <inheritdoc/>");
 
         if (prop.NotifyOnTaskCompletion)
         {
@@ -197,13 +200,19 @@ internal static class ObservableEmitter
             return;
         }
 
-        // Explicit backing field. The partial property's implementation getter/setter
+        // Property form: explicit backing field; the partial property's implementation getter/setter
         // reference it directly. (C# 14 field keyword is for user-written partial props;
         // generator-emitted implementations use an explicit field for cross-version clarity.)
-        sb.Append("    private ").Append(prop.TypeName).Append(' ').Append(prop.FieldName).AppendLine(";");
-        sb.AppendLine();
+        // Field form: the user's field IS the backing store and there is no partial declaration to
+        // implement, so emit a regular property over it.
+        if (!prop.IsFieldBacked)
+        {
+            sb.Append("    private ").Append(prop.TypeName).Append(' ').Append(prop.FieldName).AppendLine(";");
+            sb.AppendLine();
+        }
 
-        sb.Append("    public partial ").Append(prop.TypeName).Append(' ').AppendLine(prop.PropertyName);
+        sb.Append(prop.IsFieldBacked ? "    public " : "    public partial ")
+          .Append(prop.TypeName).Append(' ').AppendLine(prop.PropertyName);
         sb.AppendLine("    {");
 
         sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
@@ -230,9 +239,8 @@ internal static class ObservableEmitter
             }
             sb.Append("            On").Append(prop.PropertyName).AppendLine("Changed(__old, value);");
             sb.Append("            NotifyChanged(in __desc_").Append(prop.PropertyName).AppendLine(");");
-            // Validation call (if any validators registered)
-            if (!prop.ValidatorTypes.IsEmpty || !prop.AsyncValidatorTypes.IsEmpty)
-                sb.Append("            Validate_").Append(prop.PropertyName).AppendLine("(value);");
+            // Validation hook (D22): declared here, implemented by YFex.Validation.Generator.
+            sb.Append("            __OnValidate_").Append(prop.PropertyName).AppendLine("(in value);");
             sb.AppendLine("        }");
         }
 
@@ -247,6 +255,8 @@ internal static class ObservableEmitter
             sb.Append("    partial void On").Append(prop.PropertyName)
               .Append("Changed(").Append(prop.TypeName).Append(" oldValue, ")
               .Append(prop.TypeName).AppendLine(" newValue);");
+            sb.Append("    partial void __OnValidate_").Append(prop.PropertyName)
+              .Append("(in ").Append(prop.TypeName).AppendLine(" value);");
         }
     }
 
@@ -260,45 +270,6 @@ internal static class ObservableEmitter
         return result;
     }
 
-    private static void EmitValidationHelper(StringBuilder sb, ObservablePropertyModel prop)
-    {
-        // Sync validation helper: calls each IValidator<T>.Validate statically
-        if (!prop.ValidatorTypes.IsEmpty)
-        {
-            sb.Append("    private void Validate_").Append(prop.PropertyName)
-              .Append('(').Append(prop.TypeName).AppendLine(" value)");
-            sb.AppendLine("    {");
-            sb.AppendLine("        var __bag = Validation;");
-            // Call each validator and aggregate errors; first error wins per property
-            sb.AppendLine("        global::YFex.State.Validation.ValidationResult __vr = default;");
-            foreach (var vt in prop.ValidatorTypes)
-            {
-                sb.Append("        __vr = ").Append(vt).AppendLine(".Validate(value);");
-                sb.AppendLine("        if (!__vr.IsSuccess) { __bag.Set(__vr.Message!, __vr.Severity); return; }");
-            }
-            sb.Append("        __bag.Clear(\"").Append(prop.PropertyName).AppendLine("\");");
-            sb.AppendLine("    }");
-        }
-
-        // Async validation helper: fire-and-forget
-        if (!prop.AsyncValidatorTypes.IsEmpty)
-        {
-            sb.Append("    private async void Validate_").Append(prop.PropertyName)
-              .Append("_Async(").Append(prop.TypeName).AppendLine(" value)");
-            sb.AppendLine("    {");
-            sb.AppendLine("        var __bag = Validation;");
-            sb.AppendLine("        global::YFex.State.Validation.ValidationResult __vr = default;");
-            foreach (var avt in prop.AsyncValidatorTypes)
-            {
-                sb.Append("        __vr = await ").Append(avt)
-                  .AppendLine(".ValidateAsync(value, global::System.Threading.CancellationToken.None).ConfigureAwait(false);");
-                sb.AppendLine("        if (!__vr.IsSuccess) { __bag.Set(__vr.Message!, __vr.Severity); return; }");
-            }
-            sb.Append("        __bag.Clear(\"").Append(prop.PropertyName).AppendLine("\");");
-            sb.AppendLine("    }");
-        }
-    }
-
     private static void EmitTaskNotifierProperty(StringBuilder sb, ObservablePropertyModel prop)
     {
         // Backing field is TaskNotifier / TaskNotifier<T>; property type stays Task / Task<T>.
@@ -309,14 +280,18 @@ internal static class ObservableEmitter
             ? $"global::YFex.State.TaskNotifier<{prop.TaskResultTypeFullName}>"
             : "global::YFex.State.TaskNotifier";
 
-        sb.Append("    private ").Append(notifierType).Append("? ").Append(prop.FieldName).AppendLine(";");
+        // Field form: the user's Task-typed field can't hold a TaskNotifier, so the property gets its own
+        // notifier field and the user's field is only the declaration site.
+        string notifierField = prop.IsFieldBacked ? "__" + prop.PropertyName + "_notifier" : prop.FieldName;
+        sb.Append("    private ").Append(notifierType).Append("? ").Append(notifierField).AppendLine(";");
         sb.AppendLine();
 
-        sb.Append("    public partial ").Append(prop.TypeName).Append(' ').AppendLine(prop.PropertyName);
+        sb.Append(prop.IsFieldBacked ? "    public " : "    public partial ")
+          .Append(prop.TypeName).Append(' ').AppendLine(prop.PropertyName);
         sb.AppendLine("    {");
         sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        sb.Append("        get => ").Append(prop.FieldName).AppendLine(";");
-        sb.Append("        set => SetFieldAndNotifyOnCompletion(ref ").Append(prop.FieldName)
+        sb.Append("        get => ").Append(notifierField).AppendLine(";");
+        sb.Append("        set => SetFieldAndNotifyOnCompletion(ref ").Append(notifierField)
           .Append(", value, in __desc_").Append(prop.PropertyName).AppendLine(");");
         sb.AppendLine("    }");
     }

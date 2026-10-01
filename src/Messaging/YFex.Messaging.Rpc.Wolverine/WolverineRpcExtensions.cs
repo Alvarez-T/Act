@@ -23,16 +23,13 @@ public static class WolverineRpcExtensions
         this IServiceCollection services,
         Action<YFexMessagingRpcServerOptions>? configure = null)
     {
-        var opts = new YFexMessagingRpcServerOptions();
-        configure?.Invoke(opts);
-
-        // Base Fusion server stack
-        services.UseYFexMessagingRpcServer(_ => { });
-        services.AddSingleton(opts);
+        // Base Fusion server stack (the same options: call context, D29)
+        services.UseYFexMessagingRpcServer(configure);
 
         // Override the default LocalHandlerInvoker with the Wolverine invoker
         services.RemoveAll<IHandlerInvoker>();
         services.AddSingleton<IHandlerInvoker, WolverineHandlerInvoker>();
+        ValidatingHandlerInvoker.Decorate(services);   // RemoveAll above dropped the decorator (D25)
 
         // Override the IDispatcher with the Wolverine-direct dispatcher
         services.RemoveAll<IDispatcher>();
@@ -40,7 +37,9 @@ public static class WolverineRpcExtensions
         {
             var dispatcher = new WolverineLocalDispatcher(
                 sp.GetRequiredService<IMessageBus>(),
-                sp.GetRequiredService<IEventBus>());
+                sp.GetRequiredService<IEventBus>(),
+                sp.GetRequiredService<CompiledMessagingRegistry>(),
+                sp);
             YFexDispatcherProvider.Set(dispatcher);
             return dispatcher;
         });

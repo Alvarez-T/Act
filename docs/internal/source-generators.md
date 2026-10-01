@@ -75,7 +75,7 @@ readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IEnumerable<T
 | Candidate | `PropertyDeclarationSyntax` or `VariableDeclaratorSyntax` | Pass/fail |
 | Transform | Semantic analysis: partial check, StateObject inheritance, type, equality strategy | `ObservablePropertyRawModel` |
 | Group | Merge by (Namespace, ClassName) | `ObservableClassModel` |
-| Emit | Per-class partial | Static descriptors, property setters, DispatchPending, MVVM cache, activation |
+| Emit | Per-class partial | Static descriptors, property setters, DispatchPending, MVVM cache, activation, validation hooks (`__OnValidate_X(in value)` call + `partial void` declaration per writable property; `OnUpdateCompleted` override → `partial void __OnBatchValidated()`) — implemented by YFex.Validation.Generator (D22) |
 
 **Key decisions in Transform:**
 
@@ -228,6 +228,47 @@ Detects methods with `[Live]`.
 **Diagnostics:** YFLIV0001–0002
 
 ---
+
+## 6. YFex.Validation.Generator
+
+Design: `docs/internal/validation/03-validation-generator.md`. Bundled as analyzer of `YFex.Validation`.
+
+| Stage | Input | Output |
+|---|---|---|
+| Candidate | `TypeDeclarationSyntax` whose members / record parameters / type carry a known attribute name (`Required`, `Length`, `Range`, `Each`, `Invariant`, `Validatable`, DataAnnotations names…) — syntax-only | Pass/fail |
+| Transform | One model per type (first partial declaration only): members in declaration order, rules (YFex + DataAnnotations mapped), `[Each]`/nested validatable detection, invariant read inference, diagnostics | `TypeModel` (equatable) |
+| Required inference | `build_property.YFexValidationInferRequired` (opt-in, P5) | `TypeModel` + YFV0030 |
+| Emit | Per type | `IValidatable<T>`: `FieldIds`, `Fields`, `Rules.<Member>` (consts, `Constraints`, `Check`, `CheckItem`, `Coerce`), `Validate` (+ `ProfileId` overload), `ValidateAt`, `ValidateMember`, `TryGetConstraints`, `TryGetFieldId` |
+| Collect | All types | YFV0012/YFV0014 graph checks; `[ModuleInitializer]` calling `ValidationSlots.Register<T>()` |
+| Messages | `messages*.json` AdditionalFiles | `<Module>Messages : IMessageSource` (static switch) + YFV0040/YFV0041 |
+| View models | `StateObject` subclasses with rules / `[Invariant]` / `[ValidatesAs<T>]` / obsolete typeof validators | Implements the State hooks: `__RunField_X` (borrowed + own + legacy rules → `ValidationBag`), async runners (tickets, `[Debounce]`), invariant masks + batch coalescing, explicit `IValidationSource`, `ValidateAll`, path maps, `ApplyServer<T>`, `ToT()`; YFV0020–0025 |
+
+Key decisions: StateObject VMs are NOT `IValidatable` — they get the hook implementations above and validate through
+their bag (`Parser.HasStateHook` mirrors the State generator's hook rule exactly, else CS0759; projects compiling VMs
+with rules must reference both generators); `[Pattern]` emits a cached
+`static readonly Regex` (a generator cannot rely on `[GeneratedRegex]` — generators don't see each other's
+output); tracking names `YFexValidation.Models` / `YFexValidation.FinalModels` for caching tests.
+
+## 7. YFex.Rules.Generator
+
+Design: `docs/internal/validation/04`–`06` (+ D31 for view models). Attributes live in `YFex.Rules.dll`; the generator is
+bundled as its analyzer. Five `ForAttributeWithMetadataName` pipelines (tracking names `YFexRules.*`):
+
+| Pipeline | Trigger | Emits |
+|---|---|---|
+| Situations | `[Situation("name")]` on a partial record struct/class | `ISituation<T>`: `Fields` (typed handles), `FieldIds` (consts — other assemblies bind by name through them), `Schema` (+ enum options), `Read`, `TryGetFieldId`, `ReadLine`, `AsOf`, `Scope`, `AppendTo`/`Serialize`/`Deserialize`, `DiffMask`, `Hash`/`WriteTo`/`ReadFrom` |
+| Rules | `[Rule("code", Group = …)]` + `IRule<TS>` / `IRule<TS,TLine>` markers | model only (method shapes, parameters, split conditions) |
+| Rule sets | `[RuleSet<TS>("name")]` on a static partial class | model only (groups, derived fields, `Rounding`/`Allocation`/`LineBase`/`Base` members) |
+| Tables | `[DecisionTable<TS>("code")]` + nested `Row` with `[When]`/`[Then]` | `IDecisionTable<TS,Row>`: `Schema` (columns, enum options, cell constraints), `Match`, `Emit`, `CheckRow` (row `[Validatable]` + guardrail), `Intersects`/`Covers`, `Freeze`/`Check` |
+| Situation sources | `[SituationSource<TS>]` on a view model | `BuildSituation()` (name match › user `__Situation_X()` › generated `private partial` the VM implements) |
+
+The rules, sets and tables are **assembled** (`Collect` ×3 → `Assemble`): each rule/table joins the rule set of its situation that
+declares its group (YFR0011/0012), derived-field `[Then]` columns resolve against that set, and every rule set emits `Set` (Lazy),
+`Evaluate`, `CreateHost`, `Catalog`, `RuleIds` and one `__Explain_i` per splittable rule. `ConditionSplitter` rewrites each
+`&&` operand of `Applies` with fully-qualified names (types, enum members, accessible statics) so the explain body compiles without
+the rule file's usings; operands touching the `RuleContext`, locals or private members make the rule non-splittable (YFR0016 info).
+Diagnostics are reported from nodes combined with the compilation (in-source locations → `#pragma` works). Gotcha: enum-typed
+attribute arguments arrive as their underlying integral type (`byte` for the YFex.Rules enums) — use `Names.EnumValue`.
 
 ## Performance Considerations
 

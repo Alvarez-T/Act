@@ -1,0 +1,37 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Opt-in runtime rule editing module (validation D33): RuleAdmin contracts + handlers over IRuleStore.
+       Imports the Messaging.Rpc targets like a consumer, so the CQRS generator emits its RPC contract + proxies (D30). -->
+  <Import Project="..\..\Messaging\YFex.Messaging.Rpc\build\YFex.Messaging.Rpc.targets" />
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <RootNamespace>YFex.Rules.Admin</RootNamespace>
+    <AssemblyName>YFex.Rules.Admin</AssemblyName>
+    <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
+    <CompilerGeneratedFilesOutputPath>$(BaseIntermediateOutputPath)Generated</CompilerGeneratedFilesOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="MemoryPack" Version="1.21.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Rules\YFex.Rules.csproj" />
+    <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
+    <ProjectReference Include="..\..\Messaging\YFex.Messaging.Rpc\YFex.Messaging.Rpc.csproj" />
+    <ProjectReference Include="..\..\Cqrs\YFex.Cqrs.SourceGenerator\YFex.Cqrs.SourceGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\Messaging\YFex.Messaging.Rpc.Generator\YFex.Messaging.Rpc.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\YFex.Validation.Generator\YFex.Validation.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="YFex.Rules.Admin.Tests" />
+  </ItemGroup>
+
+</Project>

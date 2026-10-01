@@ -1,0 +1,4 @@
+{
+  "customer.minor-cnpj": "Menor de idade não pode ter CNPJ",
+  "fields": { "CustomerDto.Name": "Nome completo" }
+}

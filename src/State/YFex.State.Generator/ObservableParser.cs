@@ -121,10 +121,6 @@ internal static class ObservableParser
             }
         }
 
-        // Validator types from [ValidateWith] and [ValidateAsync]
-        var validatorTypes = ResolveValidatorTypes(allAttributes, "ValidateWithAttribute", ct);
-        var asyncValidatorTypes = ResolveValidatorTypes(allAttributes, "ValidateAsyncAttribute", ct);
-
         return new ObservablePropertyRawModel(
             Namespace: containingType.ContainingNamespace.IsGlobalNamespace
                 ? string.Empty
@@ -146,8 +142,7 @@ internal static class ObservableParser
             HasTaskTypeError: hasTaskTypeError,
             ParticipatesInActivation: participatesInActivation,
             IsNullableActivatable: isNullableActivatable,
-            ValidatorTypes: validatorTypes,
-            AsyncValidatorTypes: asyncValidatorTypes);
+            IsFieldBacked: symbol is IFieldSymbol);
     }
 
     // ── Group per-property raw models into per-class models ──────────────────
@@ -196,8 +191,7 @@ internal static class ObservableParser
                     TaskResultTypeFullName: p.TaskResultTypeFullName,
                     ParticipatesInActivation: p.ParticipatesInActivation,
                     IsNullableActivatable: p.IsNullableActivatable,
-                    ValidatorTypes: p.ValidatorTypes,
-                    AsyncValidatorTypes: p.AsyncValidatorTypes);
+                    IsFieldBacked: p.IsFieldBacked);
             }
 
             yield return new ObservableClassModel(
@@ -400,25 +394,6 @@ internal static class ObservableParser
         return null;
     }
 
-    private static EquatableArray<string> ResolveValidatorTypes(
-        ImmutableArray<AttributeData> attributes, string attributeName, CancellationToken ct)
-    {
-        List<string>? result = null;
-        foreach (var attr in attributes)
-        {
-            if (attr.AttributeClass?.Name != attributeName) continue;
-            if (attr.ConstructorArguments.Length > 0 &&
-                attr.ConstructorArguments[0].Value is INamedTypeSymbol validatorType)
-            {
-                result ??= new List<string>();
-                result.Add(validatorType.ToDisplayString(s_nullableFormat));
-            }
-        }
-        return result is null
-            ? EquatableArray<string>.Empty
-            : new EquatableArray<string>(result.ToArray());
-    }
-
     private static bool HasNotifyOnTaskCompletionAttribute(ImmutableArray<AttributeData> attributes)
     {
         foreach (var attr in attributes)
@@ -480,6 +455,5 @@ internal readonly record struct ObservablePropertyRawModel(
     bool HasTaskTypeError,
     bool ParticipatesInActivation,
     bool IsNullableActivatable,
-    EquatableArray<string> ValidatorTypes,
-    EquatableArray<string> AsyncValidatorTypes
+    bool IsFieldBacked
 ) : IEquatable<ObservablePropertyRawModel>;

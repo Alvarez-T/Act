@@ -1,3 +1,4 @@
+#pragma warning disable CS0618 // exercises the obsolete (Phase 0) validation API on purpose
 using System;
 using System.Linq;
 using System.Reflection;

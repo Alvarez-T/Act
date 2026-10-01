@@ -2,6 +2,9 @@ namespace YFex.NavigatR.Tenancy.Tests;
 
 public sealed class ScopedRouteRegistryTests
 {
+    // The test app's OWN level enum — NavigatR knows none of these names (byte = specificity rank).
+    private enum NavScope : byte { Organization = 0, Tenant = 1, User = 2 }
+
     private sealed record OrderRoute : IRoute;
 
     // Minimal INavigable stubs — only their TYPE matters to the registry.
@@ -21,49 +24,55 @@ public sealed class ScopedRouteRegistryTests
     {
         var r = new RouteRegistry();
         r.Register<OrderRoute, DefaultOrderVm>();
-        r.RegisterFor<OrderRoute, AcmeOrderVm>(Scope.Organization, "acme");
-        r.RegisterFor<OrderRoute, AcmeWestOrderVm>(Scope.Tenant, "acme-west");
-        r.RegisterFor<OrderRoute, VipOrderVm>(Scope.User, "u-42");
+        r.RegisterFor<OrderRoute, AcmeOrderVm>(NavScope.Organization, "acme");
+        r.RegisterFor<OrderRoute, AcmeWestOrderVm>(NavScope.Tenant, "acme-west");
+        r.RegisterFor<OrderRoute, VipOrderVm>(NavScope.User, "u-42");
         return r;
+    }
+
+    private static ScopeIdentity Id(string? org = null, string? tenant = null, string? user = null)
+    {
+        var rungs = new List<ScopeValue>(3);
+        if (org is not null) rungs.Add(ScopeValue.Of(NavScope.Organization, org));
+        if (tenant is not null) rungs.Add(ScopeValue.Of(NavScope.Tenant, tenant));
+        if (user is not null) rungs.Add(ScopeValue.Of(NavScope.User, user));
+        return ScopeIdentity.Of(rungs.ToArray());
     }
 
     [Fact]
     public void No_identity_uses_base_mapping()
     {
         var r = BuildRegistry();
-        r.ResolveViewModel(new OrderRoute(), ScopeIdentity.None).Should().Be(typeof(DefaultOrderVm));
+        r.ResolveViewModel(new OrderRoute(), ScopeIdentity.None.Rungs).Should().Be(typeof(DefaultOrderVm));
     }
 
     [Fact]
     public void User_scope_wins_over_tenant_and_org()
     {
         var r = BuildRegistry();
-        var id = new ScopeIdentity("acme", "acme-west", "u-42");
-        r.ResolveViewModel(new OrderRoute(), id).Should().Be(typeof(VipOrderVm));
+        r.ResolveViewModel(new OrderRoute(), Id("acme", "acme-west", "u-42").Rungs).Should().Be(typeof(VipOrderVm));
     }
 
     [Fact]
     public void Tenant_scope_wins_over_org()
     {
         var r = BuildRegistry();
-        var id = new ScopeIdentity("acme", "acme-west", UserId: null);
-        r.ResolveViewModel(new OrderRoute(), id).Should().Be(typeof(AcmeWestOrderVm));
+        r.ResolveViewModel(new OrderRoute(), Id("acme", "acme-west").Rungs).Should().Be(typeof(AcmeWestOrderVm));
     }
 
     [Fact]
     public void Org_scope_used_when_no_more_specific_override()
     {
         var r = BuildRegistry();
-        var id = new ScopeIdentity("acme", "tenant-no-override", "user-no-override");
-        r.ResolveViewModel(new OrderRoute(), id).Should().Be(typeof(AcmeOrderVm));
+        r.ResolveViewModel(new OrderRoute(), Id("acme", "tenant-no-override", "user-no-override").Rungs)
+            .Should().Be(typeof(AcmeOrderVm));
     }
 
     [Fact]
     public void Unmatched_identity_falls_back_to_base()
     {
         var r = BuildRegistry();
-        var id = new ScopeIdentity("globex", "globex-east", "u-99");
-        r.ResolveViewModel(new OrderRoute(), id).Should().Be(typeof(DefaultOrderVm));
+        r.ResolveViewModel(new OrderRoute(), Id("globex", "globex-east", "u-99").Rungs).Should().Be(typeof(DefaultOrderVm));
     }
 
     [Fact]
@@ -71,7 +80,6 @@ public sealed class ScopedRouteRegistryTests
     {
         var r = new RouteRegistry();
         r.Register<OrderRoute, DefaultOrderVm>();
-        r.ResolveViewModel(new OrderRoute(), new ScopeIdentity("acme", null, null))
-            .Should().Be(typeof(DefaultOrderVm));
+        r.ResolveViewModel(new OrderRoute(), Id("acme").Rungs).Should().Be(typeof(DefaultOrderVm));
     }
 }

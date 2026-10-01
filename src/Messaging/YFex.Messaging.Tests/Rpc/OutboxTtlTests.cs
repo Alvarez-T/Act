@@ -2,6 +2,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using YFex.Cqrs;
 using YFex.Cqrs.Configuration;
+using YFex.Validation;
 using YFex.Messaging.Rpc;
 using YFex.Messaging.Tests.Fixtures;
 
@@ -102,6 +103,26 @@ public sealed class OutboxTtlTests
             "an escalated server rejection must be dead-lettered to the sync failure log");
         (await GetByIdCacheKeysAsync(cache)).Should().BeEmpty(
             "escalating a rejection must undo the local optimistic effect by invalidating the command's caches");
+    }
+
+    [Fact]
+    public async Task Escalated_rejection_keeps_structured_violations_in_the_failure_log()
+    {
+        // Validation Phase 3, G7: the "sync issues" screen needs code + path, not a flat reason string.
+        var (_, failureLog, _, _) = await RunRejectedReplayAsync(new RejectingCommandConfig(ConflictPolicy.Escalate));
+
+        var failure = failureLog.Failures.Should().ContainSingle().Subject;
+        failure.Violations.Count.Should().Be(1);
+        failure.Violations[0].Path.ToString().Should().Be("Id");
+        failure.Violations[0].Code.Value.Should().Be("rejected");
+        failure.Violations[0].Detail.Should().Be("rejected by server");
+
+        // Persisted as JSON (StorageBackedSyncFailureLog): the converter is lossless.
+        var json = System.Text.Json.JsonSerializer.Serialize(failure);
+        var back = System.Text.Json.JsonSerializer.Deserialize<SyncFailure>(json)!;
+        back.Violations[0].Path.Should().Be(failure.Violations[0].Path);
+        back.Violations[0].Code.Should().Be(failure.Violations[0].Code);
+        back.Violations[0].Detail.Should().Be("rejected by server");
     }
 
     [Fact]
@@ -252,7 +273,7 @@ public sealed class OutboxTtlTests
             b.Command<TestAggregate.Commands.CreateCommand, TestItem>()
                 // A failing validator makes the online replay return a rejected QueueableResult (an Error).
                 .Validate((_, _) => new ValueTask<ValidationResult>(
-                    ValidationResult.Failure("Id", "rejected by server")))
+                    ValidationResult.Of(new Violation(FieldPath.Of("Id"), "rejected", detail: "rejected by server"))))
                 .Invalidates<TestAggregate.Queries.GetByIdQuery, TestItem>()
                 .OnConflict(_policy);
         }

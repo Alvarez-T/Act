@@ -2,6 +2,9 @@ using System.Collections.Frozen;
 using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
 using YFex.Cqrs;
+using YFex.Cqrs.Runtime;
+
+using YFex.Validation;
 
 namespace YFex.Messaging.Rpc;
 
@@ -67,8 +70,18 @@ public sealed class LocalHandlerInvokerRegistryBuilder
         where TCommand : class, ICommand<TResult>
     {
         _resultInvokers[typeof(TCommand)] = static async (sp, msg, ct) =>
-            await sp.GetRequiredService<ICommandHandler<TCommand, TResult>>()
-                    .HandleAsync((TCommand)msg, ct).ConfigureAwait(false);
+        {
+            var command = (TCommand)msg;
+            // Rules-enforced command with a registered IRuledCommandHandler (Phase 4): it receives the server decision.
+            if (DecisionContext.For(command) is { } decision
+                && decision.Stage.TryInvokeRuled<TCommand, TResult>(sp, command, decision.Decision, ct) is { } ruled)
+                return await ruled.ConfigureAwait(false);
+            // Opt-in validated handler (D24): the dispatch pipeline validated the command before invoking.
+            if (sp.GetService<IValidatedCommandHandler<TCommand, TResult>>() is { } validated)
+                return await validated.HandleAsync(Validator.AssumeValid(command), ct).ConfigureAwait(false);
+            return await sp.GetRequiredService<ICommandHandler<TCommand, TResult>>()
+                    .HandleAsync(command, ct).ConfigureAwait(false);
+        };
         return this;
     }
 
@@ -77,7 +90,11 @@ public sealed class LocalHandlerInvokerRegistryBuilder
         where TCommand : class, ICommand
     {
         _voidInvokers[typeof(TCommand)] = static (sp, msg, ct) =>
-            sp.GetRequiredService<ICommandHandler<TCommand>>().HandleAsync((TCommand)msg, ct);
+            DecisionContext.For(msg) is { } decision && decision.Stage.TryInvokeRuled(sp, (TCommand)msg, decision.Decision, ct) is { } ruled
+                ? ruled
+                : sp.GetService<IValidatedCommandHandler<TCommand>>() is { } validated
+                ? validated.HandleAsync(Validator.AssumeValid((TCommand)msg), ct)
+                : sp.GetRequiredService<ICommandHandler<TCommand>>().HandleAsync((TCommand)msg, ct);
         return this;
     }
 

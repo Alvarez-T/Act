@@ -68,6 +68,7 @@ public readonly struct Result : IUnion, IResult
     public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
     public static Error Conflict(string message) => new(ErrorType.Conflict, message);
     public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error ValidationProblem(in YFex.Validation.ValidationResult result) => Error.Validation(result);
 }
 
 // Generic Result<T> with non-boxing pattern
@@ -130,6 +131,7 @@ public readonly struct Result<T> : IUnion, IResult
     public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
     public static Error Conflict(string message) => new(ErrorType.Conflict, message);
     public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error ValidationProblem(in YFex.Validation.ValidationResult result) => Error.Validation(result);
 }
 
 // Result<T0, T1> with non-boxing pattern
@@ -201,6 +203,7 @@ public readonly struct Result<T0, T1> : IUnion, IResult
     public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
     public static Error Conflict(string message) => new(ErrorType.Conflict, message);
     public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error ValidationProblem(in YFex.Validation.ValidationResult result) => Error.Validation(result);
 }
 
 // Result<T0, T1, T2> with non-boxing pattern
@@ -288,6 +291,7 @@ public readonly struct Result<T0, T1, T2> : IUnion, IResult
     public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
     public static Error Conflict(string message) => new(ErrorType.Conflict, message);
     public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error ValidationProblem(in YFex.Validation.ValidationResult result) => Error.Validation(result);
 }
 
 // Result<T0, T1, T2, T3> with non-boxing pattern
@@ -391,4 +395,5 @@ public readonly struct Result<T0, T1, T2, T3> : IUnion, IResult
     public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
     public static Error Conflict(string message) => new(ErrorType.Conflict, message);
     public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error ValidationProblem(in YFex.Validation.ValidationResult result) => Error.Validation(result);
 }

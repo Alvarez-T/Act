@@ -34,6 +34,20 @@ public sealed class YFexMessagingRpcClientOptions
         EnableServerPushedEventsFlag = true;
         return this;
     }
+
+    internal CallContextClientBuilder? CallContextBuilder { get; private set; }
+
+    /// <summary>
+    /// Call-context options (validation D29) — only for the per-call header option:
+    /// <c>rpc.CallContext(ctx => ctx.SendToken((sp, ct) => tokens.GetAsync(ct)).SendTenant())</c>. The default
+    /// (connection-bound identity) needs nothing on the client: the WebSocket upgrade request carries the credentials.
+    /// </summary>
+    public YFexMessagingRpcClientOptions CallContext(Action<CallContextClientBuilder> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(CallContextBuilder ??= new CallContextClientBuilder());
+        return this;
+    }
 }
 
 /// <summary>Options for <c>UseYFexMessagingRpcServer</c>.</summary>
@@ -47,6 +61,20 @@ public sealed class YFexMessagingRpcServerOptions
     public YFexMessagingRpcServerOptions EnableServerPushedEvents()
     {
         EnableServerPushedEventsFlag = true;
+        return this;
+    }
+
+    internal CallContextServerBuilder? CallContextBuilder { get; private set; }
+
+    /// <summary>
+    /// Where the caller's identity (+ tenant) of each RPC call comes from (validation D29):
+    /// <c>rpc.CallContext(ctx => ctx.FromConnection().OrFromHeader("Authorization").WithTenant())</c>.
+    /// Not calling it = <c>ctx.FromConnection()</c> (principal captured at connect time, no tenant).
+    /// </summary>
+    public YFexMessagingRpcServerOptions CallContext(Action<CallContextServerBuilder> configure)
+    {
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(CallContextBuilder ??= new CallContextServerBuilder());
         return this;
     }
 }

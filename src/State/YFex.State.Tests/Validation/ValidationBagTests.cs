@@ -1,3 +1,4 @@
+#pragma warning disable CS0618 // exercises the obsolete (Phase 0) validation API on purpose
 using System.Linq;
 using YFex.State.Validation;
 
@@ -143,13 +144,13 @@ public class ValidationBagTests
     }
 
     [Fact]
-    public void All_EnumeratesEveryStoredResult()
+    public void ToResult_ContainsEveryStoredViolation()
     {
         var bag = new ValidationBag();
         bag.Set("A", "msgA");
         bag.Set("B", "msgB", ValidationSeverity.Warning);
 
-        bag.All.Should().HaveCount(2);
+        bag.ToResult().Violations.Count.Should().Be(2);
     }
 
     [Fact]

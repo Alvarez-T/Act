@@ -2,11 +2,16 @@ using System.Linq.Expressions;
 using System.Security.Claims;
 using YFex.Authorization.Public;
 using YFex.Cqrs.Registration;
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.DependencyInjection;
+using YFex.Cqrs.Runtime;
+using YFex.Rules;
+using YFex.Validation;
 
 namespace YFex.Cqrs.Configuration;
 
 /// <summary>
-/// Fluent builder for one query type.  Accumulates typed <see cref="ValidatorDescriptor"/>,
+/// Fluent builder for one query type.  Accumulates typed <see cref="ContextRuleFactory"/>,
 /// <see cref="AuthorizerDescriptor"/>, and <see cref="InvalidationRuleDescriptor"/> entries
 /// during the registration phase, then produces an immutable
 /// <see cref="QueryRegistrationMetadata"/> record via <see cref="BuildMetadata"/>.
@@ -16,7 +21,8 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
     where TQuery : IQuery<TResult>
 {
     // Mutable accumulation lists — used only during registration, never on the hot path.
-    private List<ValidatorDescriptor>?         _validators;
+    private List<ContextRuleFactory>?          _validators;
+    private RulesConfig?                       _rules;
     private List<AuthorizerDescriptor>?        _authorizers;
     private List<InvalidationRuleDescriptor>?  _invalidatedBy;
     private CachePolicy?                       _cache;
@@ -31,33 +37,76 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
 
     // ── Validation ────────────────────────────────────────────────────────────
 
+    /// <summary>
+    /// Shape rules for the message (same semantics as attributes, D14/D23). Constant rules are compiled into the
+    /// message by YFex.Validation.Generator; the rest (non-constant arguments, lambdas) run from
+    /// <see cref="RuntimeRules{T}"/>. Declare in the BASELINE configuration (shared by client and server) or clients
+    /// and server drift apart.
+    /// </summary>
+    public QueryConfigurationBuilder<TQuery, TResult> Validation(Action<ValidationBuilder<TQuery>> rules)
+    {
+        ValidationBuilder<TQuery>.Apply(rules);
+        return this;
+    }
+
+    /// <summary>Inline context rule (stage 5, server-side async I/O) returning a result.</summary>
     public QueryConfigurationBuilder<TQuery, TResult> Validate(
         Func<TQuery, CancellationToken, ValueTask<ValidationResult>> validator)
-    {
-        // Wrap to erased delegate at registration time (one allocation total per builder)
-        (_validators ??= []).Add(ValidatorDescriptor.Inline((q, ct) => validator((TQuery)q, ct)));
-        return this;
-    }
+        => AddContextRule(ContextRuleFactory<TQuery>.Shared(new InlineResultRule<TQuery>(validator)));
 
-    public QueryConfigurationBuilder<TQuery, TResult> Validate<TValidator>()
-        where TValidator : IQueryValidator<TQuery>
-    {
-        (_validators ??= []).Add(ValidatorDescriptor.FromType(typeof(TValidator)));
-        return this;
-    }
+    /// <summary>Inline context rule (stage 5) writing into the collector.</summary>
+    public QueryConfigurationBuilder<TQuery, TResult> Validate(
+        Func<TQuery, ViolationCollector, CancellationToken, ValueTask> rule)
+        => AddContextRule(ContextRuleFactory<TQuery>.Shared(new InlineCollectorRule<TQuery>(rule)));
 
-    public QueryConfigurationBuilder<TQuery, TResult> UseFluentValidator<TValidator>()
-        where TValidator : FluentValidation.AbstractValidator<TQuery>, new()
+    /// <summary>
+    /// Context rule type (stage 5): resolved from DI when registered, otherwise constructed with DI arguments.
+    /// Declare in the SERVER overrides (I/O the client can't do — 09 §3).
+    /// </summary>
+    public QueryConfigurationBuilder<TQuery, TResult> Validate<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TRule>()
+        where TRule : class, IContextRule<TQuery>
+        => AddContextRule(ContextRuleFactory<TQuery>.FromServices<TRule>());
+
+    [Obsolete("Implement YFex.Validation.IContextRule<T> and register it with .Validate<TRule>().")]
+    public QueryConfigurationBuilder<TQuery, TResult> UseValidator<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator>()
+        where TValidator : class, IQueryValidator<TQuery>
+        => AddContextRule(new ContextRuleFactory<TQuery>(static sp => new LegacyValidatorRule<TQuery>(
+            sp.GetService<TValidator>() ?? ActivatorUtilities.CreateInstance<TValidator>(sp))));
+
+    // ── Rules enforcement (stages 3–4, validation 09 §6, D33) ──────────────────
+
+    /// <summary>
+    /// Stage 3: loads the <typeparamref name="TSituation"/> the rules evaluate (all I/O — Principle A). The loader
+    /// comes from DI when registered, else it is constructed with DI-resolved constructor arguments.
+    /// </summary>
+    public QueryConfigurationBuilder<TQuery, TResult> UseSituation<TSituation, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TLoader>()
+        where TSituation : global::YFex.Rules.ISituation<TSituation>
+        where TLoader : class, global::YFex.Rules.ISituationLoader<TQuery, TSituation>
     {
-        var v = new TValidator();
-        // Capture instance at registration time; delegate created once.
-        (_validators ??= []).Add(ValidatorDescriptor.Inline(async (q, ct) =>
+        _rules = new RulesConfig<TQuery, TSituation>(static sp => sp.GetService<TLoader>() ?? ActivatorUtilities.CreateInstance<TLoader>(sp))
         {
-            var r = await v.ValidateAsync((TQuery)q, ct).ConfigureAwait(false);
-            if (r.IsValid) return ValidationResult.Success();
-            return ValidationResult.Failure(
-                r.Errors.Select(e => new ValidationError(e.PropertyName, e.ErrorMessage, e.ErrorCode)).ToArray());
-        }));
+            Options = _rules?.Options ?? global::YFex.Rules.EnforceOptions.Default,
+        };
+        return this;
+    }
+
+    /// <summary>
+    /// Stage 4: evaluates <paramref name="ruleSet"/> (through a registered <c>RuleSetHost&lt;TSituation&gt;</c> when present):
+    /// Denied → validation problem; NeedsApproval → approval tokens required; fingerprint mismatch → policy. Queries never reject on the verdict: the handler reads the decision (<see cref="IDecisionAccessor{TSituation}"/>).
+    /// </summary>
+    public QueryConfigurationBuilder<TQuery, TResult> Enforce<TSituation>(global::YFex.Rules.RuleSetDefinition<TSituation> ruleSet, global::YFex.Rules.EnforceOptions? options = null)
+        where TSituation : global::YFex.Rules.ISituation<TSituation>
+    {
+        ArgumentNullException.ThrowIfNull(ruleSet);
+        var rules = RulesConfig<TQuery, TSituation>.Expect(_rules, typeof(TQuery));
+        rules.Set = ruleSet;
+        if (options is not null) rules.Options = options;
+        return this;
+    }
+
+    private QueryConfigurationBuilder<TQuery, TResult> AddContextRule(ContextRuleFactory factory)
+    {
+        (_validators ??= []).Add(factory);
         return this;
     }
 
@@ -140,6 +189,9 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
     public QueryConfigurationBuilder<TQuery, TResult> ScopedByUser()           { _scope = CacheScope.User;    return this; }
     public QueryConfigurationBuilder<TQuery, TResult> ScopedBySession()        { _scope = CacheScope.Session; return this; }
     public QueryConfigurationBuilder<TQuery, TResult> Global()                 { _scope = CacheScope.Global;  return this; }
+
+    /// <summary>Scopes the cache key by <see cref="ICacheScopeContext.TenantId"/> (e.g. supplied by YFex.Cqrs.Tenancy).</summary>
+    public QueryConfigurationBuilder<TQuery, TResult> ScopedByTenant()          { _scope = CacheScope.Tenant; _scopeKey = null; return this; }
 
     public QueryConfigurationBuilder<TQuery, TResult> ScopedByTenant(Func<ICacheScopeContext, string> key)
     {
@@ -233,6 +285,7 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
         QueryType    = typeof(TQuery),
         ResultType   = typeof(TResult),
         Validators   = _validators?.ToArray(),
+        Rules        = _rules?.Build(typeof(TQuery), isQuery: true),
         Authorizers  = _authorizers?.ToArray(),
         Cache        = _cache,
         Scope        = _scope,

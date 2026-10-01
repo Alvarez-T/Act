@@ -18,7 +18,10 @@ internal sealed record QueryRegistrationMetadata
     /// <summary>Search keywords authored via <c>.Keywords(...)</c>. Null when unset.</summary>
     public string[]? Keywords    { get; init; }
 
-    public ValidatorDescriptor[]?              Validators   { get; init; }
+    /// <summary>Stages 3–4 (situation + rules), last configuration wins.</summary>
+    public YFex.Cqrs.Runtime.RulesStage? Rules { get; init; }
+
+    public YFex.Cqrs.Runtime.ContextRuleFactory[]?              Validators   { get; init; }
     public AuthorizerDescriptor[]?             Authorizers  { get; init; }
 
     public CachePolicy?                        Cache        { get; init; }

@@ -60,16 +60,19 @@ internal readonly record struct ObservablePropertyModel(
     /// </summary>
     bool IsNullableActivatable,
     /// <summary>
-    /// Non-null when [ValidateWith] attribute is present. Comma-separated list of fully-qualified
-    /// validator type names that the emitter calls statically in the generated Validate_X helper.
+    /// True when [Observable] is on a field (<c>_title</c> → <c>Title</c>). The emitter then writes a regular,
+    /// non-partial property over the user's field instead of implementing a partial property with its own backing field.
     /// </summary>
-    EquatableArray<string> ValidatorTypes,
+    bool IsFieldBacked
+) : IEquatable<ObservablePropertyModel>
+{
     /// <summary>
-    /// True when [ValidateAsync] is present on this property.
-    /// Emitter generates an async Validate_X_Async helper and wires a fire-and-forget call.
+    /// True when the setter calls the <c>partial void __OnValidate_X(in T value)</c> hook (D22): every
+    /// writable, non-Task-notifier property. YFex.Validation.Generator mirrors this rule exactly — it may only
+    /// implement hooks that are declared here (CS0759 otherwise).
     /// </summary>
-    EquatableArray<string> AsyncValidatorTypes
-) : IEquatable<ObservablePropertyModel>;
+    public bool HasValidationHook => !IsReadOnly && !NotifyOnTaskCompletion;
+}
 
 internal readonly record struct ComputedPropertyModel(
     string PropertyName,

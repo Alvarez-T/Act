@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- SQL IRuleStore for servers (validation 05 §4.3): published rule data (tables, parameters, overrides) over YFex.Data
+       connections + dialects. Plain ADO.NET commands (no Dapper in this project's code) — SQLite, Postgres, SQL Server, Oracle. -->
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <RootNamespace>YFex.Rules.Data</RootNamespace>
+    <AssemblyName>YFex.Rules.Data</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Rules\YFex.Rules.csproj" />
+    <!-- YFex.Data lives in its own repo (C:\Dev\YFex\YFex.Data). -->
+    <ProjectReference Include="..\..\..\..\YFex.Data\src\YFex.Data\YFex.Data.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="YFex.Rules.Data.Tests" />
+  </ItemGroup>
+
+</Project>

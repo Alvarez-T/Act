@@ -64,10 +64,21 @@ public abstract class MvvmStateObject : StateObject,
     // ------------------------------------------------------------------
     public event EventHandler<DataErrorsChangedEventArgs>? ErrorsChanged;
 
-    bool INotifyDataErrorInfo.HasErrors => ValidationIfCreated?.HasErrors ?? false;
+    // 07 §8: INDEI reflects what the user may SEE (display policy: touched / submitted). Gates and CanSave use
+    // Validation.HasErrors, which ignores visibility.
+    bool INotifyDataErrorInfo.HasErrors => ValidationIfCreated?.HasVisibleErrors ?? false;
 
+    /// <summary>
+    /// Stable <see cref="YFex.State.Validation.ErrorItem"/> objects (created once per stored violation; ToString() =
+    /// message). Null/empty name = form-level + every visible violation. Warnings/infos are included — templates
+    /// color by <c>ErrorItem.Severity</c>.
+    /// </summary>
     IEnumerable INotifyDataErrorInfo.GetErrors(string? propertyName)
-        => ValidationIfCreated?.GetErrors(propertyName) ?? System.Array.Empty<string>();
+    {
+        var bag = ValidationIfCreated;
+        if (bag is null) return System.Array.Empty<YFex.State.Validation.ErrorItem>();
+        return string.IsNullOrEmpty(propertyName) ? bag.GetAllVisibleItems() : bag.GetVisibleItems(propertyName);
+    }
 
     private static readonly SendOrPostCallback s_errorsChangedCallback = static state =>
     {
@@ -90,10 +101,17 @@ public abstract class MvvmStateObject : StateObject,
         Subscribe(this);
     }
 
+    /// <inheritdoc/>
+    protected override void OnValidationCreated(YFex.State.Validation.ValidationBag bag)
+    {
+        base.OnValidationCreated(bag);
+        bag.ValidationChanged += OnValidationChanged;
+    }
+
     /// <summary>
     /// Wires the <see cref="YFex.State.Validation.ValidationBag.ValidationChanged"/> event
-    /// to <see cref="ErrorsChanged"/>. Called lazily on first access of <see cref="StateObject.Validation"/>
-    /// or explicitly if you need INDEI before the first validation fires.
+    /// to <see cref="ErrorsChanged"/>. Done automatically when <see cref="StateObject.Validation"/>
+    /// is first created; calling it again is harmless (idempotent).
     /// </summary>
     protected void EnsureValidationWired()
     {

@@ -1,3 +1,4 @@
+#pragma warning disable CS0618 // exercises the obsolete (Phase 0) validation API on purpose
 using System.Collections;
 using System.ComponentModel;
 using YFex.State.Mvvm;
@@ -83,7 +84,7 @@ public class MvvmStateObjectTests
 
         var msgs = ((INotifyDataErrorInfo)vm).GetErrors("FirstName");
 
-        msgs.Cast<string>().Should().Contain("required");
+        msgs.Cast<ErrorItem>().Select(e => e.Message).Should().Contain("required");
     }
 
     [Fact]
@@ -145,13 +146,13 @@ public class MvvmStateObjectTests
         // Set
         vm.Validation.Set("Email", "invalid");
         indei.HasErrors.Should().BeTrue();
-        indei.GetErrors("Email").Cast<string>().Should().Contain("invalid");
+        indei.GetErrors("Email").Cast<ErrorItem>().Select(e => e.Message).Should().Contain("invalid");
         firedFor.Should().ContainSingle().Which.Should().Be("Email");
 
         // Clear
         vm.Validation.Clear("Email");
         indei.HasErrors.Should().BeFalse();
-        indei.GetErrors("Email").Cast<string>().Should().BeEmpty();
+        indei.GetErrors("Email").Cast<ErrorItem>().Should().BeEmpty();
         firedFor.Should().HaveCount(2).And.EndWith("Email");
     }
 

@@ -19,18 +19,29 @@ namespace YFex.Cqrs.SourceGenerator
         /// </summary>
         public bool IsCacheable { get; }
 
+        /// <summary><see cref="ReturnType"/> as ActualLab.Generators prints it in proxy signatures
+        /// (<c>global::</c>, no C# keywords): <c>global::System.Collections.Generic.List&lt;global::System.String&gt;</c>.</summary>
+        public string ProxyReturnType { get; }
+
+        /// <summary><see cref="ReturnType"/> as printed in the proxy's <c>KeepCode</c> (no <c>global::</c>, no keywords).</summary>
+        public string KeepReturnType { get; }
+
         public QueryToGenerate(
             string recordName,
             string methodName,
             string returnType,
             EquatableArray<ParameterInfo> parameters,
-            bool isCacheable)
+            bool isCacheable,
+            string proxyReturnType,
+            string keepReturnType)
         {
             RecordName = recordName;
             MethodName = methodName;
             ReturnType = returnType;
             Parameters = parameters;
             IsCacheable = isCacheable;
+            ProxyReturnType = proxyReturnType;
+            KeepReturnType = keepReturnType;
         }
 
         public bool Equals(QueryToGenerate other)
@@ -38,7 +49,9 @@ namespace YFex.Cqrs.SourceGenerator
             && MethodName == other.MethodName
             && ReturnType == other.ReturnType
             && Parameters == other.Parameters
-            && IsCacheable == other.IsCacheable;
+            && IsCacheable == other.IsCacheable
+            && ProxyReturnType == other.ProxyReturnType
+            && KeepReturnType == other.KeepReturnType;
 
         public override bool Equals(object obj)
             => obj is QueryToGenerate other && Equals(other);
@@ -53,6 +66,7 @@ namespace YFex.Cqrs.SourceGenerator
                 h = h * 31 + (ReturnType?.GetHashCode() ?? 0);
                 h = h * 31 + Parameters.GetHashCode();
                 h = h * 31 + IsCacheable.GetHashCode();
+                h = h * 31 + (ProxyReturnType?.GetHashCode() ?? 0);
                 return h;
             }
         }

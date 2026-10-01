@@ -7,6 +7,7 @@ using YFex.Authorization.Public;
 using YFex.Cqrs.Configuration;
 using YFex.Cqrs.Registration;
 using YFex.Cqrs.Runtime;
+using YFex.Validation;
 
 namespace YFex.Cqrs;
 
@@ -288,7 +289,7 @@ public sealed class CompiledMessagingRegistry
         IPolicyEvaluator? evaluator,
         Func<ClaimsPrincipal, IAuthContext>? principalFactory)
         => new(
-            BuildCompositeValidator(acc.Validators),
+            BuildContextValidator(acc.Validators),
             BuildCompositeAuthorizer(acc.Authorizers, evaluator, principalFactory),
             acc.IdempotencyKey,
             acc.ConflictPolicy,
@@ -301,14 +302,15 @@ public sealed class CompiledMessagingRegistry
             CompileInvalidationTargets(acc.Invalidates),
             acc.Reverse.HasValue ? CompileReverse(acc.Reverse.Value) : null,
             acc.OfflineHandler?.Invoke,
-            acc.Resilience);
+            acc.Resilience,
+            acc.Rules);
 
     private static QueryPolicy CompileQueryPolicy(
         QueryAccumulator acc,
         IPolicyEvaluator? evaluator,
         Func<ClaimsPrincipal, IAuthContext>? principalFactory)
         => new(
-            BuildCompositeValidator(acc.Validators),
+            BuildContextValidator(acc.Validators),
             BuildCompositeAuthorizer(acc.Authorizers, evaluator, principalFactory),
             acc.Cache,
             acc.Scope,
@@ -316,73 +318,16 @@ public sealed class CompiledMessagingRegistry
             acc.TagKey,
             acc.StaleAfter,
             acc.Timeout,
-            CompileQueryInvalidators(acc.InvalidatedBy));
+            CompileQueryInvalidators(acc.InvalidatedBy),
+            acc.Rules);
 
-    // ── Composite delegate builders ───────────────────────────────────────────
+    // ── Stage 5: context rules ────────────────────────────────────────────────
     //
-    // Principle 6: N descriptors → ONE pre-compiled delegate.
-    // Principle 9: sync fast-path avoids AsyncStateMachineBox allocation when
-    //              validators complete synchronously (the common case).
+    // Every factory registered for the message (baseline + overrides, in order) → ONE typed MessageValidator<T>.
+    // The first factory knows T, so no MakeGenericType is needed.
 
-    private static Func<object, CancellationToken, ValueTask<ValidationResult>>?
-        BuildCompositeValidator(List<ValidatorDescriptor>? descriptors)
-    {
-        if (descriptors is null || descriptors.Count == 0) return null;
-
-        // Collect only inline delegates (type-ref validators handled by Plan 3 dispatcher).
-        var inline = new List<Func<object, CancellationToken, ValueTask<ValidationResult>>>(
-            descriptors.Count);
-        for (int i = 0; i < descriptors.Count; i++)
-        {
-            var d = descriptors[i];
-            if (d.Kind == ValidatorKind.Inline && d.InlineDelegate is not null)
-                inline.Add(d.InlineDelegate);
-        }
-
-        if (inline.Count == 0) return null;
-        if (inline.Count == 1) return inline[0]; // hot path: single validator — zero overhead
-
-        // Multi-validator: sync fast-path avoids state-machine allocation for sync validators.
-        var arr = inline.ToArray();
-        return (obj, ct) =>
-        {
-            for (int i = 0; i < arr.Length; i++)
-            {
-                var vt = arr[i](obj, ct);
-                if (vt.IsCompletedSuccessfully)
-                {
-                    // Synchronous result — inspect without await (no state machine).
-                    var r = vt.Result;
-                    if (!r.IsValid) return new ValueTask<ValidationResult>(r);
-                }
-                else
-                {
-                    // Async validator — hand off remaining work to the async continuation.
-                    return ContinueValidationAsync(arr, i, vt, obj, ct);
-                }
-            }
-            return new ValueTask<ValidationResult>(ValidationResult.Success());
-        };
-    }
-
-    // Async fallback — only invoked when a validator truly yields (uncommon case).
-    // The allocation of the state machine here is unavoidable and correct.
-    private static async ValueTask<ValidationResult> ContinueValidationAsync(
-        Func<object, CancellationToken, ValueTask<ValidationResult>>[] arr,
-        int asyncIdx,
-        ValueTask<ValidationResult> asyncTask,
-        object obj,
-        CancellationToken ct)
-    {
-        var r = await asyncTask.ConfigureAwait(false);
-        if (!r.IsValid) return r;
-        for (int i = asyncIdx + 1; i < arr.Length; i++)
-        {
-            r = await arr[i](obj, ct).ConfigureAwait(false);
-            if (!r.IsValid) return r;
-        }
-        return ValidationResult.Success();
-    }
+    private static MessageValidator? BuildContextValidator(List<ContextRuleFactory>? factories)
+        => factories is null || factories.Count == 0 ? null : factories[0].CreateValidator(factories);
 
     // Translates registration-phase authorizer descriptors into ONE pre-compiled AND-predicate.
     //
@@ -548,7 +493,8 @@ public sealed class CompiledMessagingRegistry
 
     private sealed class QueryAccumulator
     {
-        public List<ValidatorDescriptor>?        Validators;
+        public List<ContextRuleFactory>?         Validators;
+        public RulesStage?                       Rules;
         public List<AuthorizerDescriptor>?       Authorizers;
         public CachePolicy?                      Cache;
         public CacheScope                        Scope      = CacheScope.Global;
@@ -563,6 +509,7 @@ public sealed class CompiledMessagingRegistry
         public void Merge(QueryRegistrationMetadata m)
         {
             if (m.Validators    is { } v)   (Validators    ??= []).AddRange(v);
+            if (m.Rules         is not null) Rules = m.Rules;
             if (m.Authorizers   is { } a)   (Authorizers   ??= []).AddRange(a);
             if (m.InvalidatedBy is { } inv) (InvalidatedBy ??= []).AddRange(inv);
             if (m.Cache      is not null) Cache      = m.Cache;
@@ -578,7 +525,8 @@ public sealed class CompiledMessagingRegistry
 
     private sealed class CommandAccumulator
     {
-        public List<ValidatorDescriptor>?        Validators;
+        public List<ContextRuleFactory>?         Validators;
+        public RulesStage?                       Rules;
         public List<AuthorizerDescriptor>?       Authorizers;
         public List<InvalidationRuleDescriptor>? Invalidates;
         public Func<object, string>?             IdempotencyKey;
@@ -597,6 +545,7 @@ public sealed class CompiledMessagingRegistry
         public void Merge(CommandRegistrationMetadata m)
         {
             if (m.Validators  is { } v) (Validators  ??= []).AddRange(v);
+            if (m.Rules       is not null) Rules = m.Rules;
             if (m.Authorizers is { } a) (Authorizers ??= []).AddRange(a);
             if (m.Invalidates is { } i) (Invalidates ??= []).AddRange(i);
             if (m.IdempotencyKey       is not null) IdempotencyKey    = m.IdempotencyKey;

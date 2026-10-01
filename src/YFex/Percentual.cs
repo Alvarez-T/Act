@@ -21,7 +21,8 @@ public readonly record struct Percentual
       IMultiplyOperators<Percentual, decimal, Percentual>,
       IDivisionOperators<Percentual, decimal, Percentual>,
       IUnaryNegationOperators<Percentual, Percentual>,
-      IComparisonOperators<Percentual, Percentual, bool>
+      IComparisonOperators<Percentual, Percentual, bool>,
+      IRawValue<Percentual>
 {
     // ── Internal storage ─────────────────────────────────────────────────────
     // Stored as the percentage value (e.g. 47.5 for "47.5 %"), never as a
@@ -56,6 +57,21 @@ public readonly record struct Percentual
 
         DecimalPlaces = decimalPlaces;
         _percentageValue = Math.Round(percentageValue, decimalPlaces, MidpointRounding.AwayFromZero);
+    }
+
+    // ── Raw form (rules, tables, bounds, wire) ───────────────────────────────
+
+    /// <summary>Raw type <c>"percent"</c>: decimal storage of the percentage value, decimal places in <see cref="RawValue.Aux"/>.</summary>
+    public static RawType RawType { get; } = RawType.Define<Percentual>("percent", ValueKind.Decimal, RawType.SpanFormatter<Percentual>());
+
+    public RawValue ToRaw() => RawValue.Typed(RawType, _percentageValue, (byte)DecimalPlaces);
+
+    /// <summary>Reads a Percentual, or a plain number as a percentage value (10 → 10 %).</summary>
+    public static bool TryFromRaw(in RawValue raw, out Percentual value)
+    {
+        bool ok = raw.TryRead(RawType, out decimal d);
+        value = !ok ? default : raw.IsTyped ? new Percentual(d, raw.Aux) : FromPercentage(d);
+        return ok;
     }
 
     // ── Named factory methods (replace the dangerous implicit operators) ──────

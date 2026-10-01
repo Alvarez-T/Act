@@ -4,6 +4,7 @@
     <TargetFramework>net11.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
     <PackageId>YFex.Persistence.Sqlite</PackageId>
     <Description>SQLite (Microsoft.Data.Sqlite) backend for YFex.Persistence: SqliteKeyValueStore and SqliteDurableQueue&lt;T&gt; over a local WAL database. Replaces the per-project SQLite storage stacks.</Description>
     <PackageTags>yfex;persistence;sqlite;storage;queue</PackageTags>

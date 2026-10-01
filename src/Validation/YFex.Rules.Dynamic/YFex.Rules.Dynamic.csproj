@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Runtime-authored rules (validation 05 §8, Phase 6): JSON rule specs (AST) with arithmetic, built-in + app/domain
+       functions, type-checked at publish, compiled once to a postfix program, interpreted over ISituation<T>.Read. Plugs into
+       YFex.Rules through IRuntimeRuleCodec (host.UseRuntimeRules). Layer 1.5: → YFex.Rules (+ YFex.Persistence for the
+       persisted compiled-program cache). -->
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <RootNamespace>YFex.Rules.Dynamic</RootNamespace>
+    <AssemblyName>YFex.Rules.Dynamic</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Rules\YFex.Rules.csproj" />
+    <ProjectReference Include="..\..\Persistence\YFex.Persistence\YFex.Persistence.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="YFex.Rules.Dynamic.Tests" />
+  </ItemGroup>
+
+</Project>

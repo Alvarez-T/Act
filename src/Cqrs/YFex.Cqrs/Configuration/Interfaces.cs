@@ -1,14 +1,17 @@
 using System.Security.Claims;
+using YFex.Validation;
 
 namespace YFex.Cqrs.Configuration;
 
 // ── Validators ───────────────────────────────────────────────────────────────
 
+[Obsolete("Implement YFex.Validation.IContextRule<TQuery> and register it with .Validate<TRule>().")]
 public interface IQueryValidator<TQuery>
 {
     ValueTask<ValidationResult> ValidateAsync(TQuery query, CancellationToken ct);
 }
 
+[Obsolete("Implement YFex.Validation.IContextRule<TCommand> and register it with .Validate<TRule>().")]
 public interface ICommandValidator<TCommand>
 {
     ValueTask<ValidationResult> ValidateAsync(TCommand command, CancellationToken ct);

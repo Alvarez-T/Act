@@ -39,7 +39,8 @@ public readonly record struct Money :
     IUnaryNegationOperators<Money, Money>,
     IComparisonOperators<Money, Money, bool>,
     IMinMaxValue<Money>,
-    IAdditiveIdentity<Money, Money>
+    IAdditiveIdentity<Money, Money>,
+    IAmount<Money>
 {
     /// <summary>Fixed monetary scale (2 decimal places).</summary>
     public const int Scale = 2;
@@ -68,6 +69,19 @@ public readonly record struct Money :
     static Money IMinMaxValue<Money>.MinValue => MinValue;
     static Money IMinMaxValue<Money>.MaxValue => MaxValue;
     static Money IAdditiveIdentity<Money, Money>.AdditiveIdentity => Zero;
+
+    /// <summary>Raw type <c>"money"</c> (decimal storage) — rules, tables, bounds, wire.</summary>
+    public static RawType RawType { get; } = RawType.Define<Money>("money", ValueKind.Decimal, RawType.SpanFormatter<Money>());
+
+    public RawValue ToRaw() => RawValue.Typed(RawType, _amount);
+
+    /// <summary>Reads Money, or a plain number as an amount.</summary>
+    public static bool TryFromRaw(in RawValue raw, out Money value)
+    {
+        bool ok = raw.TryRead(RawType, out decimal d);
+        value = ok ? new Money(d) : default;
+        return ok;
+    }
 
     /// <summary>Creates a money value from a whole number of cents.</summary>
     public static Money FromCents(long cents) => new(cents / 100m);

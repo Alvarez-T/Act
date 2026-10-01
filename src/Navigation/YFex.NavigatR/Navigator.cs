@@ -748,7 +748,7 @@ public sealed class Navigator : IDisposable
             return anon.ViewModelType;
 
         return _scopeContext is not null
-            ? _routeRegistry.ResolveViewModel(route, _scopeContext.Current)   // per-scope override, else base
+            ? _routeRegistry.ResolveViewModel(route, _scopeContext.Current.Rungs)   // per-scope override, else base
             : _routeRegistry.ResolveViewModel(route);
     }
 

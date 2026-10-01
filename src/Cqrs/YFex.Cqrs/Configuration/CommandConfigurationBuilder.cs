@@ -2,6 +2,11 @@
 using System.Security.Claims;
 using YFex.Authorization.Public;
 using YFex.Cqrs.Registration;
+using System.Diagnostics.CodeAnalysis;
+using Microsoft.Extensions.DependencyInjection;
+using YFex.Cqrs.Runtime;
+using YFex.Rules;
+using YFex.Validation;
 
 namespace YFex.Cqrs.Configuration;
 
@@ -12,7 +17,8 @@ public sealed class CommandConfigurationBuilder<TCommand>
     : ICommandConfigurationSource
     where TCommand : ICommand
 {
-    private List<ValidatorDescriptor>?          _validators;
+    private List<ContextRuleFactory>?           _validators;
+    private RulesConfig?                        _rules;
     private List<AuthorizerDescriptor>?         _authorizers;
     private List<InvalidationRuleDescriptor>?   _invalidates;
     private Func<object, string>?               _idempotencyKey;
@@ -32,31 +38,96 @@ public sealed class CommandConfigurationBuilder<TCommand>
 
     // â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+    /// <summary>
+    /// Shape rules for the message (same semantics as attributes, D14/D23). Constant rules are compiled into the
+    /// message by YFex.Validation.Generator; the rest (non-constant arguments, lambdas) run from
+    /// <see cref="RuntimeRules{T}"/>. Declare in the BASELINE configuration (shared by client and server) or clients
+    /// and server drift apart.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> Validation(Action<ValidationBuilder<TCommand>> rules)
+    {
+        ValidationBuilder<TCommand>.Apply(rules);
+        return this;
+    }
+
+    /// <summary>Inline context rule (stage 5, server-side async I/O) returning a result.</summary>
     public CommandConfigurationBuilder<TCommand> Validate(
         Func<TCommand, CancellationToken, ValueTask<ValidationResult>> validator)
-    {
-        (_validators ??= []).Add(ValidatorDescriptor.Inline((c, ct) => validator((TCommand)c, ct)));
-        return this;
-    }
+        => AddContextRule(ContextRuleFactory<TCommand>.Shared(new InlineResultRule<TCommand>(validator)));
 
-    public CommandConfigurationBuilder<TCommand> Validate<TValidator>()
-        where TValidator : ICommandValidator<TCommand>
-    {
-        (_validators ??= []).Add(ValidatorDescriptor.FromType(typeof(TValidator)));
-        return this;
-    }
+    /// <summary>Inline context rule (stage 5) writing into the collector.</summary>
+    public CommandConfigurationBuilder<TCommand> Validate(
+        Func<TCommand, ViolationCollector, CancellationToken, ValueTask> rule)
+        => AddContextRule(ContextRuleFactory<TCommand>.Shared(new InlineCollectorRule<TCommand>(rule)));
 
-    public CommandConfigurationBuilder<TCommand> UseFluentValidator<TValidator>()
-        where TValidator : FluentValidation.AbstractValidator<TCommand>, new()
+    /// <summary>
+    /// Context rule type (stage 5): resolved from DI when registered, otherwise constructed with DI arguments.
+    /// Declare in the SERVER overrides (I/O the client can't do — 09 §3).
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> Validate<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TRule>()
+        where TRule : class, IContextRule<TCommand>
+        => AddContextRule(ContextRuleFactory<TCommand>.FromServices<TRule>());
+
+    [Obsolete("Implement YFex.Validation.IContextRule<T> and register it with .Validate<TRule>().")]
+    public CommandConfigurationBuilder<TCommand> UseValidator<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator>()
+        where TValidator : class, ICommandValidator<TCommand>
+        => AddContextRule(new ContextRuleFactory<TCommand>(static sp => new LegacyValidatorRule<TCommand>(
+            sp.GetService<TValidator>() ?? ActivatorUtilities.CreateInstance<TValidator>(sp))));
+
+    // ── Rules enforcement (stages 3–4, validation 09 §6, D33) ──────────────────
+
+    /// <summary>
+    /// Stage 3: loads the <typeparamref name="TSituation"/> the rules evaluate (all I/O — Principle A). The loader
+    /// comes from DI when registered, else it is constructed with DI-resolved constructor arguments.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> UseSituation<TSituation, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TLoader>()
+        where TSituation : global::YFex.Rules.ISituation<TSituation>
+        where TLoader : class, global::YFex.Rules.ISituationLoader<TCommand, TSituation>
     {
-        var v = new TValidator();
-        (_validators ??= []).Add(ValidatorDescriptor.Inline(async (c, ct) =>
+        _rules = new RulesConfig<TCommand, TSituation>(static sp => sp.GetService<TLoader>() ?? ActivatorUtilities.CreateInstance<TLoader>(sp))
         {
-            var r = await v.ValidateAsync((TCommand)c, ct).ConfigureAwait(false);
-            if (r.IsValid) return ValidationResult.Success();
-            return ValidationResult.Failure(
-                r.Errors.Select(e => new ValidationError(e.PropertyName, e.ErrorMessage, e.ErrorCode)).ToArray());
-        }));
+            Options = _rules?.Options ?? global::YFex.Rules.EnforceOptions.Default,
+        };
+        return this;
+    }
+
+    /// <summary>
+    /// Stage 4: evaluates <paramref name="ruleSet"/> (through a registered <c>RuleSetHost&lt;TSituation&gt;</c> when present):
+    /// Denied → validation problem; NeedsApproval → approval tokens required; fingerprint mismatch → policy.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> Enforce<TSituation>(global::YFex.Rules.RuleSetDefinition<TSituation> ruleSet, global::YFex.Rules.EnforceOptions? options = null)
+        where TSituation : global::YFex.Rules.ISituation<TSituation>
+    {
+        ArgumentNullException.ThrowIfNull(ruleSet);
+        var rules = RulesConfig<TCommand, TSituation>.Expect(_rules, typeof(TCommand));
+        rules.Set = ruleSet;
+        if (options is not null) rules.Options = options;
+        return this;
+    }
+
+    /// <summary>
+    /// Renames situation paths to this command's paths in the violations a rule rejection returns (04 §14), e.g.
+    /// <c>m => m.Path("Total", "Amount").Path("Lines[]", "Items[]")</c> — so they land on the right field.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> MapSituationPaths(Func<global::YFex.Rules.SituationPathMap, global::YFex.Rules.SituationPathMap> map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        var rules = _rules ?? throw new InvalidOperationException($"'{typeof(TCommand).Name}': .MapSituationPaths requires .UseSituation().Enforce().");
+        rules.Options = rules.Options with { Paths = map(rules.Options.Paths) };
+        return this;
+    }
+
+    /// <summary>What to do when an <see cref="IDecisionBound"/> command's fingerprint differs from the server's (09 §8).</summary>
+    public CommandConfigurationBuilder<TCommand> OnDecisionMismatch(DecisionMismatchPolicy policy)
+    {
+        var rules = _rules ?? throw new InvalidOperationException($"'{typeof(TCommand).Name}': .OnDecisionMismatch requires .UseSituation().Enforce().");
+        rules.Options = rules.Options with { OnMismatch = policy };
+        return this;
+    }
+
+    private CommandConfigurationBuilder<TCommand> AddContextRule(ContextRuleFactory factory)
+    {
+        (_validators ??= []).Add(factory);
         return this;
     }
 
@@ -300,6 +371,7 @@ public sealed class CommandConfigurationBuilder<TCommand>
         ResultType           = null,
         IsQueueable          = typeof(IQueueable).IsAssignableFrom(typeof(TCommand)),
         Validators           = _validators?.ToArray(),
+        Rules                = _rules?.Build(typeof(TCommand), isQuery: false),
         Authorizers          = _authorizers?.ToArray(),
         Invalidates          = _invalidates?.ToArray(),
         IdempotencyKey       = _idempotencyKey,
@@ -324,7 +396,8 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
     : ICommandConfigurationSource
     where TCommand : ICommand<TResult>
 {
-    private List<ValidatorDescriptor>?          _validators;
+    private List<ContextRuleFactory>?           _validators;
+    private RulesConfig?                        _rules;
     private List<AuthorizerDescriptor>?         _authorizers;
     private List<InvalidationRuleDescriptor>?   _invalidates;
     private Func<object, string>?               _idempotencyKey;
@@ -342,31 +415,96 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
     private string[]?                          _keywords;
     private bool                                _irreversible;
 
+    /// <summary>
+    /// Shape rules for the message (same semantics as attributes, D14/D23). Constant rules are compiled into the
+    /// message by YFex.Validation.Generator; the rest (non-constant arguments, lambdas) run from
+    /// <see cref="RuntimeRules{T}"/>. Declare in the BASELINE configuration (shared by client and server) or clients
+    /// and server drift apart.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand, TResult> Validation(Action<ValidationBuilder<TCommand>> rules)
+    {
+        ValidationBuilder<TCommand>.Apply(rules);
+        return this;
+    }
+
+    /// <summary>Inline context rule (stage 5, server-side async I/O) returning a result.</summary>
     public CommandConfigurationBuilder<TCommand, TResult> Validate(
         Func<TCommand, CancellationToken, ValueTask<ValidationResult>> validator)
-    {
-        (_validators ??= []).Add(ValidatorDescriptor.Inline((c, ct) => validator((TCommand)c, ct)));
-        return this;
-    }
+        => AddContextRule(ContextRuleFactory<TCommand>.Shared(new InlineResultRule<TCommand>(validator)));
 
-    public CommandConfigurationBuilder<TCommand, TResult> Validate<TValidator>()
-        where TValidator : ICommandValidator<TCommand>
-    {
-        (_validators ??= []).Add(ValidatorDescriptor.FromType(typeof(TValidator)));
-        return this;
-    }
+    /// <summary>Inline context rule (stage 5) writing into the collector.</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> Validate(
+        Func<TCommand, ViolationCollector, CancellationToken, ValueTask> rule)
+        => AddContextRule(ContextRuleFactory<TCommand>.Shared(new InlineCollectorRule<TCommand>(rule)));
 
-    public CommandConfigurationBuilder<TCommand, TResult> UseFluentValidator<TValidator>()
-        where TValidator : FluentValidation.AbstractValidator<TCommand>, new()
+    /// <summary>
+    /// Context rule type (stage 5): resolved from DI when registered, otherwise constructed with DI arguments.
+    /// Declare in the SERVER overrides (I/O the client can't do — 09 §3).
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand, TResult> Validate<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TRule>()
+        where TRule : class, IContextRule<TCommand>
+        => AddContextRule(ContextRuleFactory<TCommand>.FromServices<TRule>());
+
+    [Obsolete("Implement YFex.Validation.IContextRule<T> and register it with .Validate<TRule>().")]
+    public CommandConfigurationBuilder<TCommand, TResult> UseValidator<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TValidator>()
+        where TValidator : class, ICommandValidator<TCommand>
+        => AddContextRule(new ContextRuleFactory<TCommand>(static sp => new LegacyValidatorRule<TCommand>(
+            sp.GetService<TValidator>() ?? ActivatorUtilities.CreateInstance<TValidator>(sp))));
+
+    // ── Rules enforcement (stages 3–4, validation 09 §6, D33) ──────────────────
+
+    /// <summary>
+    /// Stage 3: loads the <typeparamref name="TSituation"/> the rules evaluate (all I/O — Principle A). The loader
+    /// comes from DI when registered, else it is constructed with DI-resolved constructor arguments.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand, TResult> UseSituation<TSituation, [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] TLoader>()
+        where TSituation : global::YFex.Rules.ISituation<TSituation>
+        where TLoader : class, global::YFex.Rules.ISituationLoader<TCommand, TSituation>
     {
-        var v = new TValidator();
-        (_validators ??= []).Add(ValidatorDescriptor.Inline(async (c, ct) =>
+        _rules = new RulesConfig<TCommand, TSituation>(static sp => sp.GetService<TLoader>() ?? ActivatorUtilities.CreateInstance<TLoader>(sp))
         {
-            var r = await v.ValidateAsync((TCommand)c, ct).ConfigureAwait(false);
-            if (r.IsValid) return ValidationResult.Success();
-            return ValidationResult.Failure(
-                r.Errors.Select(e => new ValidationError(e.PropertyName, e.ErrorMessage, e.ErrorCode)).ToArray());
-        }));
+            Options = _rules?.Options ?? global::YFex.Rules.EnforceOptions.Default,
+        };
+        return this;
+    }
+
+    /// <summary>
+    /// Stage 4: evaluates <paramref name="ruleSet"/> (through a registered <c>RuleSetHost&lt;TSituation&gt;</c> when present):
+    /// Denied → validation problem; NeedsApproval → approval tokens required; fingerprint mismatch → policy.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand, TResult> Enforce<TSituation>(global::YFex.Rules.RuleSetDefinition<TSituation> ruleSet, global::YFex.Rules.EnforceOptions? options = null)
+        where TSituation : global::YFex.Rules.ISituation<TSituation>
+    {
+        ArgumentNullException.ThrowIfNull(ruleSet);
+        var rules = RulesConfig<TCommand, TSituation>.Expect(_rules, typeof(TCommand));
+        rules.Set = ruleSet;
+        if (options is not null) rules.Options = options;
+        return this;
+    }
+
+    /// <summary>
+    /// Renames situation paths to this command's paths in the violations a rule rejection returns (04 §14), e.g.
+    /// <c>m => m.Path("Total", "Amount").Path("Lines[]", "Items[]")</c> — so they land on the right field.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand, TResult> MapSituationPaths(Func<global::YFex.Rules.SituationPathMap, global::YFex.Rules.SituationPathMap> map)
+    {
+        ArgumentNullException.ThrowIfNull(map);
+        var rules = _rules ?? throw new InvalidOperationException($"'{typeof(TCommand).Name}': .MapSituationPaths requires .UseSituation().Enforce().");
+        rules.Options = rules.Options with { Paths = map(rules.Options.Paths) };
+        return this;
+    }
+
+    /// <summary>What to do when an <see cref="IDecisionBound"/> command's fingerprint differs from the server's (09 §8).</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> OnDecisionMismatch(DecisionMismatchPolicy policy)
+    {
+        var rules = _rules ?? throw new InvalidOperationException($"'{typeof(TCommand).Name}': .OnDecisionMismatch requires .UseSituation().Enforce().");
+        rules.Options = rules.Options with { OnMismatch = policy };
+        return this;
+    }
+
+    private CommandConfigurationBuilder<TCommand, TResult> AddContextRule(ContextRuleFactory factory)
+    {
+        (_validators ??= []).Add(factory);
         return this;
     }
 
@@ -604,6 +742,7 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
         ResultType           = typeof(TResult),
         IsQueueable          = typeof(IQueueable).IsAssignableFrom(typeof(TCommand)),
         Validators           = _validators?.ToArray(),
+        Rules                = _rules?.Build(typeof(TCommand), isQuery: false),
         Authorizers          = _authorizers?.ToArray(),
         Invalidates          = _invalidates?.ToArray(),
         IdempotencyKey       = _idempotencyKey,

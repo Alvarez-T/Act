@@ -47,40 +47,35 @@ public sealed class RouteRegistry
     // Keyed by string value (route resolution is infrequent, so no interning).
     // -----------------------------------------------------------------------
 
-    private Dictionary<(Type Route, YFex.Tenancy.Scope Kind, string Value), Type>? _scopedRouteToViewModel;
+    // Keyed by (route type, app-defined specificity rank, string value). The framework fixes no
+    // levels — the app supplies its own via any byte-backed enum.
+    private Dictionary<(Type Route, byte Rank, string Value), Type>? _scopedRouteToViewModel;
 
     /// <summary>
-    /// Registers a scope-specific route → ViewModel override. When the current identity matches
-    /// <paramref name="scope"/>/<paramref name="value"/>, <see cref="ResolveViewModel(IRoute, in YFex.Tenancy.ScopeIdentity)"/>
-    /// returns <typeparamref name="TViewModel"/> instead of the base mapping. Most-specific wins
-    /// (User → Tenant → Organization).
+    /// Registers a scope-specific route → ViewModel override, keyed by the app's own level enum.
+    /// When the current identity carries that level/value, <see cref="ResolveViewModel(IRoute, System.ReadOnlySpan{YFex.Tenancy.ScopeValue})"/>
+    /// returns <typeparamref name="TViewModel"/> instead of the base mapping. Most-specific wins.
     /// </summary>
-    public void RegisterFor<TRoute, TViewModel>(YFex.Tenancy.Scope scope, string value)
+    public void RegisterFor<TRoute, TViewModel>(System.Enum scope, string value)
         where TRoute : IRoute
         where TViewModel : INavigable
     {
-        (_scopedRouteToViewModel ??= new())[(typeof(TRoute), scope, value)] = typeof(TViewModel);
+        (_scopedRouteToViewModel ??= new())[(typeof(TRoute), Convert.ToByte(scope), value)] = typeof(TViewModel);
     }
 
     /// <summary>
-    /// Scope-aware resolution: returns the most-specific override for <paramref name="identity"/>
-    /// (User → Tenant → Organization), falling back to the base <see cref="ResolveViewModel(IRoute)"/>
-    /// mapping when no override matches. Rungs absent on the identity are skipped.
+    /// Scope-aware resolution: returns the most-specific override for the current scope
+    /// <paramref name="rungs"/> (ordered most-specific-first), falling back to the base
+    /// <see cref="ResolveViewModel(IRoute)"/> mapping when no override matches.
     /// </summary>
-    public Type ResolveViewModel(IRoute route, in YFex.Tenancy.ScopeIdentity identity)
+    public Type ResolveViewModel(IRoute route, System.ReadOnlySpan<YFex.Tenancy.ScopeValue> rungs)
     {
         if (_scopedRouteToViewModel is { } scoped)
         {
             var t = route.GetType();
-            if (identity.UserId is { } user &&
-                scoped.TryGetValue((t, YFex.Tenancy.Scope.User, user), out var vm))
-                return vm;
-            if (identity.TenantId is { } tenant &&
-                scoped.TryGetValue((t, YFex.Tenancy.Scope.Tenant, tenant), out vm))
-                return vm;
-            if (identity.OrganizationId is { } org &&
-                scoped.TryGetValue((t, YFex.Tenancy.Scope.Organization, org), out vm))
-                return vm;
+            for (var i = 0; i < rungs.Length; i++)
+                if (scoped.TryGetValue((t, rungs[i].Rank, rungs[i].Value), out var vm))
+                    return vm;
         }
 
         return ResolveViewModel(route);

@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using YFex.Validation;
 
 namespace YFex.Cqrs.Runtime;
 
@@ -6,7 +7,7 @@ namespace YFex.Cqrs.Runtime;
 /// Pre-compiled, immutable execution plan for one query type.
 /// </summary>
 public sealed record QueryPolicy(
-    Func<object, CancellationToken, ValueTask<ValidationResult>>? Validate,
+    MessageValidator?                                             Validation,   // stage 5 (context rules)
     Func<ClaimsPrincipal, object, bool>?                          Authorize,
     CachePolicy?                                                  Cache,
     CacheScope                                                    Scope,
@@ -20,7 +21,9 @@ public sealed record QueryPolicy(
     /// Flat array of commands that invalidate this query, each with a compiled match predicate.
     /// Null when no InvalidatedBy rules exist.
     /// </summary>
-    QueryInvalidator[]? InvalidatedBy);
+    QueryInvalidator[]? InvalidatedBy,
+    /// <summary>Stages 3–4 for queries that expose decisions (GetSaleOptions): never rejects; the handler reads the decision.</summary>
+    RulesStage? Rules = null);
 
 /// <summary>
 /// One command type that invalidates this query, with its compiled predicate.

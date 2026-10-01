@@ -78,6 +78,7 @@ For framework contributors working on YFex internals.
 | [Orchestration + Resilience Design](internal/orchestration-resilience-design.md) | Original design rationale, layering, AoT strategy, phasing (P0–P3), locked decisions |
 | [Event Sourcing Internals](internal/event-sourcing-internals.md) | In-house `IKeyValueStore` store (`es:` ordinal keys), aggregate fold serialization, generator emission, session optimistic append, projection subscriptions, snapshot cadence, sync/rebase |
 | [Event Sourcing Design](internal/event-sourcing-design.md) | Proposed ES layer: aggregate domain model, `[EventSourced]`/`[AggregateCommandHandler]` ↔ CQRS, projections, offline sync, Marten provider |
+| [Logging & Observability Design](internal/logging/README.md) | Proposed YFex.Logging: generator-driven implicit instrumentation, zero-alloc pipeline, tenant-aware tracing across nodes, audit channel, server, alerts (status: proposal, decisions ⚑L1–L12 pending) |
 | [Source Generators](internal/source-generators.md) | All generator pipelines: architecture, models, emission patterns, diagnostics, performance |
 
 ---

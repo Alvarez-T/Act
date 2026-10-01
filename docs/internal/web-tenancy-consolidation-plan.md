@@ -14,6 +14,40 @@ adapters. Companion to [custom-logic-design.md](custom-logic-design.md) (which b
 
 ---
 
+## 0. Requirement (2026-09-24): the scope model must be GENERIC — no baked-in hierarchy
+
+**Problem.** The shipped core hardcodes **one** hierarchy — `Scope { Organization, Tenant, User }`,
+`ScopeIdentity(OrganizationId, TenantId, UserId)`, and this plan's proposed `IOrganizationScoped`.
+That is *one company's* chosen structure. As a shared framework consumed by very different projects
+(`Region → Store → Terminal`; `Company → Department → Team → User`; a single tenant level; …), the
+library must **not name or fix the levels**. `IOrganizationScoped` especially bakes a domain concept
+into a generic library and is **removed**.
+
+**Principle.** The library owns the *mechanism* — an ordered set of scope **levels** resolved
+most-specific-first — never the *levels themselves*. The consuming project defines its levels.
+
+**Generic model (revises the core `YFex.Tenancy` shape — see the design-doc note below):**
+
+- Replace the `Scope` enum with an **opaque `byte` rank** (higher = more specific). The library never
+  names ranks: `ScopeKey(byte Rank, int ValueId)`, `ScopeValue(byte Rank, string Value)`.
+- `ScopeIdentity` becomes an **ordered set of rungs** (up to a `MaxScopeLevels`, e.g. 8), not three
+  named fields.
+- The app declares its levels with **its own enum** (`enum MyScope : byte { Company, Branch, Operator }`)
+  and annotates with a **generic attribute** `[CustomLogic<MyScope>(MyScope.Company, "acme")]` (C# 11
+  generic attributes; the generator reads the underlying byte). The framework sees only ranks/values.
+- **`IOrganizationScoped` is removed.** The tenant → scope projection is **app-specific**: the app
+  supplies an `ITenantScopeProjector` (or a delegate) mapping its resolved `ITenantInfo` + principal
+  to scope rungs. The library provides the plumbing; the app owns the mapping.
+
+**Cross-library impact:** `YFex.Tenancy` (core types), `YFex.CustomLogic` (attribute + generator +
+key), NavigatR/Avalonia overlays (walk rungs generically), and this plan's Web projection
+(app-supplied). **This supersedes every `Organization/Tenant/User` literal and `IOrganizationScoped`
+reference in the sections below** — where they appear, read them as *example* levels a particular app
+might choose, not framework types. It also revises `custom-logic-design.md` §2 (the `Scope` enum),
+which must be updated in lockstep.
+
+---
+
 ## 1. Goal & principles
 
 Today there are **two tenancy models** that do not know about each other:
@@ -95,9 +129,8 @@ Destination shorthand: **`Res`** = the moved-down resolution project (name decid
 
 | Type | Verdict | Destination | Notes |
 |---|---|---|---|
-| `IOrganizationScoped : ITenantInfo { string OrganizationId { get; } }` | **NEW** | `Res` | Optional richer tenant shape so the Org rung can be derived. From design §2.4. |
-| `HttpScopeContext : IScopeContext` | **NEW** | `Web.AspNetCore` | The single web adapter that projects the resolved tenant + principal into a `ScopeIdentity` (§4). |
-| (bridge helper) `TenantScopeProjector` | **NEW (optional)** | `Res` | Static helper: `(ITenantInfo?, ClaimsPrincipal?) → ScopeIdentity`, host-neutral (takes the subject id as a string, not a `ClaimsPrincipal`, to keep `Res` free of ASP.NET). See §4.1. |
+| `ITenantScopeProjector` (app-supplied) | **NEW** | `Res` (contract) / app (impl) | Replaces `IOrganizationScoped` (§0). App-defined mapping `(ITenantInfo?, string? userId) → ScopeIdentity rungs`. The library ships the *contract* + a no-op/one-level default; the app provides the real projection (which levels, from which tenant fields). Keeps ALL hierarchy naming out of the library. |
+| `HttpScopeContext : IScopeContext` | **NEW** | `Web.AspNetCore` | The single web adapter that runs the app's `ITenantScopeProjector` over the resolved tenant + principal and publishes the resulting rungs (§4). |
 
 **Nothing is DELETEd outright.** The only "deletions" are the *files* leaving `YFex.Web` /
 `YFex.Web.Data` as they relocate — the types survive under new namespaces. The one merge worth
@@ -196,19 +229,34 @@ of one resolved state.** The `YFex.Web` resolution stack remains the sole author
 tenant is discovered (strategies → store). From its output we *project* the `ScopeIdentity`; we do
 not re-resolve.
 
-### 4.1 The projection (`ITenantInfo` + principal → `ScopeIdentity`)
+### 4.1 The projection (`ITenantInfo` + principal → scope rungs) — APP-SUPPLIED (§0)
 
-The scope chain has three rungs; each is filled from the already-resolved state:
+The library does **not** know which levels an app has, so it does not hardcode the mapping. It
+defines the contract; the app implements it:
 
-| Rung | Source | Rule |
+```csharp
+// In Res (library) — no level names, no HttpContext/ClaimsPrincipal.
+public interface ITenantScopeProjector
+{
+    // Returns the app's scope rungs (rank + value) for the resolved tenant + user.
+    ScopeIdentity Project(ITenantInfo? tenant, string? userId);
+}
+```
+
+An app that chose `Company → Branch → User` implements it to read *its* tenant fields into *its*
+ranks; an app with a single tenant level emits one rung. The library ships only a **default
+projector** that emits the tenant `Id` at rank 0 and the `userId` at the highest rank (a sensible
+zero-config baseline), overridable. The example table below (`Tenant`/`Org`/`User`) is illustrative
+of what one app's projector might produce — not framework types:
+
+| Example rung | Example source | Rule |
 |---|---|---|
-| **Tenant** | `ICurrentTenantProvider.Current.Id` | Present whenever a tenant resolved. `Id` (canonical key), not `Identifier` (the matched token) — see OD-E. |
-| **Organization** | `(Current as IOrganizationScoped)?.OrganizationId` | Only when the app's tenant implements the richer `IOrganizationScoped` shape. Absent → Org rung omitted; resolution still works with Tenant + User. |
-| **User** | the authenticated principal's subject | The web adapter reads it from `ClaimsPrincipal` (which claim = OD-D / design D5). Passed to `Res` as a plain `string?` so `Res` stays ASP.NET-free. |
+| tenant level | `ICurrentTenantProvider.Current.Id` | `Id` (canonical key), not `Identifier` — see OD-E. |
+| an org/parent level | an app-defined field on the app's own `ITenantInfo` implementation | The app's projector reads it; the library has no `IOrganizationScoped`. |
+| user level | the authenticated principal's subject | Read from `ClaimsPrincipal` in the web adapter; passed to the projector as a plain `string?` so `Res` stays ASP.NET-free. |
 
-`TenantScopeProjector.Project(ITenantInfo? tenant, string? userId) → ScopeIdentity` lives in `Res`
-(host-neutral: no `HttpContext`, no `ClaimsPrincipal`). This is the single place the mapping is
-defined, reused by every host (ASP.NET, and later Avalonia/background).
+The projector lives in `Res` as a contract (host-neutral: no `HttpContext`, no `ClaimsPrincipal`);
+the concrete mapping is the app's, reused by every host (ASP.NET, Avalonia, background).
 
 ### 4.2 Where the single pipeline lives
 
@@ -235,20 +283,13 @@ Both repos have an `AsyncLocal` ambient holder: `Res.AsyncLocalTenantContextAcce
   `ICurrentTenantProvider.Current` from a resolved-tenant cache keyed by the ambient identity. More
   unification but couples the scope core to tenant-entity loading — rejected for L1 purity.
 
-### 4.4 `IOrganizationScoped`
+### 4.4 Extra levels are an app concern (no `IOrganizationScoped`)
 
-Add to `Res`:
-
-```csharp
-public interface IOrganizationScoped : ITenantInfo
-{
-    string OrganizationId { get; }
-}
-```
-
-Apps whose tenant is "organization + establishment" (the shape `ITenantInfo`'s own doc comment
-anticipates) implement it; the projector fills the Org rung. Apps that don't get a Tenant+User
-chain, unchanged.
+Per §0, the library does **not** define an `IOrganizationScoped` (or any named level). An app that
+needs a level above "tenant" (an organization, a region, a parent company) puts that field on **its
+own** `ITenantInfo` implementation and reads it in **its own** `ITenantScopeProjector`. The library
+never sees the concept. Apps with a single tenant level emit one rung; apps with a deep hierarchy
+emit several — all through the same generic rung mechanism.
 
 ### 4.5 Cross-tenant admin / impersonation (integration-plan OD5 — DECIDED: must support)
 
@@ -349,6 +390,24 @@ directly, no ASP.NET.
 
 ## 6. Phasing (each step ends build-green on both solutions)
 
+> **Progress (2026-09-25):** Phase G ✅, Phase 0 ✅, Phase 1 ✅ (move complete — `YFex.Tenancy.Resolution`
+> holds the 12 host-neutral types; YFex.Web keeps DapperTenantStore + the ASP.NET adapters; whole
+> `YFex.Web.slnx` builds and **72/72 tests pass**). Phase 2 ✅ (core) — `ITenantScopeProjector` +
+> `DefaultTenantScopeProjector` in `Res`, `HttpScopeContext : IScopeContext` in `Web.AspNetCore`,
+> `AddYFexWebTenant` now also wires `AddYFexTenancy()` + the default projector + registers
+> `HttpScopeContext` as `IScopeContext`. **Cross-tenant admin (§4.5) ✅** — host-neutral
+> `ITenantImpersonationGate` (+ default `PermissionTenantImpersonationGate` requiring the
+> `Tenant.Impersonate` permission claim) and `ITenantImpersonationAuditor` (+ `NullTenantImpersonationAuditor`)
+> in `Res`; `TenantImpersonationOptions` (header `X-Act-As-Tenant`) + an extended
+> `TenantResolutionMiddleware` in `Web.AspNetCore` that, for a gated actor, resolves the target via the
+> store and stashes it (target tenant/org rungs, real-admin user rung) with an audit call; wired by
+> `AddYFexWebTenant` (all TryAdd). 5 new tests (impersonate/ignored/no-header/unknown-target/gate),
+> `YFex.Web` **77/77** green. Phase 3 (reconcile accessors — the recommended "keep both" is a no-op) still
+> pending. Incidental fixes made in passing: a **pre-existing**
+> stale `YFex.Data` ProjectReference (`YFex\src\Database\YFex.Data` → sibling `..\YFex.Data\src\YFex.Data`)
+> and a `QueryBuilder`→parameterized-SQL rewrite in `DapperTenantStore` (the migrated YFex.Data renamed
+> `QueryBuilder`→`SqlQueryBuilder`) — both unrelated to tenancy but blocked the build.
+
 - **Phase 0 — scaffold.** Create empty `YFex.Tenancy.Resolution` at
   `C:\Dev\YFex\YFex.Tenancy\src\YFex.Tenancy.Resolution\` (`net11.0`, `IsAotCompatible`, refs
   `YFex.Tenancy` + `M.E.DI.Abstractions`); add to `tenancy.slnx` (and optionally the `/Tenancy/`
@@ -358,11 +417,18 @@ directly, no ASP.NET.
   Add the cross-repo `ProjectReference` from `YFex.Web`, `YFex.Web.Data`, `YFex.Web.AspNetCore`.
   Re-target all `using`s (incl. tests). No behavior change. Build + test green on `YFex.Web.slnx`.
   *This is the big, purely-mechanical step; do it in one shot so the tree is never half-moved.*
-- **Phase 2 — add the unified identity.** Add `IOrganizationScoped` and `TenantScopeProjector` to
-  `Res`; add `HttpScopeContext` to `Web.AspNetCore`; extend the middleware to publish the
-  `ScopeIdentity`; extend `AddYFexWebTenant` to register `HttpScopeContext` as `IScopeContext`.
-  New tests: projection rules (Tenant from `Id`, Org from `IOrganizationScoped`, User from subject),
-  and middleware publishes a chain matching the resolved tenant.
+- **Phase G (prerequisite, §0) — genericize the core scope model.** In `YFex.Tenancy` /
+  `YFex.CustomLogic`: replace the `Scope` enum with an opaque `byte` rank; make `ScopeIdentity` an
+  ordered rung set; switch the attribute to the generic `[CustomLogic<TScope>]` form and update the
+  generator/key; walk rungs generically in the NavigatR/Avalonia overlays; update
+  `custom-logic-design.md` §2. Must land **before** Phase 2 (and ideally before the big move) so the
+  Web projection targets the generic shape. Re-run all existing tenancy/customlogic/navigatr tests.
+- **Phase 2 — add the unified identity.** Add the `ITenantScopeProjector` contract + a default
+  projector to `Res` (no `IOrganizationScoped`); add `HttpScopeContext` to `Web.AspNetCore`; extend
+  the middleware to run the app's projector and publish the rung set; extend `AddYFexWebTenant` to
+  register `HttpScopeContext` as `IScopeContext`. New tests: the default projector (tenant `Id` →
+  rank 0, user → top rank), an app projector with a custom level set, and middleware publishing a
+  chain matching the resolved tenant.
 - **Phase 3 — reconcile the ambient holders (OD-F).** Either keep both accessors (recommended,
   no-op beyond docs) or unify. Decide, then lock.
 - **Phase 4 — downstream opt-in (out of scope here, tracked in the integration plan).** Now that

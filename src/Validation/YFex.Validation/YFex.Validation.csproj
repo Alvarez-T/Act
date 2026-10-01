@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>YFex.Validation</RootNamespace>
+    <AssemblyName>YFex.Validation</AssemblyName>
+  </PropertyGroup>
+
+  <!-- Layer 0.5: references YFex core ONLY (must not reference YFex.State / Cqrs / Rules). -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\YFex\YFex.csproj" />
+  </ItemGroup>
+
+  <!-- Bundle generator: consumers get runtime + codegen from one package reference.
+       (ProjectReference analyzers don't flow transitively — test projects reference it explicitly.) -->
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Validation.Generator\YFex.Validation.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="YFex.Validation.Tests" />
+  </ItemGroup>
+
+</Project>

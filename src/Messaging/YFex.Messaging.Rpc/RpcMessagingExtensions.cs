@@ -39,6 +39,10 @@ public static class RpcMessagingExtensions
         var fusion = services.AddFusion();
         fusion.Rpc.AddWebSocketClient(opts.WebSocketEndpoint);
 
+        // Call context (D29): the caller's permissions pushed by the server (UX refresh) + optional per-call headers.
+        fusion.AddClient<ICallPermissions>();
+        if (opts.CallContextBuilder is { } callContext) services.AddSingleton(callContext);
+
         // Live-state factory backed by Fusion
         services.AddSingleton<ILiveStateFactory>(sp =>
         {
@@ -141,7 +145,8 @@ public static class RpcMessagingExtensions
         configure?.Invoke(opts);
         services.AddSingleton(opts);
 
-        services.AddFusion();
+        var fusion = services.AddFusion();
+        AddCallContextServer(services, fusion, opts.CallContextBuilder ?? new CallContextServerBuilder().FromConnection());
 
         // Source-generated typed handler-invoke map. Empty fallback so LocalHandlerInvoker always
         // resolves; the generated AddYFexLocalHandlers() (call at startup) replaces this with the
@@ -150,6 +155,9 @@ public static class RpcMessagingExtensions
 
         // Default invoker resolves handlers from DI via the typed map; Wolverine adapter replaces this.
         services.TryAddSingleton<IHandlerInvoker, LocalHandlerInvoker>();
+
+        // Validation stages 1/5 for every message entering the server through the invoker (D25).
+        ValidatingHandlerInvoker.Decorate(services);
 
         // Server is always "connected" from its own perspective.
         services.TryAddSingleton<INetworkStatus>(AlwaysConnectedNetworkStatus.Instance);
@@ -190,6 +198,35 @@ public static class RpcMessagingExtensions
         return services;
     }
 
+    // ── Call context (D29) ────────────────────────────────────────────────────
+
+    // Server: identity sources + RPC middleware (stage 2 outside the compute cache), connection capture, permission
+    // versions/signals, the ICallPermissions compute service, and the IPrincipalAccessor decorator.
+    private static void AddCallContextServer(IServiceCollection services, FusionBuilder fusion, CallContextServerBuilder options)
+    {
+        if (services.Any(static d => d.ServiceType == typeof(CallContextServerBuilder))) return;   // idempotent
+        services.AddSingleton(options);
+        services.TryAddSingleton<IPermissionsVersions, PermissionsVersions>();
+        var connections = new CallContextConnections(options);
+        services.AddSingleton(connections);
+        services.AddSingleton<CallContextSignals>();
+
+        fusion.Rpc.AddMiddleware<CallContextMiddleware>();
+        fusion.AddServer<ICallPermissions, CallPermissionsService>();
+
+        // Connection-bound capture: wrap Fusion's ServerConnectionFactory (it receives the upgrade HttpContext).
+        for (int i = services.Count - 1; i >= 0; i--)
+        {
+            var d = services[i];
+            if (d.ServiceType != typeof(RpcPeerOptions)) continue;
+            services[i] = ServiceDescriptor.Singleton(sp => connections.Wrap(d.ImplementationInstance as RpcPeerOptions
+                ?? (RpcPeerOptions)d.ImplementationFactory!(sp)));
+            break;
+        }
+
+        CallContextPrincipalAccessor.Decorate(services);
+    }
+
     // ── CQRS authorization wiring (Gate 1) ─────────────────────────────────────
 
     /// <summary>
@@ -209,10 +246,15 @@ public static class RpcMessagingExtensions
     public static IServiceCollection AddYFexCqrsAuthorization(this IServiceCollection services)
     {
         services.RemoveAll<CompiledMessagingRegistry>();
-        services.AddSingleton(sp => CompiledMessagingRegistry.Build(
-            baseline: sp.GetServices<IAggregateConfiguration>(),
-            policyEvaluator: sp.GetRequiredService<IPolicyEvaluator>(),
-            principalFactory: principal => sp.GetRequiredService<IAuthContextFactory>().Create(principal)));
+        services.AddSingleton(sp =>
+        {
+            var factory = sp.GetRequiredService<IAuthContextFactory>();
+            return CompiledMessagingRegistry.Build(
+                baseline: sp.GetServices<IAggregateConfiguration>(),
+                policyEvaluator: sp.GetRequiredService<IPolicyEvaluator>(),
+                // Reuses the caller's already-resolved context (versioned per connection on the server, D29).
+                principalFactory: principal => CallAuthorization.ContextFor(principal, factory));
+        });
         return services;
     }
 

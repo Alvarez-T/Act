@@ -80,16 +80,56 @@ public abstract class StateObject : INotifyChanged, IActivatable
 
     /// <summary>
     /// Lazy-initialized validation bag. Created on first access so objects without validation
-    /// incur zero overhead. Generated <c>Validate_X</c> helpers access this to store results.
+    /// incur zero overhead. Generated validation hooks (YFex.Validation.Generator) store results here.
     /// </summary>
     public YFex.State.Validation.ValidationBag Validation
-        => _validation ??= new YFex.State.Validation.ValidationBag();
+        => _validation ?? CreateValidation();
 
     /// <summary>
     /// Returns the validation bag if already created, or null. Allows INDEI.HasErrors to
     /// avoid allocating the bag just to return false.
     /// </summary>
     protected YFex.State.Validation.ValidationBag? ValidationIfCreated => _validation;
+
+    // CAS so a generated async validation continuation running on the thread pool and a
+    // reader on the owner thread can never end up with two different bags.
+    private YFex.State.Validation.ValidationBag CreateValidation()
+    {
+        // GetType().Name is metadata only (trim/AOT safe): prefix of field display-name keys.
+        var bag = new YFex.State.Validation.ValidationBag(GetType().Name);
+        ConfigureValidation(bag); // before publishing: a losing candidate is simply dropped
+        var winner = System.Threading.Interlocked.CompareExchange(ref _validation, bag, null);
+        if (winner is not null) return winner;
+        OnValidationCreated(bag);
+        return bag;
+    }
+
+    /// <summary>
+    /// Reserved for GENERATED code (YFex.Validation.Generator): applies <c>[ValidationOptions]</c> /
+    /// <c>[ValidatesAs(Profile)]</c> defaults to a new bag before it is published. Overrides call base first and
+    /// must only set bag options (the bag may be discarded if another thread wins the lazy race).
+    /// </summary>
+    protected virtual void ConfigureValidation(YFex.State.Validation.ValidationBag bag) { }
+
+    /// <summary>
+    /// Services handed to async validation rules (<c>IAsyncValueRule&lt;T&gt;.IsValidAsync(value, services, ct)</c>).
+    /// Default: an empty provider. Override to expose the view model's scope.
+    /// </summary>
+    protected virtual System.IServiceProvider ValidationServices => YFex.State.Validation.EmptyServiceProvider.Instance;
+
+    /// <summary>
+    /// Called once, right after the lazy <see cref="Validation"/> bag is created. Adapters
+    /// (e.g. the MVVM <c>INotifyDataErrorInfo</c> bridge) subscribe to the bag here.
+    /// </summary>
+    protected virtual void OnValidationCreated(YFex.State.Validation.ValidationBag bag) { }
+
+    /// <summary>
+    /// Called when a generated async validation check throws (anything other than a
+    /// cancellation caused by a newer value). Only the latest check reports; a stale check's
+    /// fault is discarded. The bag is left unchanged. Default: no-op — override to log or
+    /// surface the failure.
+    /// </summary>
+    protected virtual void OnAsyncValidationFaulted(string propertyName, System.Exception exception) { }
 
     public void Subscribe(IChangedHandler handler) => _handlers.Add(handler);
     public void Unsubscribe(IChangedHandler handler) => _handlers.Remove(handler);
@@ -100,8 +140,21 @@ public abstract class StateObject : INotifyChanged, IActivatable
     internal void ExitUpdate()
     {
         if (--_updateDepth > 0) return;
+        // Coalesced work first (e.g. invariants deferred by generated validation hooks), so the
+        // validation state is already consistent when the batched change notifications fire.
+        OnUpdateCompleted();
         DrainPending();
     }
+
+    /// <summary>True inside a <see cref="BeginUpdate"/> scope (generated hooks defer coalescable work).</summary>
+    protected bool IsInUpdate => _updateDepth > 0;
+
+    /// <summary>
+    /// Called when the OUTERMOST <see cref="BeginUpdate"/> scope ends, before the batched notifications are
+    /// dispatched. The State generator overrides it in every class with <c>[Observable]</c> members to call
+    /// <c>base.OnUpdateCompleted()</c> and the class's <c>partial void __OnBatchValidated()</c> hook (D22).
+    /// </summary>
+    protected virtual void OnUpdateCompleted() { }
 
     /// <summary>
     /// Fires a pre-change notification to all handlers. Always immediate — never deferred by

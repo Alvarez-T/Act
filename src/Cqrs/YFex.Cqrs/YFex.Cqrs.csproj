@@ -11,12 +11,15 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FluentValidation" Version="11.11.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="11.0.0-preview.5.26302.115" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\YFex\YFex.csproj" />
+    <!-- Layer 2 -> 0.5: violations, ValidationResult, context rules and typed slots (validation design D4). -->
+    <ProjectReference Include="..\..\Validation\YFex.Validation\YFex.Validation.csproj" />
+    <!-- Layer 2 -> 1: rules enforcement stages 3-4 (.UseSituation / .Enforce, validation D33). -->
+    <ProjectReference Include="..\..\Validation\YFex.Rules\YFex.Rules.csproj" />
     <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization.Public\YFex.Authorization.Public.csproj" />
     <!-- Resilience vocabulary for the command builder's policy verbs → ResilienceSpec (design §1 L2). -->
     <ProjectReference Include="..\..\..\..\YFex.Resilience\src\YFex.Resilience\YFex.Resilience.csproj" />

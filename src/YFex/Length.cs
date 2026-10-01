@@ -57,7 +57,8 @@ public readonly record struct Length :
     IDivisionOperators<Length, decimal, Length>,
     IComparisonOperators<Length, Length, bool>,
     IMinMaxValue<Length>,
-    IAdditiveIdentity<Length, Length>
+    IAdditiveIdentity<Length, Length>,
+    IAmount<Length>
 {
     /// <summary>Canonical scale (metres, 4 decimal places → 0.1&#160;mm resolution).</summary>
     public const int Scale = 4;
@@ -129,6 +130,19 @@ public readonly record struct Length :
     static Length IMinMaxValue<Length>.MinValue => MinValue;
     static Length IMinMaxValue<Length>.MaxValue => MaxValue;
     static Length IAdditiveIdentity<Length, Length>.AdditiveIdentity => Zero;
+
+    /// <summary>Raw type <c>"length"</c> (decimal storage, metres).</summary>
+    public static RawType RawType { get; } = RawType.Define<Length>("length", ValueKind.Decimal);
+
+    public RawValue ToRaw() => RawValue.Typed(RawType, _metres);
+
+    /// <summary>Reads Length (plain numbers are metres).</summary>
+    public static bool TryFromRaw(in RawValue raw, out Length value)
+    {
+        bool ok = raw.TryRead(RawType, out decimal d);
+        value = ok ? FromMetres(d) : default;
+        return ok;
+    }
 
     // ── Operators ────────────────────────────────────────────────────────────
     public static Length operator +(Length a, Length b) => new(a._metres + b._metres);

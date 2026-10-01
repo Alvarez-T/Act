@@ -7,5 +7,7 @@ public enum ErrorType
     Fail,
     Unauthorized,
     ValidationProblem,
-    Conflict
+    Conflict,
+    /// <summary>The decision needs approvals (YFex.Rules, 09 §6) — see <see cref="Error.Approvals"/>.</summary>
+    ApprovalRequired,
 }

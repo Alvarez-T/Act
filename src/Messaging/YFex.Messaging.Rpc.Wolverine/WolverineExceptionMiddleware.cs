@@ -22,7 +22,7 @@ public sealed class ResultConversionMiddleware
         {
             await next().ConfigureAwait(false);
         }
-        catch (ResultConversionException)
+        catch (ErrorResultException)
         {
             // Already wrapped — re-throw so the contract impl layer can handle it.
             throw;
@@ -39,10 +39,7 @@ public sealed class ResultConversionMiddleware
 /// Wraps a handler exception with its typed <see cref="Error"/> representation so
 /// the Fusion server contract impl can convert it to a wire-safe failure response.
 /// </summary>
-public sealed class ResultConversionException : Exception
+public sealed class ResultConversionException : ErrorResultException
 {
-    public Error TypedError { get; }
-
-    public ResultConversionException(Error error, Exception inner)
-        : base(error.Message, inner) => TypedError = error;
+    public ResultConversionException(Error error, Exception inner) : base(error, inner) { }
 }

@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <PackageId>YFex.Cqrs.Tenancy</PackageId>
+    <Description>Opt-in tenancy bridge for YFex.Cqrs: an ICacheScopeContext fed by the ambient YFex.Tenancy scope, so ScopedByTenant()/ScopedByUser() query caches partition by the scope in effect. YFex.Cqrs itself takes no tenancy dependency.</Description>
+    <PackageTags>yfex;cqrs;tenancy;multi-tenant;cache</PackageTags>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="11.0.0-preview.5.26302.115" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Cqrs\YFex.Cqrs.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Tenancy\src\YFex.Tenancy\YFex.Tenancy.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -100,19 +100,36 @@ its whole resolver/middleware/store stack — it only additionally implements `I
 
 ## 2. YFex.Tenancy — identity & scope
 
+> **⚠ GENERIC MODEL (revised 2026-09-24).** The framework fixes **no** hierarchy. The original
+> `enum Scope { Organization, Tenant, User }` baked one company's structure into a shared library and
+> is **removed**. Levels are now opaque **byte ranks** (higher = more specific); the consuming app
+> defines its own levels with its own enum and annotates via the **generic attribute**
+> `[CustomLogic<TScope>(...)]`. Throughout the examples below, `Scope.Organization/Tenant/User` are
+> **illustrative of one app's levels**, not framework types — read them as an app's
+> `enum StoreScope : byte { Region, Store, Terminal }` etc. See `web-tenancy-consolidation-plan.md` §0.
+
 ### 2.1 The scope model
 
 ```csharp
 namespace YFex.Tenancy;
 
-/// Ascending specificity. Walking most-specific-first means User → Tenant → Organization.
-public enum Scope : byte { Organization = 0, Tenant = 1, User = 2 }
+// No framework Scope enum. A rung's level is an opaque byte rank (higher = more specific);
+// the APP defines the levels via its own byte-backed enum.
 
-/// One rung of the current identity: (kind, interned value). Blittable, cache-friendly.
-public readonly record struct ScopeKey(Scope Kind, int ValueId);
+/// One rung of the current identity: (rank, interned value). Blittable, cache-friendly.
+public readonly record struct ScopeKey(byte Rank, int ValueId);
 
-/// The authoring/registration form before interning (carries the raw string).
-public readonly record struct ScopeValue(Scope Kind, string Value);
+/// The raw (un-interned) rung. Build from the app's own enum: ScopeValue.Of(MyScope.Store, "s-42").
+public readonly record struct ScopeValue(byte Rank, string Value)
+{
+    public static ScopeValue Of<TScope>(TScope level, string value) where TScope : struct, Enum;
+}
+
+/// The ambient identity as an ORDERED SET OF RUNGS (most-specific-first) — not fixed named fields.
+public readonly struct ScopeIdentity   // .Rungs (ReadOnlySpan<ScopeValue>), .Of(params ScopeValue[]), .None
+{
+    public const int MaxLevels = 8;
+}
 ```
 
 ### 2.2 Ambient scope — `IScopeContext`
@@ -182,10 +199,13 @@ public readonly struct CustomResult<T> { /* [Union]-style; no allocation */ }
 ### 3.2 The attribute
 
 ```csharp
+// GENERIC over the app's own level enum — the framework names no levels.
 [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
-public sealed class CustomLogicAttribute(Scope scope, string value) : Attribute
+public sealed class CustomLogicAttribute<TScope>(TScope scope, string value) : Attribute
+    where TScope : struct, Enum
 {
-    public Scope  Scope { get; } = scope;
+    public TScope Scope { get; } = scope;
+    public byte   Rank  { get; } = Convert.ToByte(scope);  // the enum's underlying byte = specificity
     public string Value { get; } = value;
     /// UI-only: opt into additive application (all matching run) instead of single-winner. §6.2.
     public bool   Additive { get; init; }
@@ -193,13 +213,16 @@ public sealed class CustomLogicAttribute(Scope scope, string value) : Attribute
 ```
 
 ```csharp
-[CustomLogic(Scope.Organization, "acme")]          // whole org
+// The app declares its OWN levels (byte-backed enum; higher = more specific):
+enum OrgScope : byte { Organization = 0, Tenant = 1, User = 2 }   // one app's choice
+
+[CustomLogic<OrgScope>(OrgScope.Organization, "acme")]          // whole org
 public sealed class AcmeOrderLogic : ICustomLogic<PlaceOrder, OrderPlaced> { ... }
 
-[CustomLogic(Scope.Tenant, "globex-west")]         // one tenant under Globex
+[CustomLogic<OrgScope>(OrgScope.Tenant, "globex-west")]         // one tenant under Globex
 public sealed class GlobexWestOrderLogic : ICustomLogic<PlaceOrder, OrderPlaced> { ... }
 
-[CustomLogic(Scope.User, "u-42")]                  // one power user
+[CustomLogic<OrgScope>(OrgScope.User, "u-42")]                  // one power user
 public sealed class VipOrderLogic : ICustomLogic<PlaceOrder, OrderPlaced> { ... }
 ```
 

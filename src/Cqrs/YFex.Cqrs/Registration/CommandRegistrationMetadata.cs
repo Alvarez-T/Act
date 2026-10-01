@@ -19,7 +19,10 @@ internal sealed record CommandRegistrationMetadata
     /// <summary>True when authored via <c>.Irreversible()</c> — raises the bridge's default Mutating side-effect to Irreversible.</summary>
     public bool      Irreversible { get; init; }
 
-    public ValidatorDescriptor[]?  Validators  { get; init; }
+    /// <summary>Stages 3–4 (situation + rules), last configuration wins.</summary>
+    public YFex.Cqrs.Runtime.RulesStage? Rules { get; init; }
+
+    public YFex.Cqrs.Runtime.ContextRuleFactory[]?  Validators  { get; init; }
     public AuthorizerDescriptor[]? Authorizers { get; init; }
 
     public InvalidationRuleDescriptor[]? Invalidates { get; init; }

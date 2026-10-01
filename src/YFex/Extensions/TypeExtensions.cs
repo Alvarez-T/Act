@@ -1,25 +1,32 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 
 namespace YFex.Extensions;
 
 public static class TypeExtensions
 {
+    // The ctor(string) probe needs the constructors kept by the trimmer, hence the annotations below.
+    private const DynamicallyAccessedMemberTypes Ctors = DynamicallyAccessedMemberTypes.PublicConstructors;
+
     // 1. THE DICTIONARY CACHE (For runtime reflection scenarios)
     private static readonly ConcurrentDictionary<Type, bool> _validTypeRuntimeCache = new();
 
-    public static bool IsPrimitiveOrValidValueType(this Type type)
+    public static bool IsPrimitiveOrValidValueType([DynamicallyAccessedMembers(Ctors)] this Type type)
     {
-        // "static t =>" ensures no memory allocation during cache hits
-        return _validTypeRuntimeCache.GetOrAdd(type, static t => DetermineIfValid(t));
+        // Not GetOrAdd(type, factory): the factory's parameter would drop the trim annotation.
+        if (_validTypeRuntimeCache.TryGetValue(type, out var valid)) return valid;
+        valid = DetermineIfValid(type);
+        _validTypeRuntimeCache.TryAdd(type, valid);
+        return valid;
     }
 
     // 2. THE GENERIC WRAPPER (For compile-time generic scenarios)
     // This defers to TypeTraits<T> which is 100x faster than the dictionary.
-    public static bool IsPrimitiveOrValidValueType<T>()
+    public static bool IsPrimitiveOrValidValueType<[DynamicallyAccessedMembers(Ctors)] T>()
         => TypeTraits<T>.IsPrimitiveOrValidValueType;
 
     // 3. THE CORE LOGIC
-    internal static bool DetermineIfValid(Type t)
+    internal static bool DetermineIfValid([DynamicallyAccessedMembers(Ctors)] Type t)
     {
         var underlyingType = Nullable.GetUnderlyingType(t) ?? t;
 
@@ -49,7 +56,7 @@ public static class TypeExtensions
 }
 
 // 4. THE GENERIC STATIC CACHE (Internal engine)
-internal static class TypeTraits<T>
+internal static class TypeTraits<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicConstructors)] T>
 {
     public static readonly bool IsPrimitiveOrValidValueType = TypeExtensions.DetermineIfValid(typeof(T));
 }

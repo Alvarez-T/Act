@@ -91,8 +91,9 @@ while running:
 ### Query Dispatch
 
 ```
+0. Coerce (Range(coerce: true) clamps) + stage 1 shape — BEFORE the offline cache and the cache key (invalid queries never cached)
 1. Look up QueryPolicy from CompiledMessagingRegistry (FrozenDictionary<Type, QueryPolicy>)
-2. Validate (if policy.Validate != null) — composite delegate, short-circuits on first failure
+2. Stage 5 context rules (policy.Validation)
 3. Authorize (if policy.Authorize != null) — fused predicate
 4. Check INetworkStatus:
    - Online: resolve IQueryHandler<TQuery,TResult> from DI → InvokeAsync
@@ -107,8 +108,8 @@ while running:
 
 ```
 1. Look up CommandPolicy from CompiledMessagingRegistry
-2. Validate
-3. Authorize
+2. Validate — stage 1 shape (MessagePipeline.CheckShape, zero-alloc when valid); an invalid command is NEVER enqueued offline
+3. Authorize (ErrorType.Unauthorized), then stage 5 context rules (policy.Validation) — errors carry structured violations
 4. Apply optimistic updates (if policy.Optimistic != null):
    - Look up matching cached query values via Match delegate
    - Apply the Optimistic.Apply delegate to produce predicted result
@@ -264,6 +265,54 @@ JS interop via `IJSRuntime`. Three object stores: `cache`, `outbox`, `failures`.
 > **📌 Note:** The AEAD authentication tag (16 bytes) detects tampering. `Unprotect()` returns `null` on authentication failure rather than throwing — callers treat corrupted entries as cache misses.
 
 ---
+
+## Server-side validation (validation Phase 3)
+
+`UseYFexMessagingRpcServer` (and the Wolverine variant) decorate `IHandlerInvoker` with `ValidatingHandlerInvoker`: every message
+entering the server through the invoker (generated RPC contract impl, Wolverine, replay) is coerced, shape-checked
+(`ObjectValidation`) and context-checked (policy `MessageValidator`). Rejections are thrown as `ErrorResultException` and returned by
+the generated contract impl as the typed error — which crosses the wire thanks to `Serialization/RpcResultFormatters` (MemoryPack,
+Fusion's default `mempack6`). `LocalDispatcher` unwraps the decorator (it runs the stages itself). `FusionMessageBus` runs stages 1 + 2 client-side (stage 2
+for UX only) and returns the server's `Error` (typed-result routes) instead of throwing. Stage 2 server-side: see "Call context".
+Tests: `YFex.Messaging.Rpc.Tests` (two hubs bridged in memory → real serialization).
+
+## Call context (validation D29)
+
+Who is calling and in which tenant is **implicit**: never a message field, never a handler parameter. Code in
+`YFex.Messaging.Rpc/CallContext/`.
+
+```csharp
+// server — default is ctx.FromConnection() (principal only)
+services.UseYFexMessagingRpcServer(rpc => rpc.CallContext(ctx => ctx
+    .FromConnection()                 // captured once per WebSocket from the upgrade HttpContext (User, bearer, host tenant)
+    .OrFromHeader("Authorization")    // per-call token → app ICallTokenValidator (also validates the requested tenant)
+    .WithTenant()));                  // every call runs inside a ScopeOverride of the caller's tenant
+// client — only for the header option
+services.AddYFexMessagingRpcClient(rpc => rpc.CallContext(ctx => ctx.SendToken((sp, ct) => tokens.GetAsync(ct)).SendTenant()));
+```
+
+| Piece | Role |
+|---|---|
+| `CallContext` | AsyncLocal: `Auth` (`IAuthContext`), `Scope`/`HasScope`, `Culture`, `CorrelationId`, `Subject`. `Enter()` also enters the tenant `ScopeOverride`. |
+| `ICallIdentitySource` | Pluggable sources; first authenticated identity wins; a rejected token = anonymous (no fallback); expired identities are skipped. `FromConnection`, `OrFromHeader`, `OrFromSession` (Fusion `Session`), `OrFrom(custom)`. |
+| `CallContextConnections` | Wraps `RpcPeerOptions.ServerConnectionFactory` (it receives the upgrade `HttpContext`); stores the captured `CallIdentity` in the connection's `PropertyBag`; subject → connections index for revocation. |
+| `CallContextMiddleware` | `IRpcMiddleware`, priority 990 (after argument validation, before Fusion's compute/command handlers): resolve + enter the context; coerce arg0; if the shape is valid run stage 2 → rejection = the method's typed result (`RpcErrorResults<T>`); overwrite the generated query's `variant` argument; force `ICallPermissions`' `caller` argument. |
+| `CallAuthorization` / `CallPrincipalSource` | Stage 2 in every dispatcher: `CallContext.Current ?? IPrincipalAccessor.Current ?? anonymous`; `ContextFor` lets the Cqrs registry reuse the resolved auth context. |
+| `CallContextPrincipalAccessor` | Decorates the registered `IPrincipalAccessor` so any consumer sees the RPC caller. |
+| `IPermissionsVersions` / `CallContextSignals` | Per-user permissions version checked per call (reload only on change); `PermissionsChanged`, `AllPermissionsChanged`, `RevokeAsync` (closes the user's connections). |
+| `ICallPermissions` | `[ComputeMethod] GetMyPermissionsAsync()` — client UI refresh, invalidated by `PermissionsChanged`. Proxies checked in (ActualLab output, golden-tested). |
+
+> **Why stage 2 is a middleware:** generated queries are Fusion compute methods cached by argument. Authorizing inside the
+> method (the invoker) would let a second caller receive the first caller's cached computed. The middleware runs per call,
+> outside the cache; the invoker skips its own stage 2 for the instance the middleware authorized.
+
+> **Compute-cache variant:** `Task<Result<T>> XAsync(TQuery q, string? variant = null, CancellationToken ct = default)` — clients
+> pass null, the middleware writes the caller's variant from the query's `CacheScope` (Global/Tenant → tenant; User/Custom →
+> tenant + user; Session → tenant + connection). Cached results are never shared across tenants, even for `Global`.
+
+> **⚠️ Limits:** per-call headers ride only on regular calls (`RpcOutboundCallSetup`); Fusion compute-client calls carry none
+> (connection identity). A denied compute call has no computed → Fusion invalidates it after one tick (don't live-bind denied
+> queries). Versions / connection index are per process (fan signals out in a farm). Connection identities expire with their token.
 
 ## Wolverine Adapter
 

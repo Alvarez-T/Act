@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using YFex;
+using YFex.Validation;
 
 namespace YFex.Cqrs;
 
@@ -81,4 +82,5 @@ public readonly struct CacheableQueryResult<T> : IUnion, IResult
     public static Error NotFound(string message = "") => new(ErrorType.NotFound, message);
     public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
     public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error ValidationProblem(in ValidationResult result) => Error.Validation(result);
 }

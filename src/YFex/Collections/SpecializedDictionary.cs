@@ -339,9 +339,9 @@ public class SpecializedDictionary<TKey, TValue> : ISpecializedDictionary<TKey, 
     /// </summary>
     /// <param name="key">Key to look for.</param>
     /// <returns>Reference to the existing value.</returns>
-    private unsafe ref TValue FindValue(TKey key)
+    private ref TValue FindValue(TKey key)
     {
-        ref Entry entry = ref *(Entry*)null;
+        ref Entry entry = ref Unsafe.NullRef<Entry>();
         uint hashCode = (uint)key.GetHashCode();
         int i = GetBucket(hashCode);
         Entry[] entries = this.entries;
@@ -372,7 +372,7 @@ public class SpecializedDictionary<TKey, TValue> : ISpecializedDictionary<TKey, 
         return ref value;
 
         ReturnNotFound:
-        value = ref *(TValue*)null;
+        value = ref Unsafe.NullRef<TValue>();
 
         goto Return;
     }

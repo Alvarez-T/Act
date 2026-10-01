@@ -1,5 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
 using YFex.Messaging.Internal;
 using YFex.State.Notification;
 
@@ -34,27 +32,31 @@ public sealed class LiveGeneratorTests
     }
 
     // ── Value after activation ─────────────────────────────────────────────────
+    // StateObject is single-threaded (owner-thread assert in DEBUG), so these tests stay
+    // synchronous: every Activate/Deactivate call runs on the thread that created the VM.
 
     [Fact]
-    public async Task Counter_PopulatedAfterActivation_AndFirstFetch()
+    public void Counter_PopulatedAfterActivation_AndFirstFetch()
     {
+        using var scope = new NoSyncContextScope();
         var vm = new LiveTestVm(ct => Task.FromResult(42));
         vm.Activate();
 
-        await PollUntilAsync(() => vm.Counter == 42);
+        WaitUntil(() => vm.Counter == 42);
 
         vm.Counter.Should().Be(42);
         vm.Deactivate();
     }
 
     [Fact]
-    public async Task CounterError_IsSet_WhenComputationThrows()
+    public void CounterError_IsSet_WhenComputationThrows()
     {
+        using var scope = new NoSyncContextScope();
         var ex = new InvalidOperationException("boom");
         var vm = new LiveTestVm(ct => Task.FromException<int>(ex));
         vm.Activate();
 
-        await PollUntilAsync(() => vm.CounterError is not null);
+        WaitUntil(() => vm.CounterError is not null);
 
         vm.CounterError.Should().BeSameAs(ex);
         vm.Deactivate();
@@ -63,18 +65,19 @@ public sealed class LiveGeneratorTests
     // ── RefreshCounterAsync ────────────────────────────────────────────────────
 
     [Fact]
-    public async Task RefreshCounterAsync_TriggersAnotherFetch()
+    public void RefreshCounterAsync_TriggersAnotherFetch()
     {
+        using var scope = new NoSyncContextScope();
         int callCount = 0;
-        var vm = new LiveTestVm(ct => { callCount++; return Task.FromResult(callCount); });
+        var vm = new LiveTestVm(ct => Task.FromResult(Interlocked.Increment(ref callCount)));
         vm.Activate();
 
-        await PollUntilAsync(() => callCount >= 1);
+        WaitUntil(() => Volatile.Read(ref callCount) >= 1 && vm.Counter == 1);
         callCount.Should().Be(1);
 
         // Fire-and-forget the refresh; wait for the value to update
         _ = vm.RefreshCounterAsync();
-        await PollUntilAsync(() => callCount >= 2);
+        WaitUntil(() => vm.Counter == 2);
 
         callCount.Should().Be(2);
         vm.Counter.Should().Be(2);
@@ -84,46 +87,55 @@ public sealed class LiveGeneratorTests
     // ── Deactivation cleanup ───────────────────────────────────────────────────
 
     [Fact]
-    public async Task Deactivate_StopsUpdates()
+    public void Deactivate_StopsUpdates()
     {
+        using var scope = new NoSyncContextScope();
         int fetchCount = 0;
-        var vm = new LiveTestVm(ct => { fetchCount++; return Task.FromResult(fetchCount); });
+        var vm = new LiveTestVm(ct => Task.FromResult(Interlocked.Increment(ref fetchCount)));
         vm.Activate();
 
-        await PollUntilAsync(() => fetchCount >= 1);
+        WaitUntil(() => Volatile.Read(ref fetchCount) >= 1);
         vm.Deactivate();
 
-        int countAtDeactivate = fetchCount;
-        await Task.Delay(30); // give any racing async to settle
+        int countAtDeactivate = Volatile.Read(ref fetchCount);
+        Thread.Sleep(30); // give any racing async to settle
 
-        fetchCount.Should().Be(countAtDeactivate, "no more fetches after deactivate");
+        Volatile.Read(ref fetchCount).Should().Be(countAtDeactivate, "no more fetches after deactivate");
         vm.Counter.Should().BeNull("generated field nulled → companion returns null");
     }
 
     // ── Polling ────────────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task PollingVm_FetchesMultipleTimes_WhileActive()
+    public void PollingVm_FetchesMultipleTimes_WhileActive()
     {
+        using var scope = new NoSyncContextScope();
         var vm = new PollingLiveVm();
         vm.Activate();
 
-        await PollUntilAsync(() => vm.FetchCount >= 3, timeoutMs: 1000);
+        WaitUntil(() => vm.FetchCount >= 3, timeoutMs: 1000);
 
         vm.FetchCount.Should().BeGreaterThanOrEqualTo(3);
         vm.Deactivate();
     }
 
-    // ── Helper ─────────────────────────────────────────────────────────────────
+    // ── Helpers ────────────────────────────────────────────────────────────────
 
-    private static async Task PollUntilAsync(Func<bool> condition, int timeoutMs = 2000)
+    // Blocking wait: no await between VM calls, so the test never leaves the owner thread.
+    private static void WaitUntil(Func<bool> condition, int timeoutMs = 2000)
+        => SpinWait.SpinUntil(condition, timeoutMs).Should().BeTrue($"condition should be met within {timeoutMs} ms");
+
+    /// <summary>
+    /// Clears <see cref="SynchronizationContext.Current"/> for the test so the live state's
+    /// continuations (e.g. its initial <c>Task.Yield</c>) run on the thread pool instead of
+    /// being queued on xunit's max-concurrency context while the test thread blocks.
+    /// </summary>
+    private sealed class NoSyncContextScope : IDisposable
     {
-        using var cts = new CancellationTokenSource(timeoutMs);
-        while (!condition())
-        {
-            if (cts.IsCancellationRequested)
-                throw new TimeoutException($"Condition not met within {timeoutMs} ms");
-            await Task.Delay(2, CancellationToken.None);
-        }
+        private readonly SynchronizationContext? _previous = SynchronizationContext.Current;
+
+        public NoSyncContextScope() => SynchronizationContext.SetSynchronizationContext(null);
+
+        public void Dispose() => SynchronizationContext.SetSynchronizationContext(_previous);
     }
 }

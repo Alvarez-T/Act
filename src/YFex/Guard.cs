@@ -27,7 +27,7 @@ public static class Guard
             throw new NullReferenceException("At least one argument must not be null or empty.");
     }
 
-    public static void ThrowIfAllNull<T>(T value)
+    public static void ThrowIfAllNull<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] T>(T value)
     {
         if (!HasAnyPropertyFilled(value))
             throw new ArgumentNullException(null, "At least one property must not be null.");
@@ -91,22 +91,28 @@ public static class Guard
             throw new ArgumentException($"Member type '{memberType}' does not match the expression's return type '{returnType}'.", nameof(expression));
     }
 
-    public static bool HasAnyPropertyFilled<T>(T instance)
+    public static bool HasAnyPropertyFilled<[DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.PublicProperties)] T>(T instance)
     {
         if (instance is null) return false;
 
-        return typeof(T).GetProperties().Any(prop => prop.GetValue(instance) switch
+        foreach (var prop in typeof(T).GetProperties())
         {
-            null => false,
-            string str => !string.IsNullOrWhiteSpace(str),
-            int i => i != 0,
-            long l => l != 0,
-            DateTime dt => dt != default,
-            _ => true
-        });
+            var filled = prop.GetValue(instance) switch
+            {
+                null => false,
+                string str => !string.IsNullOrWhiteSpace(str),
+                int i => i != 0,
+                long l => l != 0,
+                DateTime dt => dt != default,
+                _ => true
+            };
+            if (filled) return true;
+        }
+        return false;
     }
 
     /// <summary>Validates an object's data annotations, throwing <see cref="ValidationException"/> if invalid.</summary>
+    [RequiresUnreferencedCode("DataAnnotations validation reflects over the runtime type of the instance; its members may be trimmed.")]
     public static void ThrowIfNotValid(this object obj)
         => Validator.ValidateObject(obj, new ValidationContext(obj, null, null), validateAllProperties: true);
 

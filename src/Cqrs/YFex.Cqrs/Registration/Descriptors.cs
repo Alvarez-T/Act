@@ -3,30 +3,9 @@
 using System.Linq.Expressions;
 using System.Security.Claims;
 using YFex.Authorization.Public;
+using YFex.Validation;
 
 namespace YFex.Cqrs.Registration;
-
-// ── Validator ─────────────────────────────────────────────────────────────────
-
-internal enum ValidatorKind { Inline, TypeRef, FluentTypeRef }
-
-internal readonly struct ValidatorDescriptor
-{
-    public readonly ValidatorKind Kind;
-    /// <summary>Set when Kind == Inline. Type-erased wrapper compiled from user lambda at registration time.</summary>
-    public readonly Func<object, CancellationToken, ValueTask<ValidationResult>>? InlineDelegate;
-    /// <summary>Set when Kind == TypeRef or FluentTypeRef. Resolved from DI at first call (Plan 3).</summary>
-    public readonly Type? ValidatorType;
-
-    private ValidatorDescriptor(ValidatorKind kind,
-        Func<object, CancellationToken, ValueTask<ValidationResult>>? del,
-        Type? type) { Kind = kind; InlineDelegate = del; ValidatorType = type; }
-
-    public static ValidatorDescriptor Inline(Func<object, CancellationToken, ValueTask<ValidationResult>> del)
-        => new(ValidatorKind.Inline, del, null);
-    public static ValidatorDescriptor FromType(Type t, ValidatorKind kind = ValidatorKind.TypeRef)
-        => new(kind, null, t);
-}
 
 // ── Authorizer ────────────────────────────────────────────────────────────────
 

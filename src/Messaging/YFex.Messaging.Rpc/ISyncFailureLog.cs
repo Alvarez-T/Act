@@ -22,6 +22,13 @@ public sealed record SyncFailure(
 
     /// <summary>Failure category — e.g. <c>"outbox"</c>, <c>"saga-compensation"</c>, <c>"saga-escalate"</c> (design §8.1).</summary>
     public string Category { get; init; } = "outbox";
+
+    /// <summary>
+    /// Structured violations when the server rejected the replayed command with a validation error (G7) — the "sync
+    /// issues" screen shows them with messages and paths instead of <see cref="Reason"/>'s flat text.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonConverter(typeof(YFex.Messaging.Rpc.Serialization.ViolationListJsonConverter))]
+    public YFex.Validation.ViolationList Violations { get; init; }
 }
 
 /// <summary>

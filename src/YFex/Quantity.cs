@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 
-namespace Act.Utils;
+namespace YFex;
 
 /// <summary>
 /// A quantity with up to 4-decimal scale (DF-e <c>qCom</c>/<c>qTrib</c> carry up to
@@ -27,7 +27,8 @@ public readonly record struct Quantity :
     IMultiplyOperators<Quantity, decimal, Quantity>,
     IComparisonOperators<Quantity, Quantity, bool>,
     IMinMaxValue<Quantity>,
-    IAdditiveIdentity<Quantity, Quantity>
+    IAdditiveIdentity<Quantity, Quantity>,
+    IAmount<Quantity>
 {
     public const int Scale = 4;
     private readonly decimal _value;
@@ -44,6 +45,19 @@ public readonly record struct Quantity :
     static Quantity IMinMaxValue<Quantity>.MinValue => MinValue;
     static Quantity IMinMaxValue<Quantity>.MaxValue => MaxValue;
     static Quantity IAdditiveIdentity<Quantity, Quantity>.AdditiveIdentity => Zero;
+
+    /// <summary>Raw type <c>"quantity"</c> (decimal storage).</summary>
+    public static RawType RawType { get; } = RawType.Define<Quantity>("quantity", ValueKind.Decimal, RawType.SpanFormatter<Quantity>());
+
+    public RawValue ToRaw() => RawValue.Typed(RawType, _value);
+
+    /// <summary>Reads Quantity, or a plain number.</summary>
+    public static bool TryFromRaw(in RawValue raw, out Quantity value)
+    {
+        bool ok = raw.TryRead(RawType, out decimal d);
+        value = ok ? new Quantity(d) : default;
+        return ok;
+    }
 
     public static Quantity operator +(Quantity a, Quantity b) => new(a._value + b._value);
     public static Quantity operator -(Quantity a, Quantity b) => new(a._value - b._value);

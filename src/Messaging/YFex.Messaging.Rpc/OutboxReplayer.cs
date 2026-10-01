@@ -184,7 +184,7 @@ public sealed class OutboxReplayer : BackgroundService
                 // Dead-letter the command AND undo the local optimistic effect (invalidate → refetch).
                 _logger.LogWarning("Replay of {Key} rejected; escalating to the sync failure log. {Reason}",
                     entry.IdempotencyKey, reason);
-                await MoveToFailureLogAsync(entry, "conflict", ct).ConfigureAwait(false);
+                await MoveToFailureLogAsync(entry, "conflict", ct, outcome.Error.Violations).ConfigureAwait(false);
                 await UndoOptimisticEffectAsync(outcome, ct).ConfigureAwait(false);
                 break;
         }
@@ -220,11 +220,12 @@ public sealed class OutboxReplayer : BackgroundService
     private static string ConflictReason(in ReplayOutcome outcome)
         => string.IsNullOrEmpty(outcome.Error.Message) ? "conflict" : outcome.Error.Message;
 
-    private async Task MoveToFailureLogAsync(OutboxEntry entry, string reason, CancellationToken ct)
+    private async Task MoveToFailureLogAsync(OutboxEntry entry, string reason, CancellationToken ct,
+        YFex.Validation.ViolationList violations = default)
     {
         await _outbox.RemoveAsync(entry.IdempotencyKey, ct).ConfigureAwait(false);
         var failure = new SyncFailure(entry.IdempotencyKey, entry.CommandTypeName, entry.Payload, reason,
-            DateTimeOffset.UtcNow, false);
+            DateTimeOffset.UtcNow, false) { Violations = violations };
         await _failureLog.AddAsync(failure, ct).ConfigureAwait(false);
         _eventBus.Publish(new SyncFailureEvent(entry.IdempotencyKey, entry.CommandTypeName, reason));
     }

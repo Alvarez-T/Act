@@ -120,8 +120,11 @@ namespace YFex.State
         public bool CancelPrevious { get; init; }
     }
 
-    /// <summary>Debounces the method call by the specified milliseconds.</summary>
-    [AttributeUsage(AttributeTargets.Method, AllowMultiple = false)]
+    /// <summary>
+    /// On a method: debounces the call by the specified milliseconds. On an <c>[Observable]</c> property
+    /// (07 §6.3): debounces that property's ASYNC validation rules (sync rules still run immediately).
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
     public sealed class DebounceAttribute : Attribute
     {
         public DebounceAttribute(int milliseconds) => Milliseconds = milliseconds;
@@ -214,6 +217,7 @@ namespace YFex.State
     public sealed class EpochAttribute : Attribute { }
 
     /// <summary>Validates the property using a synchronous validator.</summary>
+    [Obsolete("Use [ValidateWith<TRule>] from YFex.Validation (IValueRule<T> / ITextRule). Still honoured by the validation generator for one release.")]
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true)]
     public sealed class ValidateWithAttribute : Attribute
     {
@@ -222,6 +226,7 @@ namespace YFex.State
     }
 
     /// <summary>Validates the property using an asynchronous validator.</summary>
+    [Obsolete("Use [ValidateWith<TRule>] with an IAsyncValueRule<T> from YFex.Validation. Still honoured by the validation generator for one release.")]
     [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = true)]
     public sealed class ValidateAsyncAttribute : Attribute
     {
@@ -247,5 +252,61 @@ namespace YFex.State
     {
         public GateAttribute(string propertyName) => PropertyName = propertyName;
         public string PropertyName { get; }
+    }
+
+    // ── Validation timing (07 §6, D16: timing belongs to YFex.State) ─────────
+
+    /// <summary>
+    /// Class-level validation defaults for a view model. <see cref="Trigger"/> = when rules RUN;
+    /// <see cref="Show"/> = when violations become VISIBLE.
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Class, AllowMultiple = false)]
+    public sealed class ValidationOptionsAttribute : Attribute
+    {
+        public ValidateOn Trigger { get; init; } = ValidateOn.Change;
+        public ShowErrors Show { get; init; } = ShowErrors.AfterTouched;
+    }
+
+    /// <summary>Per-property override of <see cref="ValidationOptionsAttribute.Trigger"/>.</summary>
+    [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field, AllowMultiple = false)]
+    public sealed class ValidateOnAttribute : Attribute
+    {
+        public ValidateOnAttribute(ValidateOn trigger) => Trigger = trigger;
+        public ValidateOn Trigger { get; }
+    }
+
+    /// <summary>When the rules of a property run.</summary>
+    public enum ValidateOn : byte
+    {
+        /// <summary>Every setter call (with a commit-mode input this is effectively on commit).</summary>
+        Change,
+        /// <summary>Only when the control reports Touch (blur / Enter).</summary>
+        Commit,
+        /// <summary>Only in <c>ValidateAll</c>.</summary>
+        Submit,
+    }
+
+    /// <summary>When violations become visible (<c>HasErrors</c> for Gates ignores visibility).</summary>
+    public enum ShowErrors : byte
+    {
+        /// <summary>As soon as validated.</summary>
+        Immediately,
+        /// <summary>After the field lost focus once, or after a submit attempt (default).</summary>
+        AfterTouched,
+        /// <summary>Only after Save was attempted.</summary>
+        AfterSubmit,
+    }
+
+    /// <summary>What happened to a submitted command/query, from the view model's point of view (07 §7).</summary>
+    public enum ServerOutcome : byte
+    {
+        /// <summary>Accepted.</summary>
+        Ok,
+        /// <summary>Stored offline for later replay — nothing to show on fields.</summary>
+        Queued,
+        /// <summary>Rejected with violations — they are now on the fields / form summary.</summary>
+        Invalid,
+        /// <summary>Failed for another reason (form-level).</summary>
+        Failed,
     }
 }

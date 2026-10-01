@@ -5,6 +5,7 @@ namespace YFex.State.Validation;
 /// <summary>
 /// Immutable validation outcome. Success is <c>default</c> — zero allocation on the happy path.
 /// </summary>
+[Obsolete("Use YFex.Validation.Violation (one failure) / YFex.Validation.ValidationResult (many). Legacy [ValidateWith(typeof)] validators still return this type.")]
 public readonly struct ValidationResult : IEquatable<ValidationResult>
 {
     public string? Message { get; }

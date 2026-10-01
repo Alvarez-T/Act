@@ -1,12 +1,11 @@
-﻿using System.Security.Claims;
-using System.Text;
-using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.DependencyInjection;
 using YFex;
 using YFex.Cqrs;
 using YFex.Cqrs.Runtime;
 using YFex.Messaging;
 
 using YFex.Persistence;
+using YFex.Validation;
 
 namespace YFex.Messaging.Rpc;
 
@@ -29,6 +28,8 @@ public sealed class LocalDispatcher : IDispatcher
     private readonly IEventBus _eventBus;
     private readonly IServiceProvider _sp;
     private readonly YFex.Resilience.IResiliencePipelineFactory? _pipelineFactory;
+    // Stage 2 principal (D29): the remote caller's CallContext, else the host's IPrincipalAccessor.
+    private readonly CallPrincipalSource _principal;
 
     public LocalDispatcher(
         IHandlerInvoker invoker,
@@ -42,7 +43,8 @@ public sealed class LocalDispatcher : IDispatcher
         // dispatch keeps its legacy behaviour (the CommandPolicy.Timeout CTS path).
         YFex.Resilience.IResiliencePipelineFactory? pipelineFactory = null)
     {
-        _invoker = invoker;
+        // A ValidatingHandlerInvoker (server) would repeat stages 1/5 that this dispatcher already runs.
+        _invoker = invoker is ValidatingHandlerInvoker validating ? validating.Inner : invoker;
         _registry = registry;
         _networkStatus = networkStatus;
         _cache = cache;
@@ -50,6 +52,7 @@ public sealed class LocalDispatcher : IDispatcher
         _eventBus = eventBus;
         _sp = sp;
         _pipelineFactory = pipelineFactory;
+        _principal = new CallPrincipalSource(sp);
     }
 
     // â”€â”€ Query â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -58,33 +61,53 @@ public sealed class LocalDispatcher : IDispatcher
         TQuery query, CancellationToken ct = default)
         where TQuery : IQuery<TResult>
     {
+        // Coerce (paging clamps) → stage 1, before the offline cache or the cache key: an invalid query never reaches the
+        // cache (09 §7).
+        query = MessagePipeline.Coerce(in query);
+        if (!MessagePipeline.CheckShape(in query, out var shape))
+            return CacheableQueryResult<TResult>.ValidationProblem(shape);
+
         if (!_networkStatus.IsConnected)
             return await OfflineQueryAsync<TQuery, TResult>(query, ct).ConfigureAwait(false);
 
         _registry.Queries.TryGetValue(typeof(TQuery), out var policy);
 
-        var validationResult = policy?.Validate is not null
-            ? await policy.Validate(query!, ct).ConfigureAwait(false)
-            : ValidationResult.Success();
-        if (!validationResult.IsValid)
-            return CacheableQueryResult<TResult>.ValidationProblem(FormatErrors(validationResult));
-
-        if (policy?.Authorize is not null && !policy.Authorize(ClaimsPrincipal.Current ?? new(), query!))
+        // Stages (1 above) → 2 → 3–4 → 5 (09 §1): authorize, situation + rules (queries never reject on the verdict), context rules.
+        if (!_principal.Authorize(policy?.Authorize, query!))
             return CacheableQueryResult<TResult>.Unauthorized();
 
+        RulesOutcome rules = default;
+        if (policy?.Rules is { } ruleStage) rules = await ruleStage.RunAsync(query!, _sp, ct).ConfigureAwait(false);
+        using var decisionScope = DecisionContext.Enter(query!, policy?.Rules, rules);
+
+        if (policy?.Validation is { } contextRules)
+        {
+            var context = await MessagePipeline.CheckContextAsync(query, contextRules, _sp, ct).ConfigureAwait(false);
+            if (!context.IsValid) return CacheableQueryResult<TResult>.ValidationProblem(context);
+        }
+
         var cacheKey = QueryCacheKey.For(typeof(TQuery), query!, policy, _sp);
-        if (cacheKey is null)
-            return new Fresh<TResult>(await InvokeQueryAsync<TResult>(query!, policy, ct).ConfigureAwait(false));
+        try
+        {
+            if (cacheKey is null)
+                return new Fresh<TResult>(await InvokeQueryAsync<TResult>(query!, policy, ct).ConfigureAwait(false));
 
-        // Stampede-safe read-through: concurrent misses collapse into one factory call on FusionCache.
-        var result = await _cache.GetOrSetAsync<TResult>(
-            cacheKey,
-            innerCt => InvokeQueryAsync<TResult>(query!, policy, innerCt),
-            QueryCacheKey.Options(typeof(TQuery), policy, query!),
-            ct).ConfigureAwait(false);
+            // Stampede-safe read-through: concurrent misses collapse into one factory call on FusionCache.
+            var result = await _cache.GetOrSetAsync<TResult>(
+                cacheKey,
+                innerCt => InvokeQueryAsync<TResult>(query!, policy, innerCt),
+                QueryCacheKey.Options(typeof(TQuery), policy, query!),
+                ct).ConfigureAwait(false);
 
-        // Online read-through — authoritative, regardless of whether L1 served it within TTL.
-        return new Fresh<TResult>(result);
+            // Online read-through — authoritative, regardless of whether L1 served it within TTL.
+            return new Fresh<TResult>(result);
+        }
+        catch (ErrorResultException rejected)
+        {
+            // Same contract as commands and the generated RPC contract impl: a handler's typed rejection (not found,
+            // resource permission…) is the result — and, thrown inside the factory, it is never cached.
+            return rejected.TypedError;
+        }
     }
 
     private async Task<TResult> InvokeQueryAsync<TResult>(object query, QueryPolicy? policy, CancellationToken ct)
@@ -129,30 +152,54 @@ public sealed class LocalDispatcher : IDispatcher
 
         _registry.Commands.TryGetValue(typeof(TCommand), out var policy);
 
-        var valResult = policy?.Validate is not null
-            ? await policy.Validate(cmd!, ct).ConfigureAwait(false)
-            : ValidationResult.Success();
-        if (!valResult.IsValid)
-            return QueueableResult<TResult>.Fail(FormatErrors(valResult));
+        // Stages 1 → 2 → 5 (09 §1): shape, authorize, context rules.
+        if (!MessagePipeline.CheckShape(in cmd, out var shape))
+            return QueueableResult<TResult>.Invalid(shape);
 
-        if (policy?.Authorize is not null && !policy.Authorize(ClaimsPrincipal.Current ?? new(), cmd!))
-            return QueueableResult<TResult>.Fail("Unauthorized.");
+        if (!_principal.Authorize(policy?.Authorize, cmd!))
+            return QueueableResult<TResult>.Unauthorized("Unauthorized.");
+
+        // Stages 3–4 (09 §6): situation + rules; Denied / approval required / mismatch policy reject here.
+        RulesOutcome rules = default;
+        if (policy?.Rules is { } ruleStage)
+        {
+            rules = await ruleStage.RunAsync(cmd!, _sp, ct).ConfigureAwait(false);
+            if (rules.Error is { } rejected) return rejected;
+        }
+
+        if (policy?.Validation is { } contextRules)
+        {
+            var context = await MessagePipeline.CheckContextAsync(cmd, contextRules, _sp, ct).ConfigureAwait(false);
+            if (!context.IsValid) return QueueableResult<TResult>.Invalid(context);
+        }
+
+        // The decision flows to IRuledCommandHandler / IDecisionAccessor through the async context.
+        using var decisionScope = DecisionContext.Enter(cmd!, policy?.Rules, rules);
 
         // Scope-specific override (YFex.CustomLogic). Optional seam — absent unless the CustomLogic.Cqrs
         // bridge is registered. A handled override replaces the default handler but still flows through the
         // rest of the pipeline (optimistic update, invalidation, executed-observer/journal).
         var customLogic = _sp.GetService<ICommandCustomLogic>();
         TResult result;
-        if (customLogic is not null)
+        try
         {
-            var over = await customLogic.TryHandleAsync(typeof(TCommand), cmd!, ct).ConfigureAwait(false);
-            result = over.IsHandled
-                ? (TResult)over.Result!
-                : await InvokeCommandAsync<TResult>(cmd!, policy, ct).ConfigureAwait(false);
+            if (customLogic is not null)
+            {
+                var over = await customLogic.TryHandleAsync(typeof(TCommand), cmd!, ct).ConfigureAwait(false);
+                result = over.IsHandled
+                    ? (TResult)over.Result!
+                    : await InvokeCommandAsync<TResult>(cmd!, policy, ct).ConfigureAwait(false);
+            }
+            else
+            {
+                result = await InvokeCommandAsync<TResult>(cmd!, policy, ct).ConfigureAwait(false);
+            }
         }
-        else
+        catch (ErrorResultException rejected)
         {
-            result = await InvokeCommandAsync<TResult>(cmd!, policy, ct).ConfigureAwait(false);
+            // A handler rejecting with a typed error (domain invariant, resource permission, concurrency) — same
+            // contract as the generated RPC contract impl: the error becomes the result, nothing else runs.
+            return rejected.TypedError;
         }
 
         await ApplyOptimisticUpdatesAsync(cmd!, policy, ct).ConfigureAwait(false);
@@ -165,6 +212,10 @@ public sealed class LocalDispatcher : IDispatcher
     private async ValueTask<QueueableResult<TResult>> OfflineCommandAsync<TCommand, TResult>(
         TCommand cmd, CancellationToken ct) where TCommand : ICommand<TResult>
     {
+        // Stage 1 before anything is queued: an invalid command is never enqueued (09 §8, G6).
+        if (!MessagePipeline.CheckShape(in cmd, out var shape))
+            return QueueableResult<TResult>.Invalid(shape);
+
         _registry.Commands.TryGetValue(typeof(TCommand), out var policy);
 
         if (policy?.OnOfflineHandler is not null)
@@ -197,20 +248,41 @@ public sealed class LocalDispatcher : IDispatcher
 
         _registry.Commands.TryGetValue(typeof(TCommand), out var policy);
 
-        var valResult = policy?.Validate is not null
-            ? await policy.Validate(cmd!, ct).ConfigureAwait(false)
-            : ValidationResult.Success();
-        if (!valResult.IsValid)
-            return QueueableResult.Fail(FormatErrors(valResult));
+        // Stages 1 → 2 → 5 (09 §1): shape, authorize, context rules.
+        if (!MessagePipeline.CheckShape(in cmd, out var shape))
+            return QueueableResult.Invalid(shape);
 
-        if (policy?.Authorize is not null && !policy.Authorize(ClaimsPrincipal.Current ?? new(), cmd!))
-            return QueueableResult.Fail("Unauthorized.");
+        if (!_principal.Authorize(policy?.Authorize, cmd!))
+            return QueueableResult.Unauthorized("Unauthorized.");
+
+        // Stages 3–4 (09 §6).
+        RulesOutcome rules = default;
+        if (policy?.Rules is { } ruleStage)
+        {
+            rules = await ruleStage.RunAsync(cmd!, _sp, ct).ConfigureAwait(false);
+            if (rules.Error is { } rejected) return rejected;
+        }
+
+        if (policy?.Validation is { } contextRules)
+        {
+            var context = await MessagePipeline.CheckContextAsync(cmd, contextRules, _sp, ct).ConfigureAwait(false);
+            if (!context.IsValid) return QueueableResult.Invalid(context);
+        }
+
+        using var decisionScope = DecisionContext.Enter(cmd!, policy?.Rules, rules);
 
         // Scope-specific override (YFex.CustomLogic). Optional seam; a handled override replaces the
         // default handler, then invalidation + executed-observer run exactly as for the default path.
         var customLogic = _sp.GetService<ICommandCustomLogic>();
-        if (customLogic is null || !(await customLogic.TryHandleAsync(typeof(TCommand), cmd!, ct).ConfigureAwait(false)).IsHandled)
-            await InvokeCommandVoidAsync(cmd!, policy, ct).ConfigureAwait(false);
+        try
+        {
+            if (customLogic is null || !(await customLogic.TryHandleAsync(typeof(TCommand), cmd!, ct).ConfigureAwait(false)).IsHandled)
+                await InvokeCommandVoidAsync(cmd!, policy, ct).ConfigureAwait(false);
+        }
+        catch (ErrorResultException rejected)
+        {
+            return rejected.TypedError;
+        }
         await InvalidateCachesAsync(cmd!, policy, ct).ConfigureAwait(false);
         await NotifyExecutedAsync(cmd!, result: null, ct).ConfigureAwait(false);
 
@@ -230,6 +302,10 @@ public sealed class LocalDispatcher : IDispatcher
     private async ValueTask<QueueableResult> OfflineCommandVoidAsync<TCommand>(
         TCommand cmd, CancellationToken ct) where TCommand : ICommand
     {
+        // Stage 1 before anything is queued: an invalid command is never enqueued (09 §8, G6).
+        if (!MessagePipeline.CheckShape(in cmd, out var shape))
+            return QueueableResult.Invalid(shape);
+
         _registry.Commands.TryGetValue(typeof(TCommand), out var policy);
 
         if (policy?.OnOfflineHandler is not null)
@@ -343,18 +419,5 @@ public sealed class LocalDispatcher : IDispatcher
             : null;
         if (cts is not null) cts.CancelAfter(policy!.Timeout!.Value);
         await _invoker.InvokeAsync(cmd, cts?.Token ?? ct).ConfigureAwait(false);
-    }
-
-    private static string FormatErrors(ValidationResult result)
-    {
-        if (result.Errors.Count == 0) return "Validation failed.";
-        var sb = new StringBuilder();
-        var errors = result.Errors;
-        for (int i = 0; i < errors.Count; i++)
-        {
-            if (i > 0) sb.Append("; ");
-            sb.Append(errors[i].Message);
-        }
-        return sb.ToString();
     }
 }

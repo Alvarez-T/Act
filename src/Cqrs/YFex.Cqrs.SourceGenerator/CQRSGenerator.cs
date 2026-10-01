@@ -31,6 +31,20 @@ public sealed class CQRSGenerator : IIncrementalGenerator
     private const string ICacheableInterface    = "YFex.Cqrs.ICacheable";
     private const string IAggregateConfigBase   = "YFex.Cqrs.Configuration.IAggregateConfiguration";
 
+    // ActualLab.Generators' type formats (GenerationExt.ToGlobalName / ToFullName) — the emitted Fusion proxies must be
+    // byte-identical to what ActualLab would generate (validation D30; golden test in YFex.Messaging.Rpc.Tests).
+    private static readonly SymbolDisplayFormat ProxyGlobalFormat = new(
+        SymbolDisplayGlobalNamespaceStyle.Included,
+        SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+        SymbolDisplayGenericsOptions.IncludeTypeParameters,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.ExpandNullable);
+
+    private static readonly SymbolDisplayFormat ProxyKeepFormat = new(
+        SymbolDisplayGlobalNamespaceStyle.Omitted,
+        SymbolDisplayTypeQualificationStyle.NameAndContainingTypesAndNamespaces,
+        SymbolDisplayGenericsOptions.IncludeTypeParameters,
+        miscellaneousOptions: SymbolDisplayMiscellaneousOptions.ExpandNullable);
+
     private const string QueryClassName   = "Queries";
     private const string CommandClassName = "Commands";
     private const string EventsClassName  = "Events";
@@ -88,7 +102,7 @@ public sealed class CQRSGenerator : IIncrementalGenerator
                 .Where(static pair => pair.Right)
                 .Select(static (pair, _) => pair.Left);
 
-        // Emit three files per aggregate: interface, server impl, and registrations.
+        // Emit per aggregate: interface (+ client view), server impl, registrations and the three Fusion proxies.
         context.RegisterSourceOutput(rpcModels, static (spc, model) =>
         {
             var (ifaceHint, ifaceSrc) = RpcContractCodeBuilder.GenerateInterface(model);
@@ -99,6 +113,16 @@ public sealed class CQRSGenerator : IIncrementalGenerator
 
             var (regHint, regSrc) = RpcContractCodeBuilder.GenerateRegistrations(model);
             spc.AddSource(regHint, regSrc);
+
+            // Fusion proxies (D30): ActualLab.Generators can't see the types above, and Fusion 13 has no runtime proxy
+            // fallback — emit them here with ActualLab's exact name/template.
+            foreach (var (hint, src) in new[]
+            {
+                RpcProxyCodeBuilder.GenerateContractProxy(model),
+                RpcProxyCodeBuilder.GenerateClientProxy(model),
+                RpcProxyCodeBuilder.GenerateImplProxy(model),
+            })
+                spc.AddSource(hint, src);
         });
     }
 
@@ -168,6 +192,7 @@ public sealed class CQRSGenerator : IIncrementalGenerator
             if (!member.IsRecord) continue;
 
             string? returnType = null;
+            ITypeSymbol? returnTypeSymbol = null;
             foreach (var iface in member.AllInterfaces)
             {
                 if (iface.IsGenericType && GetBaseInterfaceName(iface) == IQueryInterface)
@@ -175,6 +200,7 @@ public sealed class CQRSGenerator : IIncrementalGenerator
                     returnType = iface.TypeArguments[0].ToDisplayString(
                         SymbolDisplayFormat.FullyQualifiedFormat
                             .WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted));
+                    returnTypeSymbol = iface.TypeArguments[0];
                     break;
                 }
             }
@@ -182,7 +208,7 @@ public sealed class CQRSGenerator : IIncrementalGenerator
             if (returnType is null) continue;
 
             // Skip if user already declared a method with the same name (override guard)
-            string methodName = CodeBuilder.GetQueryMethodName(member.Name);
+            string methodName = HelperName(queryClass, CodeBuilder.GetQueryMethodName(member.Name));
             if (queryClass.GetMembers(methodName).Any(m => m.Kind == SymbolKind.Method)) continue;
 
             // ICacheable marker → the query can be served from the offline cache, so the helper
@@ -193,9 +219,18 @@ public sealed class CQRSGenerator : IIncrementalGenerator
             output.Add(new QueryToGenerate(
                 member.Name, methodName, returnType,
                 new EquatableArray<ParameterInfo>(ExtractParameters(member)),
-                isCacheable));
+                isCacheable,
+                returnTypeSymbol!.ToDisplayString(ProxyGlobalFormat),
+                returnTypeSymbol!.ToDisplayString(ProxyKeepFormat)));
         }
     }
+
+    /// <summary>
+    /// A record without the Query/Command suffix (<c>CreateCustomer</c>) would get a helper with its own name — a
+    /// CS0102 clash with the nested type. Such helpers are named <c>{Name}Async</c> instead.
+    /// </summary>
+    private static string HelperName(INamedTypeSymbol container, string methodName)
+        => container.GetMembers(methodName).Any(m => m.Kind == SymbolKind.NamedType) ? methodName + "Async" : methodName;
 
     private static void ExtractCommands(
         INamedTypeSymbol commandClass,
@@ -212,6 +247,7 @@ public sealed class CQRSGenerator : IIncrementalGenerator
 
             // ICommand<TResult>
             string? resultType = null;
+            ITypeSymbol? resultTypeSymbol = null;
             foreach (var iface in member.AllInterfaces)
             {
                 if (iface.IsGenericType && GetBaseInterfaceName(iface) == ICommandInterface)
@@ -219,6 +255,7 @@ public sealed class CQRSGenerator : IIncrementalGenerator
                     resultType = iface.TypeArguments[0].ToDisplayString(
                         SymbolDisplayFormat.FullyQualifiedFormat
                             .WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Omitted));
+                    resultTypeSymbol = iface.TypeArguments[0];
                     break;
                 }
             }
@@ -229,14 +266,16 @@ public sealed class CQRSGenerator : IIncrementalGenerator
 
             if (!implementsICommand) continue;
 
-            string methodName = CodeBuilder.GetCommandMethodName(member.Name);
+            string methodName = HelperName(commandClass, CodeBuilder.GetCommandMethodName(member.Name));
             if (commandClass.GetMembers(methodName).Any(m => m.Kind == SymbolKind.Method)) continue;
 
             output.Add(new CommandToGenerate(
                 member.Name, methodName,
                 new EquatableArray<ParameterInfo>(ExtractParameters(member)),
                 resultType,
-                isQueueable));
+                isQueueable,
+                resultTypeSymbol?.ToDisplayString(ProxyGlobalFormat),
+                resultTypeSymbol?.ToDisplayString(ProxyKeepFormat)));
         }
     }
 

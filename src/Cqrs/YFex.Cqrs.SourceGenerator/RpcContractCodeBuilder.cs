@@ -7,16 +7,22 @@ namespace YFex.Cqrs.SourceGenerator;
 /// defines the <c>YFEX_RPC</c> preprocessor constant (injected via
 /// <c>YFex.Messaging.Rpc.targets</c>).
 ///
-/// Emits four output files per aggregate:
+/// Emits per aggregate:
 /// <list type="number">
-///   <item><c>I{Aggregate}RpcContract</c> — Fusion compute-service interface.</item>
+///   <item><c>I{Aggregate}RpcContract</c> — Fusion compute-service interface (+ the <c>I{Aggregate}RpcClient</c> client view).</item>
 ///   <item><c>{Aggregate}RpcContractImpl</c> — server-side impl that forwards to <c>IHandlerInvoker</c>.</item>
-///   <item><c>{Aggregate}RpcServerRegistration</c> — DI extension to call <c>fusion.AddServer()</c>.</item>
-///   <item><c>{Aggregate}RpcClientRegistration</c> — DI extension that populates the <c>FusionMessageBusBuilder</c>.</item>
+///   <item><c>{Aggregate}RpcServerRegistration</c> / <c>{Aggregate}RpcClientRegistration</c> — DI extensions, formatter
+///   registration and the <c>FusionMessageBusBuilder</c> routes.</item>
 /// </list>
+/// The Fusion proxies of these types are emitted by <see cref="RpcProxyCodeBuilder"/> (validation D30).
 /// </summary>
 internal static class RpcContractCodeBuilder
 {
+    // Using directives of the contract / impl files. ActualLab's proxy generator copies the declaring file's usings
+    // into the proxy file, so RpcProxyCodeBuilder emits the same lists (D30 golden test).
+    internal static readonly string[] ContractUsings = { "ActualLab.Fusion", "YFex.Cqrs" };
+    internal static readonly string[] ImplUsings = { "ActualLab.Fusion", "YFex.Cqrs", "YFex.Messaging.Rpc" };
+
     // ── Entry point ───────────────────────────────────────────────────────────
 
     public static (string Hint, string Source) GenerateInterface(ClassToGenerate model) =>
@@ -37,8 +43,7 @@ internal static class RpcContractCodeBuilder
         sb.AppendLine("#nullable enable");
         sb.AppendLine("#if YFEX_RPC");
         sb.AppendLine();
-        sb.AppendLine("using ActualLab.Fusion;");
-        sb.AppendLine("using YFex.Cqrs;");
+        foreach (var u in ContractUsings) sb.Append("using ").Append(u).AppendLine(";");
         sb.AppendLine();
         if (!string.IsNullOrEmpty(model.Namespace))
             sb.Append("namespace ").Append(model.Namespace).AppendLine(";").AppendLine();
@@ -52,17 +57,21 @@ internal static class RpcContractCodeBuilder
         foreach (var q in model.Queries)
         {
             sb.AppendLine("    /// <summary>Fusion compute-method — result is cached and pushed on invalidation.</summary>");
+            sb.AppendLine("    /// <param name=\"variant\">Pass null. The server replaces it with the caller's compute-cache variant (tenant, and user");
+            sb.AppendLine("    /// for <c>ScopedByUser</c>) so a cached result is never shared across tenants/users (validation D29).</param>");
             sb.AppendLine("    [ComputeMethod]");
             sb.Append("    System.Threading.Tasks.Task<YFex.Cqrs.Result<").Append(q.ReturnType).Append(">> ");
-            sb.Append(q.MethodName).Append("(").Append(q.RecordName)
-              .AppendLine(" q, System.Threading.CancellationToken ct = default);");
+            sb.Append(q.MethodName).Append("(").Append(QueryType(model, q.RecordName))
+              .AppendLine(" q, string? variant = null, System.Threading.CancellationToken ct = default);");
             sb.AppendLine();
         }
 
         foreach (var cmd in model.Commands)
         {
-            sb.AppendLine("    /// <summary>Fusion command-handler — executes once, triggers compute invalidation.</summary>");
-            sb.AppendLine("    [CommandHandler]");
+            // Regular RPC call, NOT a CommandR [CommandHandler]: CommandR requires the argument to implement ActualLab's
+            // ICommand<T> ("Wrong command handler method arguments" at registration) and YFex records implement only
+            // YFex.Cqrs.ICommand. The server impl invalidates with Invalidation.Begin() after the handler succeeds.
+            sb.AppendLine("    /// <summary>Command — executes once on the server, then invalidates the affected compute methods.</summary>");
             if (!string.IsNullOrEmpty(cmd.ResultType))
             {
                 sb.Append("    System.Threading.Tasks.Task<YFex.Cqrs.QueueableResult<")
@@ -72,11 +81,20 @@ internal static class RpcContractCodeBuilder
             {
                 sb.Append("    System.Threading.Tasks.Task<YFex.Cqrs.QueueableResult> ");
             }
-            sb.Append(cmd.MethodName).Append("(").Append(cmd.RecordName)
+            sb.Append(cmd.MethodName).Append("(").Append(CommandType(model, cmd.RecordName))
               .AppendLine(" cmd, System.Threading.CancellationToken ct = default);");
             sb.AppendLine();
         }
 
+        sb.AppendLine("}");
+        sb.AppendLine();
+        // Client view (D30): a distinct service type registered under the contract's wire name, so a hub that hosts
+        // the server can also hold a REMOTE client of the same contract (Fusion: rpc.AddClient<IClient>(nameof(IService))).
+        sb.Append("/// <summary>Client-side view of <see cref=\"").Append(ifaceName)
+          .AppendLine("\"/>: a distinct service type for hubs that also host the server — registered under the contract's");
+        sb.AppendLine("/// wire name, its calls always go to the remote peer.</summary>");
+        sb.Append("public interface I").Append(model.ClassName).Append("RpcClient : ").AppendLine(ifaceName);
+        sb.AppendLine("{");
         sb.AppendLine("}");
         sb.AppendLine("#endif // YFEX_RPC");
         return sb.ToString();
@@ -91,9 +109,7 @@ internal static class RpcContractCodeBuilder
         sb.AppendLine("#nullable enable");
         sb.AppendLine("#if YFEX_RPC");
         sb.AppendLine();
-        sb.AppendLine("using ActualLab.Fusion;");
-        sb.AppendLine("using YFex.Cqrs;");
-        sb.AppendLine("using YFex.Messaging.Rpc;");
+        foreach (var u in ImplUsings) sb.Append("using ").Append(u).AppendLine(";");
         sb.AppendLine();
         if (!string.IsNullOrEmpty(model.Namespace))
             sb.Append("namespace ").Append(model.Namespace).AppendLine(";").AppendLine();
@@ -117,15 +133,25 @@ internal static class RpcContractCodeBuilder
             sb.Append("    public virtual async System.Threading.Tasks.Task<YFex.Cqrs.Result<")
               .Append(q.ReturnType).Append(">> ")
               .Append(q.MethodName)
-              .Append("(").Append(q.RecordName).AppendLine(" q, System.Threading.CancellationToken ct = default)");
+              .Append("(").Append(QueryType(model, q.RecordName))
+              .AppendLine(" q, string? variant = null, System.Threading.CancellationToken ct = default)");
+            // `variant` is only part of Fusion's compute-cache key (set by CallContextMiddleware); the handler never sees it.
             sb.AppendLine("    {");
-            sb.Append("        var value = await _invoker.InvokeAsync<").Append(q.ReturnType)
+            sb.AppendLine("        try");
+            sb.AppendLine("        {");
+            sb.Append("            var value = await _invoker.InvokeAsync<").Append(q.ReturnType)
               .AppendLine(">(q, ct).ConfigureAwait(false);");
-            sb.Append("        return YFex.Cqrs.Result<").Append(q.ReturnType).AppendLine(">.Ok(value);");
+            sb.Append("            return YFex.Cqrs.Result<").Append(q.ReturnType).AppendLine(">.Ok(value);");
+            sb.AppendLine("        }");
+            // Validation rejections (server invoker decorator) / converted handler failures → typed error result.
+            sb.AppendLine("        catch (YFex.Cqrs.ErrorResultException ere)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            return ere.TypedError;");
+            sb.AppendLine("        }");
             sb.AppendLine("    }");
         }
 
-        // Commands → [CommandHandler] virtual methods with Invalidation.Begin() hook
+        // Commands → regular virtual methods (no CommandR [CommandHandler], see BuildInterface) with an Invalidation.Begin() hook
         foreach (var cmd in model.Commands)
         {
             bool hasResult = !string.IsNullOrEmpty(cmd.ResultType);
@@ -134,12 +160,11 @@ internal static class RpcContractCodeBuilder
                 : "YFex.Cqrs.QueueableResult";
 
             sb.AppendLine();
-            sb.AppendLine("    [CommandHandler]");
             sb.Append("    public virtual async System.Threading.Tasks.Task<").Append(resultTypeFull).Append("> ")
               .Append(cmd.MethodName)
-              .Append("(").Append(cmd.RecordName).AppendLine(" cmd, System.Threading.CancellationToken ct = default)");
+              .Append("(").Append(CommandType(model, cmd.RecordName)).AppendLine(" cmd, System.Threading.CancellationToken ct = default)");
             sb.AppendLine("    {");
-            // Fusion calls the method inside Invalidation.IsActive to record invalidation deps.
+            // Never execute a command inside an invalidation pass (a caller wrapping it in Invalidation.Begin()).
             sb.AppendLine("        if (Invalidation.IsActive)");
             sb.AppendLine("        {");
             sb.AppendLine("            // Override OnInvalidate() to emit compute-method calls that should be invalidated.");
@@ -164,12 +189,11 @@ internal static class RpcContractCodeBuilder
                 sb.AppendLine("            return YFex.Cqrs.QueueableResult.Ok();");
             }
             sb.AppendLine("        }");
-            sb.AppendLine("        catch (YFex.Messaging.Rpc.Wolverine.ResultConversionException rce)");
+            // Base of the Wolverine ResultConversionException and the validation rejection of ValidatingHandlerInvoker —
+            // catching the base keeps generated servers free of any Wolverine reference.
+            sb.AppendLine("        catch (YFex.Cqrs.ErrorResultException ere)");
             sb.AppendLine("        {");
-            if (hasResult)
-                sb.AppendLine("            return rce.TypedError;");
-            else
-                sb.AppendLine("            return rce.TypedError;");
+            sb.AppendLine("            return ere.TypedError;");
             sb.AppendLine("        }");
             sb.AppendLine("    }");
         }
@@ -185,6 +209,16 @@ internal static class RpcContractCodeBuilder
         sb.AppendLine("#endif // YFEX_RPC");
         return sb.ToString();
     }
+
+    // Records are nested in {Aggregate}.Queries / {Aggregate}.Commands; generated RPC files live in the aggregate's
+    // namespace but OUTSIDE the aggregate class, so the names must be qualified.
+    internal static string QueryType(ClassToGenerate model, string record) => Qualified(model, "Queries", record);
+    internal static string CommandType(ClassToGenerate model, string record) => Qualified(model, "Commands", record);
+
+    private static string Qualified(ClassToGenerate model, string container, string record)
+        => string.IsNullOrEmpty(model.Namespace)
+            ? "global::" + model.ClassName + "." + container + "." + record
+            : "global::" + model.Namespace + "." + model.ClassName + "." + container + "." + record;
 
     // ── Server + client registrations ─────────────────────────────────────────
 
@@ -218,6 +252,26 @@ internal static class RpcContractCodeBuilder
         sb.AppendLine("}");
         sb.AppendLine();
 
+        // ── Wire formatters (validation D26): closed Result<T>/QueueableResult<T> per result type — AOT-safe ──
+        var resultTypes = new System.Collections.Generic.SortedSet<string>(System.StringComparer.Ordinal);
+        foreach (var q in model.Queries) resultTypes.Add(q.ReturnType);
+        foreach (var cmd in model.Commands)
+            if (!string.IsNullOrEmpty(cmd.ResultType)) resultTypes.Add(cmd.ResultType!);
+        sb.AppendLine("/// <summary>Registers the MemoryPack formatters of this aggregate's RPC result types.</summary>");
+        sb.Append("internal static class ").Append(model.ClassName).AppendLine("RpcFormatters");
+        sb.AppendLine("{");
+        sb.AppendLine("    [System.Runtime.CompilerServices.ModuleInitializer]");
+        sb.AppendLine("#pragma warning disable CA2255");
+        sb.AppendLine("    internal static void Register()");
+        sb.AppendLine("#pragma warning restore CA2255");
+        sb.AppendLine("    {");
+        sb.AppendLine("        global::YFex.Messaging.Rpc.Serialization.RpcResultFormatters.EnsureRegistered();");
+        foreach (var t in resultTypes)
+            sb.Append("        global::YFex.Messaging.Rpc.Serialization.RpcResultFormatters.Register<").Append(t).AppendLine(">();");
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+        sb.AppendLine();
+
         // ── Client registration ──
         sb.AppendLine("/// <summary>Generated client-side Fusion registration helpers.</summary>");
         sb.Append("public static class ").Append(model.ClassName).AppendLine("RpcClientRegistration");
@@ -230,38 +284,34 @@ internal static class RpcContractCodeBuilder
         sb.AppendLine("        return fusion;");
         sb.AppendLine("    }");
         sb.AppendLine();
+        string clientName = $"I{model.ClassName}RpcClient";
+        sb.Append("    /// <summary>Registers <see cref=\"").Append(clientName).Append("\"/> — a remote client of <see cref=\"")
+          .Append(ifaceName).AppendLine("\"/> for a hub that also hosts the server (calls never short-circuit locally).</summary>");
+        sb.Append("    public static global::ActualLab.Rpc.RpcBuilder Add").Append(model.ClassName)
+          .AppendLine("RpcRemoteClient(this global::ActualLab.Rpc.RpcBuilder rpc)");
+        sb.AppendLine("    {");
+        sb.Append("        rpc.AddClient<").Append(clientName).Append(">(nameof(").Append(ifaceName).AppendLine("));");
+        sb.AppendLine("        return rpc;");
+        sb.AppendLine("    }");
+        sb.AppendLine();
         sb.Append("    /// <summary>Populates <paramref name=\"builder\"/> with the query/command routing from <see cref=\"");
         sb.Append(ifaceName).AppendLine("\"/>.</summary>");
         sb.Append("    public static void RegisterRoutes(FusionMessageBusBuilder builder, ").Append(ifaceName).AppendLine(" proxy)");
         sb.AppendLine("    {");
 
-        // Register each query
+        // Routes return the server's typed result (D26): an Error — e.g. structured validation violations — reaches
+        // the caller instead of being replaced by an InvalidOperationException.
         foreach (var q in model.Queries)
         {
-            sb.Append("        builder.AddQuery<").Append(q.RecordName).Append(", ").Append(q.ReturnType).AppendLine(">(");
-            sb.Append("            async (q, ct) => { var r = await proxy.").Append(q.MethodName)
-              .AppendLine("(q, ct).ConfigureAwait(false);");
-            sb.AppendLine("                            if (r.TryGetValue(out var v)) return v!;");
-            sb.AppendLine("                            throw new System.InvalidOperationException(\"Query failed.\"); });");
+            sb.Append("        builder.AddQuery<").Append(QueryType(model, q.RecordName)).Append(", ").Append(q.ReturnType)
+              .Append(">((q, ct) => proxy.").Append(q.MethodName).AppendLine("(q, null, ct));");
         }
 
-        // Register each command with result
         foreach (var cmd in model.Commands)
         {
-            if (!string.IsNullOrEmpty(cmd.ResultType))
-            {
-                sb.Append("        builder.AddCommand<").Append(cmd.RecordName).Append(", ").Append(cmd.ResultType).AppendLine(">(");
-                sb.Append("            async (cmd, ct) => { var r = await proxy.").Append(cmd.MethodName)
-                  .AppendLine("(cmd, ct).ConfigureAwait(false);");
-                sb.AppendLine("                              if (r.TryGetValue(out var v)) return v!;");
-                sb.AppendLine("                              throw new System.InvalidOperationException(\"Command failed.\"); });");
-            }
-            else
-            {
-                sb.Append("        builder.AddCommand<").Append(cmd.RecordName).AppendLine(">(");
-                sb.Append("            async (cmd, ct) => { await proxy.").Append(cmd.MethodName)
-                  .AppendLine("(cmd, ct).ConfigureAwait(false); });");
-            }
+            sb.Append("        builder.AddCommand<").Append(CommandType(model, cmd.RecordName));
+            if (!string.IsNullOrEmpty(cmd.ResultType)) sb.Append(", ").Append(cmd.ResultType);
+            sb.Append(">((cmd, ct) => proxy.").Append(cmd.MethodName).AppendLine("(cmd, ct));");
         }
 
         sb.AppendLine("    }");

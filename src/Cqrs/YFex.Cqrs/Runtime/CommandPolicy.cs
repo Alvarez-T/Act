@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using YFex.Validation;
 
 namespace YFex.Cqrs.Runtime;
 
@@ -17,7 +18,8 @@ public sealed record CommandPolicy(
     /// Null if no validators. Internally uses sync-fast-path / async-fallback to
     /// avoid state-machine allocations when validators complete synchronously.
     /// </summary>
-    Func<object, CancellationToken, ValueTask<ValidationResult>>? Validate,
+    /// <summary>Stage 5 (context rules); stage 1 runs through ValidationSlot&lt;T&gt; without a policy.</summary>
+    MessageValidator? Validation,
 
     /// <summary>
     /// Composite AND-predicate of all authorizers, merged at Build time.
@@ -68,7 +70,10 @@ public sealed record CommandPolicy(
     /// <c>IResiliencePipelineFactory</c> is registered, the dispatcher executes the command's invoke through the
     /// pipeline for this spec; otherwise the legacy <see cref="Timeout"/> path applies. Null when no verbs are set.
     /// </summary>
-    global::YFex.Resilience.ResilienceSpec? Resilience = null);
+    global::YFex.Resilience.ResilienceSpec? Resilience = null,
+
+    /// <summary>Stages 3–4 (<c>.UseSituation().Enforce()</c>): gather the situation, evaluate the rule set. Null when not configured.</summary>
+    RulesStage? Rules = null);
 
 /// <summary>
 /// Pre-compiled reverse (compensation) plan for one command type. Either a typed map to a

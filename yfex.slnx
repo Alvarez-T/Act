@@ -6,12 +6,17 @@
     <Project Path="src/Cqrs/YFex.Cqrs.SourceGenerator.Test/YFex.Cqrs.SourceGenerator.Test.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs.SourceGenerator/YFex.Cqrs.SourceGenerator.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj" />
+    <Project Path="src/Cqrs/YFex.Cqrs.FluentValidation/YFex.Cqrs.FluentValidation.csproj" />
+    <Project Path="src/Cqrs/YFex.Cqrs.FluentValidation.Tests/YFex.Cqrs.FluentValidation.Tests.csproj" />
+    <Project Path="src/Cqrs/YFex.Cqrs.Tenancy/YFex.Cqrs.Tenancy.csproj" />
+    <Project Path="src/Cqrs/YFex.Cqrs.Tenancy.Tests/YFex.Cqrs.Tenancy.Tests.csproj" />
   </Folder>
   <Folder Name="/Messaging/">
     <Project Path="src/Messaging/YFex.Messaging.Fusion/YFex.Messaging.Fusion.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Generator/YFex.Messaging.Generator.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc.AotSample/YFex.Messaging.Rpc.AotSample.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc.Generator/YFex.Messaging.Rpc.Generator.csproj" />
+    <Project Path="src/Messaging/YFex.Messaging.Rpc.Tests/YFex.Messaging.Rpc.Tests.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc.Wolverine/YFex.Messaging.Rpc.Wolverine.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj" />
     <Project Path="src/Messaging/YFex.Messaging.Tests/YFex.Messaging.Tests.csproj" />
@@ -33,6 +38,8 @@
     <Project Path="src/Persistence/YFex.Persistence.IndexedDb/YFex.Persistence.IndexedDb.csproj" />
     <Project Path="src/Persistence/YFex.Persistence.Smoke/YFex.Persistence.Smoke.csproj" />
     <Project Path="src/Persistence/YFex.Persistence.Sqlite/YFex.Persistence.Sqlite.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence.Tenancy/YFex.Persistence.Tenancy.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence.Tenancy.Tests/YFex.Persistence.Tenancy.Tests.csproj" />
     <Project Path="src/Persistence/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj" />
     <Project Path="src/Persistence/YFex.Persistence/YFex.Persistence.csproj" />
   </Folder>
@@ -85,5 +92,24 @@
     <Project Path="../YFex.CustomLogic/src/YFex.CustomLogic.Cqrs/YFex.CustomLogic.Cqrs.csproj" />
     <Project Path="../YFex.CustomLogic/tests/YFex.CustomLogic.Tests/YFex.CustomLogic.Tests.csproj" />
   </Folder>
+  <Folder Name="/Validation/">
+    <Project Path="src/Validation/YFex.Validation/YFex.Validation.csproj" />
+    <Project Path="src/Validation/YFex.Validation.Tests/YFex.Validation.Tests.csproj" />
+    <Project Path="src/Validation/YFex.Validation.Generator/YFex.Validation.Generator.csproj" />
+    <Project Path="src/Validation/YFex.Validation.Generator.Tests/YFex.Validation.Generator.Tests.csproj" />
+    <Project Path="src/Validation/YFex.Validation.Testing/YFex.Validation.Testing.csproj" />
+    <Project Path="src/Validation/YFex.Validation.Smoke/YFex.Validation.Smoke.csproj" />
+    <Project Path="src/Validation/YFex.Rules/YFex.Rules.csproj" />
+    <Project Path="src/Validation/YFex.Rules.Generator/YFex.Rules.Generator.csproj" />
+    <Project Path="src/Validation/YFex.Rules.Tests/YFex.Rules.Tests.csproj" />
+    <Project Path="src/Validation/YFex.Rules.Generator.Tests/YFex.Rules.Generator.Tests.csproj" />
+    <Project Path="src/Validation/YFex.Rules.Admin/YFex.Rules.Admin.csproj" />
+    <Project Path="src/Validation/YFex.Rules.Admin.Tests/YFex.Rules.Admin.Tests.csproj" />
+    <Project Path="src/Validation/YFex.Rules.Data/YFex.Rules.Data.csproj" />
+    <Project Path="src/Validation/YFex.Rules.Data.Tests/YFex.Rules.Data.Tests.csproj" />
+    <Project Path="src/Validation/YFex.Rules.Dynamic/YFex.Rules.Dynamic.csproj" />
+    <Project Path="src/Validation/YFex.Rules.Dynamic.Tests/YFex.Rules.Dynamic.Tests.csproj" />
+  </Folder>
   <Project Path="src/YFex/YFex.csproj" />
+  <Project Path="src/YFex.Tests/YFex.Tests.csproj" />
 </Solution>
