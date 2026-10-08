@@ -22,7 +22,7 @@ internal sealed record QueryRegistrationMetadata
     public YFex.Cqrs.Runtime.RulesStage? Rules { get; init; }
 
     public YFex.Cqrs.Runtime.ContextRuleFactory[]?              Validators   { get; init; }
-    public AuthorizerDescriptor[]?             Authorizers  { get; init; }
+    public YFex.Authorization.Public.Requirement[]? Authorization { get; init; }
 
     public CachePolicy?                        Cache        { get; init; }
     public CacheScope                          Scope        { get; init; } = CacheScope.Global;

@@ -83,12 +83,11 @@ public sealed class Navigator : IDisposable
         deniedReason = null;
         if (_authPolicies is null || _authEvaluator is null || _authPrincipal is null) return true;
         if (!_authPolicies.TryGetPolicy(viewModelType, out var policy)) return true;
-        if (_authEvaluator.IsAllowed(policy, _authPrincipal.Current)) return true;
+        if (_authEvaluator.IsVisible(policy, _authPrincipal.Current)) return true;
 
-        deniedReason = policy.Requirements.Length > 0
-            && policy.Requirements[0].Kind == RequirementKind.Permission
-                ? $"Requires {policy.Requirements[0].Permission.Value}"
-                : "Not authorized.";
+        deniedReason = policy.FirstRequiredPermission.Value is { Length: > 0 } permission
+            ? $"Requires {permission}"
+            : "Not authorized.";
         return false;
     }
 

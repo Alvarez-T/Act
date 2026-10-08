@@ -17,12 +17,14 @@ namespace YFex.Messaging.Rpc;
 /// </remarks>
 internal static class QueryCacheKey
 {
-    /// <summary>Deterministic, scope-aware cache key. Returns null for non-cacheable queries.</summary>
+    /// <summary>Deterministic, scope-aware cache key. Returns null for non-cacheable queries (and per-user queries without a subject).</summary>
     public static string? For(Type queryType, object query, QueryPolicy? policy, IServiceProvider sp)
     {
         if (query is not ICacheable) return null;
         var hash = Fnv1a64(query.ToString() ?? string.Empty);
         var scope = ResolveScope(policy, sp);
+        if (scope is null && policy?.ScopeKey is null && policy?.Scope == CacheScope.User)
+            return null;   // per-user query without a subject: never cached, so never shared across users
         return scope is null
             ? $"query:{queryType.FullName}:{hash:x16}"
             : $"query:{queryType.FullName}:{scope}:{hash:x16}";
@@ -65,12 +67,16 @@ internal static class QueryCacheKey
             return ctx is null ? null : policy.ScopeKey(ctx);
         return policy.Scope switch
         {
-            CacheScope.User    => ctx?.User.Identity?.Name,
+            CacheScope.User    => ctx?.Subject is { Length: > 0 } subject ? subject : AmbientSubject(),
             CacheScope.Tenant  => ctx?.TenantId,
             CacheScope.Session => ctx?.SessionId,
             _                  => null, // Global
         };
     }
+
+    // The actor in effect (RPC call, HTTP request, desktop/client session) — authorization-consolidation 06 §4.
+    private static string? AmbientSubject()
+        => YFex.Authorization.Public.ActorContext.Current?.Actor is { IsAnonymous: false } actor ? actor.Subject : null;
 
     /// <summary>FNV-1a over UTF-16 code units — deterministic and culture-invariant (no per-process randomization).</summary>
     private static ulong Fnv1a64(string s)

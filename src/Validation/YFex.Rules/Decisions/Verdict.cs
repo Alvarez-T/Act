@@ -1,11 +1,13 @@
 using YFex.Validation;
+using YFex.Authorization.Public;
 
 namespace YFex.Rules;
 
 /// <summary>A permission needed for the decision to go through, why, and which rule asked.</summary>
-public readonly struct ApprovalRequest(string permission, in Violation reason, RuleRef rule)
+public readonly struct ApprovalRequest(Permission permission, in Violation reason, RuleRef rule)
 {
-    public string Permission { get; } = permission;
+    /// <summary>The permission the approver must hold (typed, authorization-consolidation ⚑Z2).</summary>
+    public Permission Permission { get; } = permission;
     public Violation Reason { get; } = reason;
     public RuleRef Rule { get; } = rule;
     public override string ToString() => $"{Permission} ({Reason.Code} by {Rule.Code})";
@@ -26,10 +28,10 @@ public readonly struct ApprovalRequestList
     public ReadOnlySpan<ApprovalRequest> AsSpan() => _items;
     public ReadOnlySpan<ApprovalRequest>.Enumerator GetEnumerator() => AsSpan().GetEnumerator();
 
-    public bool Requires(string permission)
+    public bool Requires(in Permission permission)
     {
         foreach (ref readonly var a in AsSpan())
-            if (string.Equals(a.Permission, permission, StringComparison.Ordinal)) return true;
+            if (a.Permission == permission) return true;
         return false;
     }
 }

@@ -94,7 +94,7 @@ public class PerCallHeaderTests(AnonymousConnectionFixture fx) : IClassFixture<A
         var r = await fx.Contract.CreateCustomerAsync(TakenEmail);
 
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.Unauthorized, "stage 2 runs before the context rule (stage 5) that would report 'email taken'");
+        e.Kind.Should().Be(ErrorKind.Unauthenticated, "stage 2 runs before the context rule (stage 5) that would report 'email taken'");
         fx.Handler.Calls.Should().Be(calls);
     }
 
@@ -107,12 +107,12 @@ public class PerCallHeaderTests(AnonymousConnectionFixture fx) : IClassFixture<A
             => As.Caller(subject, Users.Acme, () => fx.Contract.SearchCustomersAsync(new SearchCustomers("shared", take)));
 
         (await Search("mallory", 5)).TryGetValue(out Error denied).Should().BeTrue();
-        denied.Type.Should().Be(ErrorType.Unauthorized);
+        denied.Kind.Should().Be(ErrorKind.Forbidden);
         (await Search("alice", 5)).OkValue.Should().Equal(new[] { "shared:5" }, "the rejection was never cached");
 
         (await Search("alice", 6)).OkValue.Should().Equal("shared:6");
         (await Search("mallory", 6)).TryGetValue(out Error leaked).Should().BeTrue("alice's cached value must not leak");
-        leaked.Type.Should().Be(ErrorType.Unauthorized);
+        leaked.Kind.Should().Be(ErrorKind.Forbidden);
     }
 
     [Fact]
@@ -121,7 +121,7 @@ public class PerCallHeaderTests(AnonymousConnectionFixture fx) : IClassFixture<A
         var r = await fx.Contract.CreateCustomerAsync(new CreateCustomer("", "a@b.co", "12345678901"));
 
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.ValidationProblem);   // stage 1 → 2: a malformed message never reaches the authorizer
+        e.Kind.Should().Be(ErrorKind.ValidationProblem);   // stage 1 → 2: a malformed message never reaches the authorizer
     }
 
     [Fact]
@@ -131,7 +131,7 @@ public class PerCallHeaderTests(AnonymousConnectionFixture fx) : IClassFixture<A
         var allowed = await As.Caller("alice", Users.Acme, () => fx.Contract.CreateCustomerAsync(As.ValidCustomer));
 
         denied.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.Unauthorized);
+        e.Kind.Should().Be(ErrorKind.Forbidden);
         allowed.OkValue.Should().Be(42);
     }
 
@@ -141,7 +141,7 @@ public class PerCallHeaderTests(AnonymousConnectionFixture fx) : IClassFixture<A
         var r = await As.Caller("nobody", default, () => fx.Contract.WhoAmIAsync(new WhoAmI(10)));
 
         r.TryGetValue(out Error e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.Unauthorized);
+        e.Kind.Should().Be(ErrorKind.Unauthenticated);
     }
 
     [Fact]
@@ -152,7 +152,7 @@ public class PerCallHeaderTests(AnonymousConnectionFixture fx) : IClassFixture<A
 
         granted.OkValue.Should().Be("bob@globex");
         forged.TryGetValue(out Error e).Should().BeTrue();   // bob isn't in acme → token rejected → anonymous
-        e.Type.Should().Be(ErrorType.Unauthorized);
+        e.Kind.Should().Be(ErrorKind.Unauthenticated);
     }
 
     [Fact]
@@ -208,11 +208,11 @@ public class PermissionChangeTests(CarolFixture fx) : IClassFixture<CarolFixture
         fx.Signals.PermissionsChanged("carol");
 
         await computed.WhenInvalidated().WaitAsync(TimeSpan.FromSeconds(10));
-        computed = (Computed<CallPermissions>)await computed.Update();
+        computed = (Computed<PermissionSnapshot>)await computed.Update();
         computed.Value.Has(ShopPermissions.CreateCustomer).Should().BeFalse("the client UI refreshes from the pushed invalidation");
         computed.Value.Has(ShopPermissions.SearchCustomers).Should().BeTrue();
         (await fx.Contract.CreateCustomerAsync(As.ValidCustomer)).TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.Unauthorized);
+        e.Kind.Should().Be(ErrorKind.Forbidden);
 
         fx.Permissions.Grant("carol", ShopPermissions.CreateCustomer);
         fx.Signals.PermissionsChanged("carol");
@@ -241,12 +241,12 @@ public class RevocationTests(ErinFixture fx) : IClassFixture<ErinFixture>
         connections.CountFor("erin").Should().Be(1);
 
         fx.ConnectionUser = Users.Anonymous;           // the identity provider revoked erin's token
-        await fx.Signals.RevokeAsync("erin").WaitAsync(TimeSpan.FromSeconds(10));
+        await fx.Signals.RevokedAsync("erin").AsTask().WaitAsync(TimeSpan.FromSeconds(10));
 
         connections.CountFor("erin").Should().Be(0);
         var r = await fx.Contract.CreateCustomerAsync(As.ValidCustomer).WaitAsync(TimeSpan.FromSeconds(20));
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.Unauthorized);
+        e.Kind.Should().Be(ErrorKind.Unauthenticated);
     }
 }
 
@@ -256,19 +256,21 @@ public class ClientSideAuthorizationTests
     [Fact]
     public async Task Denied_command_is_not_sent_to_the_server()
     {
-        var provider = new TestPermissionProvider().Grant("alice", ShopPermissions.CreateCustomer);
+        var provider = new TestPermissionSource().Grant("alice", ShopPermissions.CreateCustomer);
         var user = new FixedPrincipalAccessor(CallContext.Anonymous);
+        var registry = CompiledMessagingRegistry.Build([new ShopBaseline()]);
         var services = new ServiceCollection()
-            .AddYFexAuthorization(a => a.UsePermissionProvider(provider))
+            .AddYFexAuthorization(a => a.AddPermissionSource(provider))
+            .AddSingleton(registry)
+            .AddYFexCqrsAuthorizationConfiguration()
             .AddSingleton<IPrincipalAccessor>(user)
             .BuildServiceProvider();
-        var factory = services.GetRequiredService<IAuthContextFactory>();
+        var factory = services.GetRequiredService<IAuthorizationContextFactory>();
         int sent = 0;
         var bus = new FusionMessageBusBuilder()
             .AddCommand<CreateCustomer, int>((_, _) => { sent++; return Task.FromResult(QueueableResult<int>.Ok(1)); })
             .Build(
-                CompiledMessagingRegistry.Build([new ShopBaseline()], policyEvaluator: services.GetRequiredService<IPolicyEvaluator>(),
-                    principalFactory: p => CallAuthorization.ContextFor(p, factory)),
+                registry,
                 new AlwaysConnected(), new InMemoryCache(), new InMemoryOutbox(new OutboxOptions()), new DefaultEventBus(), services);
 
         var denied = await bus.CommandAsync<CreateCustomer, int>(As.ValidCustomer);
@@ -276,16 +278,15 @@ public class ClientSideAuthorizationTests
         var allowed = await bus.CommandAsync<CreateCustomer, int>(As.ValidCustomer);
 
         denied.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.Unauthorized);
+        e.Kind.Should().Be(ErrorKind.Unauthenticated);
         allowed.OkValue.Should().Be(1);
         sent.Should().Be(1);
     }
 
-    private sealed class AlwaysConnected : INetworkStatus
+    private sealed class AlwaysConnected : IServerConnection
     {
-        public bool IsConnected => true;
-        public SyncState State => SyncState.Connected;
-        public event Action<SyncState>? Changed { add { } remove { } }
+        public ServerConnectionState State => ServerConnectionState.Connected;
+        public event Action<ServerConnectionChange>? Changed { add { } remove { } }
     }
 }
 

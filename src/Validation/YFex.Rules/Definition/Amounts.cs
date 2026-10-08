@@ -24,14 +24,7 @@ public static class Amounts
     }
 
     /// <summary><paramref name="value"/> as a value of amount type <paramref name="type"/>.</summary>
-    public static RawValue ToRaw(decimal value, RawType type) => type.Storage switch
-    {
-        ValueKind.Decimal => type.IsPrimitive ? RawValue.From(value) : RawValue.Typed(type, value),
-        ValueKind.Int64 => type.IsPrimitive ? RawValue.From((long)value) : RawValue.Typed(type, (long)value),
-        ValueKind.Int32 => RawValue.From((int)value).WithType(type),
-        ValueKind.Double => type.IsPrimitive ? RawValue.From((double)value) : RawValue.Typed(type, (double)value),
-        _ => throw new InvalidOperationException($"Raw type '{type.Key}' is not numeric."),
-    };
+    public static RawValue ToRaw(decimal value, RawType type) => RawValueConvert.FromDecimal(value, type);
 
     /// <summary>Typed amount from engine decimal storage.</summary>
     public static T FromDecimal<T>(decimal value, RawType type)

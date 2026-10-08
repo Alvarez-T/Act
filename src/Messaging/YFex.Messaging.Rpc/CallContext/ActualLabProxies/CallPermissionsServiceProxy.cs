@@ -4,8 +4,6 @@
 
 using System.Collections.Concurrent;
 using ActualLab.Fusion;
-using MemoryPack;
-using YFex.Authorization;
 using YFex.Authorization.Public;
 
 namespace YFex.Messaging.Rpc.ActualLabProxies;
@@ -30,8 +28,8 @@ namespace YFex.Messaging.Rpc.ActualLabProxies;
 public sealed class CallPermissionsServiceProxy : global::YFex.Messaging.Rpc.CallPermissionsService, global::ActualLab.Interception.IProxy
 {
     private static global::System.Reflection.MethodInfo? __cachedMethod0 = __cachedMethod0 = global::ActualLab.Interception.Internal.ProxyHelper.GetMethodInfo(typeof(global::YFex.Messaging.Rpc.CallPermissionsService), "GetMyPermissionsAsync", new[] { typeof(string), typeof(global::System.Threading.CancellationToken) });
-    private global::System.Func<global::ActualLab.Interception.ArgumentList, global::System.Threading.Tasks.Task<global::YFex.Messaging.Rpc.CallPermissions>>? __cachedIntercepted0;
-    private global::System.Func<global::ActualLab.Interception.Invocation, global::System.Threading.Tasks.Task<global::YFex.Messaging.Rpc.CallPermissions>>? __cachedIntercept0;
+    private global::System.Func<global::ActualLab.Interception.ArgumentList, global::System.Threading.Tasks.Task<global::YFex.Authorization.Public.PermissionSnapshot>>? __cachedIntercepted0;
+    private global::System.Func<global::ActualLab.Interception.Invocation, global::System.Threading.Tasks.Task<global::YFex.Authorization.Public.PermissionSnapshot>>? __cachedIntercept0;
     private global::ActualLab.Interception.Interceptor? __interceptor;
     global::ActualLab.Interception.Interceptor global::ActualLab.Interception.IProxy.Interceptor
     {
@@ -45,15 +43,15 @@ public sealed class CallPermissionsServiceProxy : global::YFex.Messaging.Rpc.Cal
         set
         {
             __interceptor = value ?? throw new global::System.ArgumentNullException("value");
-            __cachedIntercept0 = __interceptor.Intercept<global::System.Threading.Tasks.Task<global::YFex.Messaging.Rpc.CallPermissions>>;
+            __cachedIntercept0 = __interceptor.Intercept<global::System.Threading.Tasks.Task<global::YFex.Authorization.Public.PermissionSnapshot>>;
         }
     }
 
-    public CallPermissionsServiceProxy(global::YFex.Messaging.Rpc.IPermissionsVersions versions) : base(versions)
+    public CallPermissionsServiceProxy() : base()
     {
     }
 
-    public override global::System.Threading.Tasks.Task<global::YFex.Messaging.Rpc.CallPermissions> GetMyPermissionsAsync(string caller, global::System.Threading.CancellationToken ct)
+    public override global::System.Threading.Tasks.Task<global::YFex.Authorization.Public.PermissionSnapshot> GetMyPermissionsAsync(string caller, global::System.Threading.CancellationToken ct)
     {
         var intercepted = __cachedIntercepted0 ??= args =>
         {
@@ -77,7 +75,7 @@ public sealed class CallPermissionsServiceProxy : global::YFex.Messaging.Rpc.Cal
         {
             global::ActualLab.Interception.Trimming.ProxyCodeKeeper.KeepProxy<global::YFex.Messaging.Rpc.CallPermissionsService, CallPermissionsServiceProxy>();
             global::ActualLab.Trimming.CodeKeeper.Keep<CallPermissionsServiceProxy>();
-            global::ActualLab.Interception.Trimming.ProxyCodeKeeper.KeepAsyncMethod<YFex.Messaging.Rpc.CallPermissions, string, global::System.Threading.CancellationToken>("GetMyPermissionsAsync");
+            global::ActualLab.Interception.Trimming.ProxyCodeKeeper.KeepAsyncMethod<YFex.Authorization.Public.PermissionSnapshot, string, global::System.Threading.CancellationToken>("GetMyPermissionsAsync");
         }
     }
 }

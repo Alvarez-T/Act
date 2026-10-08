@@ -12,7 +12,7 @@ namespace YFex.Messaging.Tests.Fixtures;
 /// </summary>
 public sealed class TestDispatcherFixture
 {
-    public ManualNetworkStatus Network { get; }
+    public ManualServerConnection Network { get; }
     public InMemoryCache Cache { get; }
     public InMemoryOutbox Outbox { get; }
     public InMemorySyncFailureLog FailureLog { get; }
@@ -26,7 +26,7 @@ public sealed class TestDispatcherFixture
         bool startConnected = true,
         OutboxOptions? outboxOptions = null)
     {
-        Network = new ManualNetworkStatus(startConnected);
+        Network = new ManualServerConnection(startConnected);
         Cache = new InMemoryCache();
         Outbox = new InMemoryOutbox(outboxOptions ?? new OutboxOptions());
         FailureLog = new InMemorySyncFailureLog();
@@ -41,6 +41,11 @@ public sealed class TestDispatcherFixture
         // Build DI container with test handlers
         var services = new ServiceCollection();
         services.AddLogging();
+        // The one message gate (authorization-consolidation 04 §2): requirements are exported and enforced through it.
+        services.AddSingleton(Registry);
+        YFex.Authorization.ServiceCollectionExtensions.AddYFexAuthorization(services);
+        services.AddYFexCqrsAuthorizationConfiguration();
+
         services.AddTransient<IQueryHandler<TestAggregate.Queries.GetByIdQuery, TestItem>, GetByIdHandler>();
         services.AddTransient<IQueryHandler<TestAggregate.Queries.GetAllQuery, List<TestItem>>, GetAllHandler>();
         services.AddTransient<ICommandHandler<TestAggregate.Commands.CreateCommand, TestItem>, CreateCommandHandler>();

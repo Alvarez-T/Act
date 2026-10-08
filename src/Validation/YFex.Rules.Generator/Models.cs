@@ -158,7 +158,7 @@ internal sealed record ColumnModel(
     string Field,             // bound name as written ("Payment", "Lines[].Category", "InstallmentValue")
     string Directive,         // DirectiveKind member ("None" for When)
     string? OnExceed,
-    string? Permission,
+    string? Permission,       // C# expression of the typed Permission (PermissionArguments), null = none
     // resolution (filled in the transform when the field is a situation/line field)
     string? Access,           // C# expression reading the situation value: "s.Payment" / "__line.Category"
     string? FieldRefExpr,     // SituationFieldRef expression for Then columns
@@ -180,7 +180,7 @@ internal sealed record TableModel(
     string? RuleSet,
     int Priority,
     string Editable,
-    string? PublishPermission,
+    string? PublishPermission,     // C# expression of the typed Permission (PermissionArguments), null = none
     string? GuardrailFqn,
     bool Complete,
     string SituationFqn,

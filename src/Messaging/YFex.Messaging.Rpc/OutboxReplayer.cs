@@ -30,7 +30,7 @@ public sealed class OutboxReplayer : BackgroundService
     private readonly IOutbox _outbox;
     private readonly IWritableSyncFailureLog _failureLog;
     private readonly IDispatcher _dispatcher;
-    private readonly INetworkStatus _networkStatus;
+    private readonly IServerConnection _server;
     private readonly SyncStatus _syncStatus;
     private readonly IEventBus _eventBus;
     private readonly OutboxCommandRegistry _commandRegistry;
@@ -38,6 +38,9 @@ public sealed class OutboxReplayer : BackgroundService
     private readonly CompiledMessagingRegistry _messagingRegistry;
     private readonly IServiceProvider _services;
     private readonly TimeSpan _entryTtl;
+    private readonly bool _keepExpired;
+    private readonly IOutboxCallerCapture? _callerCapture;
+    private readonly HashSet<Guid> _expiredWarned = [];
     private readonly ILogger<OutboxReplayer> _logger;
     private readonly SemaphoreSlim _trigger = new(0, 1);
 
@@ -45,7 +48,7 @@ public sealed class OutboxReplayer : BackgroundService
         IOutbox outbox,
         IWritableSyncFailureLog failureLog,
         IDispatcher dispatcher,
-        INetworkStatus networkStatus,
+        IServerConnection server,
         SyncStatus syncStatus,
         IEventBus eventBus,
         OutboxCommandRegistry commandRegistry,
@@ -58,7 +61,7 @@ public sealed class OutboxReplayer : BackgroundService
         _outbox = outbox;
         _failureLog = failureLog;
         _dispatcher = dispatcher;
-        _networkStatus = networkStatus;
+        _server = server;
         _syncStatus = syncStatus;
         _eventBus = eventBus;
         _commandRegistry = commandRegistry;
@@ -66,18 +69,20 @@ public sealed class OutboxReplayer : BackgroundService
         _messagingRegistry = messagingRegistry;
         _services = services;
         _entryTtl = options.OutboxEntryTtl;
+        _keepExpired = options.OutboxOptions.KeepExpiredEntries;
+        _callerCapture = services.GetService(typeof(IOutboxCallerCapture)) as IOutboxCallerCapture;
         _logger = logger;
 
-        _networkStatus.Changed += OnNetworkChanged;
+        _server.Changed += OnServerConnectionChanged;
         _outbox.Enqueued += OnEnqueued;
     }
 
-    private void OnNetworkChanged(SyncState state)
+    private void OnServerConnectionChanged(ServerConnectionChange change)
     {
-        _syncStatus.IsOffline = state != SyncState.Connected;
-        _eventBus.Publish(new NetworkStatusChangedEvent(
-            state == SyncState.Connected ? SyncState.Disconnected : SyncState.Connected, state));
-        if (state == SyncState.Connected && _trigger.CurrentCount == 0)
+        bool connected = change.Current == ServerConnectionState.Connected;
+        _syncStatus.IsOffline = !connected;
+        _eventBus.Publish(new ServerConnectionChangedEvent(change.Previous, change.Current));
+        if (connected && _trigger.CurrentCount == 0)
             _trigger.Release();
     }
 
@@ -89,14 +94,14 @@ public sealed class OutboxReplayer : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         // Attempt a drain on startup in case we reconnect before the first change event.
-        if (_networkStatus.IsConnected)
+        if (_server.IsConnected)
             await DrainAsync(stoppingToken).ConfigureAwait(false);
 
         while (!stoppingToken.IsCancellationRequested)
         {
             // Wait up to 30 s between checks; a reconnect triggers immediately.
             await _trigger.WaitAsync(TimeSpan.FromSeconds(30), stoppingToken).ConfigureAwait(false);
-            if (_networkStatus.IsConnected)
+            if (_server.IsConnected)
                 await DrainAsync(stoppingToken).ConfigureAwait(false);
         }
     }
@@ -132,8 +137,25 @@ public sealed class OutboxReplayer : BackgroundService
     {
         if (DateTimeOffset.UtcNow - entry.EnqueuedAt > _entryTtl)
         {
-            await MoveToFailureLogAsync(entry, "expired", ct).ConfigureAwait(false);
-            return;
+            if (!_keepExpired)
+            {
+                await MoveToFailureLogAsync(entry, "expired", ct).ConfigureAwait(false);
+                return;
+            }
+            // Offline design F5/F13: a queued command (often a sale that already happened) never silently becomes a dead
+            // letter. Warn once per entry and keep replaying.
+            if (_expiredWarned.Add(entry.IdempotencyKey))
+                _logger.LogWarning("Outbox entry {Key} ({Type}) is older than the outbox TTL of {Ttl}; it is kept and replayed.",
+                    entry.IdempotencyKey, entry.CommandTypeName, _entryTtl);
+        }
+
+        // Offline design F4 (interim): the connection still carries the CURRENT user; flag replays of someone else's command.
+        if (entry.Subject is { } queuedBy && _callerCapture?.Capture().Subject is { } current
+            && !string.Equals(queuedBy, current, StringComparison.Ordinal))
+        {
+            _syncStatus.ReplaysUnderAnotherSubject++;
+            _logger.LogWarning("Replaying outbox entry {Key} ({Type}) queued by another user while a different user is signed in; " +
+                "the queued scope is used, the identity is the connection's.", entry.IdempotencyKey, entry.CommandTypeName);
         }
 
         ReplayOutcome outcome;
@@ -243,7 +265,9 @@ public sealed class OutboxReplayer : BackgroundService
                 "Ensure the generated AddYFexOutboxCommands() is called at startup so the command " +
                 "type is included in the OutboxCommandRegistry.");
 
-        return await handler(entry.Payload, _dispatcher, _services, ct).ConfigureAwait(false);
+        // The dispatcher re-sends the entry's idempotency key and queued scope (offline design F3/F4).
+        using (OutboxReplayContext.Enter(entry))
+            return await handler(entry.Payload, _dispatcher, _services, ct).ConfigureAwait(false);
     }
 
     private static TimeSpan BackoffDelay(int attempt) =>
@@ -251,7 +275,7 @@ public sealed class OutboxReplayer : BackgroundService
 
     public override void Dispose()
     {
-        _networkStatus.Changed -= OnNetworkChanged;
+        _server.Changed -= OnServerConnectionChanged;
         _outbox.Enqueued -= OnEnqueued;
         _trigger.Dispose();
         base.Dispose();

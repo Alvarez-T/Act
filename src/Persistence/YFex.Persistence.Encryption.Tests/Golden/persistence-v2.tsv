@@ -1,0 +1,7 @@
+# Interim layout 0x02 (offline Phase 0, 2026-10-03), sealed by the code that existed before cryptography Phase 0 (2026-10-04).
+# AAD = UTF-8 "yfex.store|" + store + "|" + key. Columns: store, key, plaintext (hex), sealed value (hex).
+# key a0a1a2a3a4a5a6a7a8a9aaabacadaeafb0b1b2b3b4b5b6b7b8b9babbbcbdbebf
+default	outbox:0001	76656e6461203432	0238f0723d82394420fe647ed9a482bfdc78786df102b7806f18e12e53ba8f3a3faa694195
+farma	cache:convenio:4711	7b22637066223a222a2a2a227d	024105d3810dc9bb9653ea049910a9a981689625a8e9117ec6749a3373b3a29b5200a89aaf69b27c36c7
+farma	k|with|pipes		02652c4de2b82b98c881f9487176a5fd28db04c745cf497a1ee76bee1c
+default	seq	78	029fd878bd0f14b57aaf0189fad5483198987aca6534a6d94b1f545e6440

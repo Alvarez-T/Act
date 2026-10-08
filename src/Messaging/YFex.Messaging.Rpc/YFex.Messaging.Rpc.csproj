@@ -37,6 +37,10 @@
     <ProjectReference Include="..\..\Persistence\YFex.Persistence\YFex.Persistence.csproj" />
     <!-- Tenancy core: server-pushed event audiences (EventChannelHost). Runtime-optional: no scope => every event is global. -->
     <ProjectReference Include="..\..\..\..\YFex.Tenancy\src\YFex.Tenancy\YFex.Tenancy.csproj" />
+    <!-- Event-audience tokens (MessageToken over a shared, rotating key ring) — cryptography 09 I7, C4. -->
+    <ProjectReference Include="..\..\..\..\YFex.Cryptography\src\YFex.Cryptography\YFex.Cryptography.csproj" />
+    <!-- Trusted time: the central anchor (ICentralTime + UseCentralAnchor) — time T2. -->
+    <ProjectReference Include="..\..\..\..\YFex.Time\src\YFex.Time\YFex.Time.csproj" />
   </ItemGroup>
 
 </Project>

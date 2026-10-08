@@ -13,12 +13,16 @@ using static YFex.Rules.Admin.RuleAdmin;
 
 namespace YFex.Rules.Admin;
 
-/// <summary>Baseline (client + server): everything requires an authenticated caller; reads are cacheable (offline clients).</summary>
+/// <summary>
+/// Baseline (client + server): everything requires an authenticated caller plus the permission of
+/// <see cref="RuleAdminRequirements"/> / <see cref="RuleAdminViewRequirement"/> (registered by <c>AddYFexRuleAdminRequirements()</c>);
+/// reads are cacheable (offline clients).
+/// </summary>
 public sealed class RuleAdminBaseline : IAggregateConfiguration<RuleAdmin>
 {
     public void Configure(AggregateConfigurationBuilder<RuleAdmin> b)
     {
-        b.Command<Commands.PublishTable, long>().RequireAuthenticated()
+        b.Command<Commands.PublishTable, long>().RequireAuthenticated().Authorize<RuleAdminRequirements>()
             .Validation(v =>
             {
                 v.Field(c => c.RuleSet).Required();
@@ -27,7 +31,7 @@ public sealed class RuleAdminBaseline : IAggregateConfiguration<RuleAdmin>
             })
             .Invalidates<Queries.GetRuleData, RuleDataPayload[]>()
             .Invalidates<Queries.GetDataVersions, RuleDataHeader[]>();
-        b.Command<Commands.PublishParameters, long>().RequireAuthenticated()
+        b.Command<Commands.PublishParameters, long>().RequireAuthenticated().Authorize<RuleAdminRequirements>()
             .Validation(v =>
             {
                 v.Field(c => c.RuleSet).Required();
@@ -36,7 +40,7 @@ public sealed class RuleAdminBaseline : IAggregateConfiguration<RuleAdmin>
             })
             .Invalidates<Queries.GetRuleData, RuleDataPayload[]>()
             .Invalidates<Queries.GetDataVersions, RuleDataHeader[]>();
-        b.Command<Commands.SetRuleOverride, long>().RequireAuthenticated()
+        b.Command<Commands.SetRuleOverride, long>().RequireAuthenticated().Authorize<RuleAdminRequirements>()
             .Validation(v =>
             {
                 v.Field(c => c.RuleSet).Required();
@@ -45,7 +49,7 @@ public sealed class RuleAdminBaseline : IAggregateConfiguration<RuleAdmin>
             })
             .Invalidates<Queries.GetRuleData, RuleDataPayload[]>()
             .Invalidates<Queries.GetDataVersions, RuleDataHeader[]>();
-        b.Command<Commands.PublishRule, long>().RequireAuthenticated()
+        b.Command<Commands.PublishRule, long>().RequireAuthenticated().Authorize<RuleAdminRequirements>()
             .Validation(v =>
             {
                 v.Field(c => c.RuleSet).Required();
@@ -54,15 +58,15 @@ public sealed class RuleAdminBaseline : IAggregateConfiguration<RuleAdmin>
             })
             .Invalidates<Queries.GetRuleData, RuleDataPayload[]>()
             .Invalidates<Queries.GetDataVersions, RuleDataHeader[]>();
-        b.Command<Commands.ApproveDecision, ApprovalToken>().RequireAuthenticated()
+        b.Command<Commands.ApproveDecision, ApprovalToken>().RequireAuthenticated().Authorize<ApproveDecisionRequirement>()
             .Validation(v => v.Field(c => c.Permission).Required());
 
-        b.Query<Queries.GetRuleData, RuleDataPayload[]>().RequireAuthenticated().Cacheable();
-        b.Query<Queries.GetDataVersions, RuleDataHeader[]>().RequireAuthenticated().Cacheable();
-        b.Query<Queries.GetDataVersion, RuleDataPayload[]>().RequireAuthenticated().Cacheable();
-        b.Query<Queries.GetRuleDefinition, RuleDefinitionView>().RequireAuthenticated().Cacheable();
-        b.Query<Queries.GetDataChanges, RuleDataChanges>().RequireAuthenticated().Cacheable();   // versions are immutable
-        b.Query<Queries.Simulate, SimulationResult>().RequireAuthenticated();
+        b.Query<Queries.GetRuleData, RuleDataPayload[]>().RequireAuthenticated().Authorize<RuleAdminViewRequirement>().Cacheable();
+        b.Query<Queries.GetDataVersions, RuleDataHeader[]>().RequireAuthenticated().Authorize<RuleAdminViewRequirement>().Cacheable();
+        b.Query<Queries.GetDataVersion, RuleDataPayload[]>().RequireAuthenticated().Authorize<RuleAdminViewRequirement>().Cacheable();
+        b.Query<Queries.GetRuleDefinition, RuleDefinitionView>().RequireAuthenticated().Authorize<RuleAdminViewRequirement>().Cacheable();
+        b.Query<Queries.GetDataChanges, RuleDataChanges>().RequireAuthenticated().Authorize<RuleAdminViewRequirement>().Cacheable();   // versions are immutable
+        b.Query<Queries.Simulate, SimulationResult>().RequireAuthenticated().Authorize<RuleAdminRequirements>();
     }
 }
 
@@ -146,7 +150,7 @@ public sealed class KeyValueRuleDataCache(IKeyValueStore store, int keepVersions
 /// <item>start: the device cache (<see cref="IRuleDataCache"/>, optional) is applied FIRST — an offline restart evaluates
 ///   with the versions the device had;</item>
 /// <item>then only what is new is fetched (<c>GetRuleData(set, lastKnownVersion)</c>), cached and applied;</item>
-/// <item>each <see cref="Events.RulesetPublished"/> and each reconnect (<see cref="INetworkStatus"/>, optional) repeats the
+/// <item>each <see cref="Events.RulesetPublished"/> and each reconnect (<see cref="IServerConnection"/>, optional) repeats the
 ///   incremental fetch — versions missed while offline are caught up in order.</item>
 /// </list>
 /// A failed fetch (offline) keeps what the device has; nothing is lost.
@@ -157,19 +161,19 @@ public sealed class RuleSetSync : IAsyncEventRecipient<Events.RulesetPublished>,
     private readonly RuleSetRegistry _registry;
     private readonly IEventBus _events;
     private readonly IRuleDataCache? _cache;
-    private readonly INetworkStatus? _network;
+    private readonly IServerConnection? _server;
     private readonly Dictionary<string, long> _lastVersion = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private IDisposable? _subscription;
     private bool _started;
 
-    public RuleSetSync(IDispatcher dispatcher, RuleSetRegistry registry, IEventBus events, IRuleDataCache? cache = null, INetworkStatus? network = null)
+    public RuleSetSync(IDispatcher dispatcher, RuleSetRegistry registry, IEventBus events, IRuleDataCache? cache = null, IServerConnection? server = null)
     {
         _dispatcher = dispatcher;
         _registry = registry;
         _events = events;
         _cache = cache;
-        _network = network;
+        _server = server;
     }
 
     /// <summary>Records that failed to decode (removed tables/rules) — for logging.</summary>
@@ -187,7 +191,7 @@ public sealed class RuleSetSync : IAsyncEventRecipient<Events.RulesetPublished>,
     public async Task StartAsync(CancellationToken ct = default)
     {
         _subscription ??= _events.SubscribeAsync(this);
-        if (!_started && _network is not null) _network.Changed += OnNetworkChanged;
+        if (!_started && _server is not null) _server.Changed += OnServerConnectionChanged;
         _started = true;
         if (_cache is not null)
             foreach (var host in _registry.All)
@@ -229,9 +233,9 @@ public sealed class RuleSetSync : IAsyncEventRecipient<Events.RulesetPublished>,
         await SyncAsync(host, ct).ConfigureAwait(false);
     }
 
-    private async void OnNetworkChanged(SyncState state)
+    private async void OnServerConnectionChanged(ServerConnectionChange change)
     {
-        if (state != SyncState.Connected) return;
+        if (change.Current != ServerConnectionState.Connected) return;
         try { await SyncAllAsync().ConfigureAwait(false); }
         catch (Exception e) { lock (SyncErrors) SyncErrors.Add(e); }        // async void: never let it escape
     }
@@ -248,7 +252,7 @@ public sealed class RuleSetSync : IAsyncEventRecipient<Events.RulesetPublished>,
     public void Dispose()
     {
         _subscription?.Dispose();
-        if (_started && _network is not null) _network.Changed -= OnNetworkChanged;
+        if (_started && _server is not null) _server.Changed -= OnServerConnectionChanged;
     }
 }
 
@@ -277,6 +281,7 @@ public static class RuleAdminServiceCollectionExtensions
         configure?.Invoke(options);
         services.TryAddSingleton(options);
         services.TryAddSingleton<RuleSetRegistry>();
+        services.AddYFexRuleAdminRequirements();                                 // the gate requirements of RuleAdminBaseline
         services.TryAddSingleton<RulePublisher>();
         services.TryAddTransient<ICommandHandler<Commands.PublishTable, long>, PublishTableHandler>();
         services.TryAddTransient<ICommandHandler<Commands.PublishParameters, long>, PublishParametersHandler>();
@@ -300,6 +305,7 @@ public static class RuleAdminServiceCollectionExtensions
     public static IServiceCollection AddYFexRuleSetSync(this IServiceCollection services, bool deviceCache = true, int keepVersions = 16)
     {
         services.TryAddSingleton<RuleSetRegistry>();
+        services.AddYFexRuleAdminRequirements();                                 // the client registry carries RuleAdminBaseline too
         if (deviceCache)
             services.TryAddSingleton<IRuleDataCache>(sp => new KeyValueRuleDataCache(sp.GetRequiredService<IKeyValueStore>(), keepVersions,
                 sp.GetService<TimeProvider>()));

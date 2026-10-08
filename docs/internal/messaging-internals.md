@@ -49,7 +49,7 @@ On publish, each handler is checked against `PublishOptions`:
 
 ```
 while running:
-  wait for INetworkStatus.Changed → Connected
+  wait for IServerConnection.Changed → Connected
   or periodic 30s heartbeat
 
   for each pending entry (oldest first):
@@ -80,7 +80,7 @@ while running:
 
 > **Why oldest-first?** Command ordering matters for causal consistency. If the user created an order and then added items to it, replaying in reverse would fail because the items reference a non-existent order.
 
-> **⚠️ Warning:** The 30s heartbeat is a fallback. The primary trigger is `INetworkStatus.Changed`. If the network status implementation doesn't fire events reliably (e.g., in some Blazor WASM scenarios), the heartbeat ensures the queue is eventually drained.
+> **⚠️ Warning:** The 30s heartbeat is a fallback. The primary trigger is `IServerConnection.Changed`. If the connection implementation doesn't fire events reliably (e.g., in some Blazor WASM scenarios), the heartbeat ensures the queue is eventually drained.
 
 > **📌 Note:** `SyncFailure` was generalized (additive `init` properties `SagaId` / `StepIndex` / `Category`, defaulting to `Category = "outbox"`) so `ISyncFailureLog` is the shared dead-letter store for both the outbox and `YFex.Orchestration`. The orchestration DLQ (`SyncFailureDeadLetterSink` in `YFex.Orchestration.Rpc`) writes here via `IWritableSyncFailureLog.AddAsync` with `Category` set to `"saga-escalate"` / `"saga-compensation"` / `"broker"`. The additive properties keep every existing outbox construction call source-compatible.
 
@@ -95,7 +95,7 @@ while running:
 1. Look up QueryPolicy from CompiledMessagingRegistry (FrozenDictionary<Type, QueryPolicy>)
 2. Stage 5 context rules (policy.Validation)
 3. Authorize (if policy.Authorize != null) — fused predicate
-4. Check INetworkStatus:
+4. Check IServerConnection:
    - Online: resolve IQueryHandler<TQuery,TResult> from DI → InvokeAsync
              if ICacheable: write result to IClientCache
    - Offline: if ICacheable: serve from IClientCache (IsFromOfflineCache=true)
@@ -114,7 +114,7 @@ while running:
    - Look up matching cached query values via Match delegate
    - Apply the Optimistic.Apply delegate to produce predicted result
    - Write updated values to IClientCache
-5. Check INetworkStatus:
+5. Check IServerConnection:
    - Online: invoke handler (through the resilience pipeline if configured — see note) →
              on success: invalidate cache targets
              → on failure: rollback optimistic updates (restore pre-mutation snapshot)

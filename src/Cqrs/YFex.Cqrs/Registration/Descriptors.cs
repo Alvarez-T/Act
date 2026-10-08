@@ -7,39 +7,6 @@ using YFex.Validation;
 
 namespace YFex.Cqrs.Registration;
 
-// ── Authorizer ────────────────────────────────────────────────────────────────
-
-internal enum AuthorizerKind { RequireAuthenticated, Roles, PolicyName, Inline, TypeRef, Permission }
-
-internal readonly struct AuthorizerDescriptor
-{
-    public readonly AuthorizerKind Kind;
-    public readonly Func<ClaimsPrincipal, object, bool>? InlinePredicate;
-    public readonly Type?       AuthorizerType;
-    public readonly string[]?   Roles;
-    public readonly string?     PolicyName;
-    /// <summary>Set when Kind == Permission. Evaluated via YFex.Authorization's IPolicyEvaluator.</summary>
-    public readonly Permission  Permission;
-
-    private AuthorizerDescriptor(AuthorizerKind kind,
-        Func<ClaimsPrincipal, object, bool>? pred, Type? type, string[]? roles, string? policy,
-        Permission permission = default)
-    { Kind = kind; InlinePredicate = pred; AuthorizerType = type; Roles = roles; PolicyName = policy; Permission = permission; }
-
-    public static AuthorizerDescriptor MustBeAuthenticated()
-        => new(AuthorizerKind.RequireAuthenticated, null, null, null, null);
-    public static AuthorizerDescriptor MustHaveRoles(string[] roles)
-        => new(AuthorizerKind.Roles, null, null, roles, null);
-    public static AuthorizerDescriptor MustSatisfyPolicy(string name)
-        => new(AuthorizerKind.PolicyName, null, null, null, name);
-    public static AuthorizerDescriptor MustHavePermission(Permission permission)
-        => new(AuthorizerKind.Permission, null, null, null, null, permission);
-    public static AuthorizerDescriptor Inline(Func<ClaimsPrincipal, object, bool> pred)
-        => new(AuthorizerKind.Inline, pred, null, null, null);
-    public static AuthorizerDescriptor FromType(Type t)
-        => new(AuthorizerKind.TypeRef, null, t, null, null);
-}
-
 // ── Invalidation rule ─────────────────────────────────────────────────────────
 
 internal readonly struct InvalidationRuleDescriptor

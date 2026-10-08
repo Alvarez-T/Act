@@ -1,5 +1,6 @@
 using System.Buffers;
 using YFex.Validation;
+using YFex.Authorization.Public;
 
 namespace YFex.Rules;
 
@@ -39,16 +40,16 @@ public ref struct DirectiveWriter
 
     /// <summary>Bounds a situation field: <c>d.Limit(Fields.Installments, max: 6)</c>. Omitted side = unbounded.</summary>
     public void Limit<TS, T>(SituationField<TS, T> field, LimitBound<T> min = default, LimitBound<T> max = default,
-        Exceed onExceed = Exceed.Deny, string? permission = null) where TS : ISituation<TS>
+        Exceed onExceed = Exceed.Deny, Permission? permission = null) where TS : ISituation<TS>
         => Add(new LimitDirective(field, min.ToRaw(), max.ToRaw(), onExceed, permission));
 
     /// <summary>Bounds a rule-set derived field: <c>d.Limit(SaleRules.InstallmentValue, min: new Money(5))</c>.</summary>
     public void Limit<TS, T>(DerivedField<TS, T> field, LimitBound<T> min = default, LimitBound<T> max = default,
-        Exceed onExceed = Exceed.Deny, string? permission = null) where TS : ISituation<TS>
+        Exceed onExceed = Exceed.Deny, Permission? permission = null) where TS : ISituation<TS>
         => Add(new LimitDirective(field.Ref, min.ToRaw(), max.ToRaw(), onExceed, permission));
 
     /// <summary>Untyped limit (tables, dynamic rules). <see cref="RawValue.None"/> = unbounded side.</summary>
-    public void LimitRaw(SituationFieldRef field, RawValue min, RawValue max, Exceed onExceed = Exceed.Deny, string? permission = null)
+    public void LimitRaw(SituationFieldRef field, RawValue min, RawValue max, Exceed onExceed = Exceed.Deny, Permission? permission = null)
         => Add(new LimitDirective(field, min, max, onExceed, permission));
 
     /// <summary>Allowed discrete values: <c>d.Grant(Fields.Installments, OptionSet.Range(1, 6))</c>.</summary>
@@ -100,7 +101,7 @@ public ref struct DirectiveWriter
     /// <summary>Untyped adjustment (tables, dynamic rules): the amount must fit the rule set's amount type.</summary>
     public void Adjust(in AdjustDirective adjustment) => Add(new Directive(adjustment));
 
-    public void RequireApproval(string permission, in FieldPath path, RuleCode reason)
+    public void RequireApproval(Permission permission, in FieldPath path, RuleCode reason)
         => Add(new ApprovalDirective(permission, Make(path, reason, Severity.Warning, default)));
 
     public void Add(in Directive directive) => _buffer.Add(in directive, _candidate);

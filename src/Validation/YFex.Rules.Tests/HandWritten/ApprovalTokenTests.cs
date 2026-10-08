@@ -19,7 +19,7 @@ public class ApprovalTokenTests
         var d = NeedsApproval(8);
         var request = d.Approvals[0];
         var tokens = Hmac();
-        var token = tokens.Issue("mgr42", request.Permission, d.Fingerprint, Now);
+        var token = tokens.Issue("mgr42", request.Permission.Value, d.Fingerprint, Now);
 
         tokens.Verify(in token, in request, d.Fingerprint, Now.AddMinutes(1)).Should().Be(new ApprovalVerification(ApprovalCheck.Valid));
         tokens.Verify(in token, in request, d.Fingerprint, Now.AddMinutes(16)).Check.Should().Be(ApprovalCheck.Expired);

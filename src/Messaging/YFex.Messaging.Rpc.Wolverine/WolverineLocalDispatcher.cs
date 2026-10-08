@@ -36,10 +36,8 @@ public sealed class WolverineLocalDispatcher : YFex.Cqrs.IDispatcher
         _eventBus = eventBus;
         _registry = registry;
         _services = services;
-        _principal = new CallPrincipalSource(services);
+        _principal = new CallPrincipalSource(services, registry);
     }
-
-    private static readonly YFex.Cqrs.Error Unauthorized = new(YFex.Cqrs.ErrorType.Unauthorized, "Unauthorized.");
 
     // Validation stages 1 → 2 → 5 (09 §1). Stage 2 authorizes the remote caller (CallContext, D29) or the host principal.
     // Returns null when valid, else the error.
@@ -49,19 +47,19 @@ public sealed class WolverineLocalDispatcher : YFex.Cqrs.IDispatcher
     {
         if (!MessagePipeline.CheckShape(in message, out var shape)) return (YFex.Cqrs.Error.Validation(shape), null, default);
         YFex.Cqrs.Runtime.MessageValidator? context = null;
-        Func<System.Security.Claims.ClaimsPrincipal, object, bool>? authorize = null;
         YFex.Cqrs.Runtime.RulesStage? stage = null;
         if (_registry is not null)
         {
-            if (isQuery && _registry.Queries.TryGetValue(typeof(T), out var q)) (context, authorize, stage) = (q.Validation, q.Authorize, q.Rules);
-            else if (!isQuery && _registry.Commands.TryGetValue(typeof(T), out var c)) (context, authorize, stage) = (c.Validation, c.Authorize, c.Rules);
+            if (isQuery && _registry.Queries.TryGetValue(typeof(T), out var q)) (context, stage) = (q.Validation, q.Rules);
+            else if (!isQuery && _registry.Commands.TryGetValue(typeof(T), out var c)) (context, stage) = (c.Validation, c.Rules);
         }
-        if (!_principal.Authorize(authorize, message!)) return (Unauthorized, null, default);
+        var verdict = await _principal.AuthorizeAsync(message!, ct).ConfigureAwait(false);
+        if (!verdict.IsAllowed) return (YFex.Cqrs.Error.From(verdict), null, default);
         YFex.Cqrs.Runtime.RulesOutcome rules = default;
         if (stage is not null && _services is not null)
         {
             rules = await stage.RunAsync(message!, _services, ct).ConfigureAwait(false);
-            if (rules.Error is { } rejected) return (rejected, stage, rules);
+            if (rules.Error.HasValue) return (rules.Error.Value, stage, rules);
         }
         if (context is null || _services is null) return (null, stage, rules);
         var result = await MessagePipeline.CheckContextAsync(message, context, _services, ct).ConfigureAwait(false);
@@ -74,7 +72,7 @@ public sealed class WolverineLocalDispatcher : YFex.Cqrs.IDispatcher
     {
         query = MessagePipeline.Coerce(in query);
         var (error, stage, rules) = await ValidateAsync(query, isQuery: true, ct).ConfigureAwait(false);
-        if (error is { } e) return e;
+        if (error.HasValue) return error.Value;
         using var decisionScope = YFex.Cqrs.Runtime.DecisionContext.Enter(query!, stage, rules);
 
         // Server-side: always live/authoritative, no cache or offline path.
@@ -87,7 +85,7 @@ public sealed class WolverineLocalDispatcher : YFex.Cqrs.IDispatcher
         where TCommand : YFex.Cqrs.ICommand<TResult>
     {
         var (error, stage, rules) = await ValidateAsync(cmd, isQuery: false, ct).ConfigureAwait(false);
-        if (error is { } e) return e;
+        if (error.HasValue) return error.Value;
         using var decisionScope = YFex.Cqrs.Runtime.DecisionContext.Enter(cmd!, stage, rules);
 
         var result = await _bus.InvokeAsync<TResult>(cmd!, ct).ConfigureAwait(false);
@@ -99,7 +97,7 @@ public sealed class WolverineLocalDispatcher : YFex.Cqrs.IDispatcher
         where TCommand : YFex.Cqrs.ICommand
     {
         var (error, stage, rules) = await ValidateAsync(cmd, isQuery: false, ct).ConfigureAwait(false);
-        if (error is { } e) return e;
+        if (error.HasValue) return error.Value;
         using var decisionScope = YFex.Cqrs.Runtime.DecisionContext.Enter(cmd!, stage, rules);
 
         await _bus.InvokeAsync(cmd!, ct).ConfigureAwait(false);

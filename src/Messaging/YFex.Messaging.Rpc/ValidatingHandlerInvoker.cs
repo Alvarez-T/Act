@@ -25,6 +25,7 @@ public sealed class ValidatingHandlerInvoker : IHandlerInvoker
     private readonly CompiledMessagingRegistry _registry;
     private readonly IServiceProvider _services;
     private readonly CallPrincipalSource _principal;
+    private readonly IdempotentExecution? _idempotency;
 
     public ValidatingHandlerInvoker(IHandlerInvoker inner, CompiledMessagingRegistry registry, IServiceProvider services)
     {
@@ -32,13 +33,22 @@ public sealed class ValidatingHandlerInvoker : IHandlerInvoker
         Inner = inner is ValidatingHandlerInvoker nested ? nested.Inner : inner;
         _registry = registry;
         _services = services;
-        _principal = new CallPrincipalSource(services);
+        _principal = new CallPrincipalSource(services, registry);
+        _idempotency = services.GetService<IdempotentExecution>();
     }
 
     /// <summary>The undecorated invoker.</summary>
     public IHandlerInvoker Inner { get; }
 
-    public async Task<T> InvokeAsync<T>(object message, CancellationToken ct)
+    // Offline design F3: a command already executed under the same idempotency key returns its stored result BEFORE
+    // validation, rules and authorization run again (the command already happened; a replay must not run it twice).
+    public Task<T> InvokeAsync<T>(object message, CancellationToken ct)
+        => _idempotency is null ? InvokeValidatedAsync<T>(message, ct) : _idempotency.RunAsync(message, InvokeValidatedAsync<T>, ct);
+
+    public Task InvokeAsync(object message, CancellationToken ct)
+        => _idempotency is null ? InvokeValidatedAsync(message, ct) : _idempotency.RunAsync(message, InvokeValidatedAsync, ct);
+
+    private async Task<T> InvokeValidatedAsync<T>(object message, CancellationToken ct)
     {
         message = ObjectValidation.Coerce(message);   // old clients may send un-clamped paging (09 §7)
         var (stage, rules) = await ValidateAsync(message, ct).ConfigureAwait(false);
@@ -46,7 +56,7 @@ public sealed class ValidatingHandlerInvoker : IHandlerInvoker
         return await Inner.InvokeAsync<T>(message, ct).ConfigureAwait(false);
     }
 
-    public async Task InvokeAsync(object message, CancellationToken ct)
+    private async Task InvokeValidatedAsync(object message, CancellationToken ct)
     {
         var (stage, rules) = await ValidateAsync(message, ct).ConfigureAwait(false);
         using var decisionScope = DecisionContext.Enter(message, stage, rules);
@@ -61,25 +71,26 @@ public sealed class ValidatingHandlerInvoker : IHandlerInvoker
         if (!MessagePipeline.CheckShape(message, out var shape))
             throw new ErrorResultException(Error.Validation(shape));
 
+        // Stage 2 (D29, one message gate) — unless the RPC middleware already authorized this very instance.
+        if (!ReferenceEquals(CallContext.Current?.AuthorizedMessage, message))
+        {
+            var verdict = await _principal.AuthorizeAsync(message, ct).ConfigureAwait(false);
+            if (!verdict.IsAllowed) throw new ErrorResultException(Error.From(verdict));
+        }
+
         var type = message.GetType();
         MessageValidator? context;
-        Func<System.Security.Claims.ClaimsPrincipal, object, bool>? authorize;
         RulesStage? stage;
-        if (_registry.Commands.TryGetValue(type, out var command)) (context, authorize, stage) = (command.Validation, command.Authorize, command.Rules);
-        else if (_registry.Queries.TryGetValue(type, out var query)) (context, authorize, stage) = (query.Validation, query.Authorize, query.Rules);
+        if (_registry.Commands.TryGetValue(type, out var command)) (context, stage) = (command.Validation, command.Rules);
+        else if (_registry.Queries.TryGetValue(type, out var query)) (context, stage) = (query.Validation, query.Rules);
         else return default;
-
-        // Stage 2 (D29) — unless the RPC middleware already authorized this very instance.
-        if (authorize is not null && !ReferenceEquals(CallContext.Current?.AuthorizedMessage, message)
-            && !_principal.Authorize(authorize, message))
-            throw new ErrorResultException(new Error(ErrorType.Unauthorized, "Unauthorized."));
 
         // Stages 3–4 (09 §6): situation + rules.
         RulesOutcome rules = default;
         if (stage is not null)
         {
             rules = await stage.RunAsync(message, _services, ct).ConfigureAwait(false);
-            if (rules.Error is { } rejected) throw new ErrorResultException(rejected);
+            if (rules.Error.HasValue) throw new ErrorResultException(rules.Error.Value);
         }
 
         if (context is not null)

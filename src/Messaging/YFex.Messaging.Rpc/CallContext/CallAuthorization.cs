@@ -1,74 +1,87 @@
-using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using YFex.Authorization;
 using YFex.Authorization.Public;
+using YFex.Cqrs;
 
 namespace YFex.Messaging.Rpc;
 
 /// <summary>
-/// Validation stage 2 (authorize) as run by every dispatcher (validation D29): <see cref="LocalDispatcher"/>,
-/// <see cref="ValidatingHandlerInvoker"/>, <see cref="CallContextMiddleware"/>, the Wolverine dispatcher and — client side,
-/// for UX only — <see cref="FusionMessageBus"/>.
+/// The caller and the ONE message gate of a dispatcher (validation D29, authorization-consolidation 04 §2):
+/// <see cref="LocalDispatcher"/>, <see cref="ValidatingHandlerInvoker"/>, <see cref="CallContextMiddleware"/> and the Wolverine
+/// dispatcher run the full check (<see cref="AuthorizeAsync"/>); <see cref="FusionMessageBus"/> runs the quick check
+/// (<see cref="IsVisible"/>, UX only — the server re-checks).
 /// </summary>
-public static class CallAuthorization
+/// <remarks>
+/// The caller is the ambient <see cref="CallContext"/> (remote call), else the registered <see cref="IPrincipalAccessor"/> (host /
+/// desktop login), else anonymous. The gate is <see cref="IMessageAuthorization"/>; when the messaging registry declares
+/// authorization requirements and no gate (or a gate that does not know them) is registered, construction fails — never a
+/// silent allow or a silent deny at run time.
+/// </remarks>
+public sealed class CallPrincipalSource
 {
-    [ThreadStatic] private static IAuthContext? t_authorizing;
+    private readonly IServiceProvider? _services;
+    private IPrincipalAccessor? _accessor;
+    private bool _accessorResolved;
 
-    /// <summary>
-    /// The caller: the ambient <see cref="CallContext"/> (remote call), else <paramref name="accessor"/>'s current principal
-    /// (host / desktop login), else anonymous.
-    /// </summary>
-    public static IAuthContext CurrentAuth(IPrincipalAccessor? accessor)
-        => CallContext.Current?.Auth ?? accessor?.Current ?? CallContext.Anonymous;
-
-    /// <summary>
-    /// Runs a compiled policy authorizer for <paramref name="message"/> as <paramref name="auth"/>. While it runs,
-    /// <see cref="ContextFor"/> hands the evaluator this already-resolved context (permissions included) instead of
-    /// rebuilding one from the principal. No authorizer = allowed.
-    /// </summary>
-    public static bool Authorize(Func<ClaimsPrincipal, object, bool>? authorize, object message, IAuthContext auth)
+    public CallPrincipalSource(IServiceProvider? services, CompiledMessagingRegistry? registry = null)
     {
-        if (authorize is null) return true;
-        var previous = t_authorizing;
-        t_authorizing = auth;
-        try { return authorize(auth.Principal, message); }
-        finally { t_authorizing = previous; }
+        _services = services;
+        Authorization = services?.GetService<IMessageAuthorization>();
+        if (registry is not null) EnsureConfigured(registry, Authorization);
     }
 
-    /// <summary>
-    /// Principal → auth context for the Cqrs registry (<c>AddYFexCqrsAuthorization</c>): reuses the context being
-    /// authorized when it is for the same principal (the server's versioned per-connection cache), else builds one.
-    /// </summary>
-    public static IAuthContext ContextFor(ClaimsPrincipal principal, IAuthContextFactory factory)
-        => t_authorizing is { } current && ReferenceEquals(current.Principal, principal) ? current : factory.Create(principal);
-}
+    /// <summary>The message gate, or null when authorization is not wired (allowed only when nothing declares requirements).</summary>
+    public IMessageAuthorization? Authorization { get; }
 
-/// <summary>
-/// Lazily resolved <see cref="IPrincipalAccessor"/> of a singleton dispatcher: resolved on first need only (a host whose
-/// accessor is scoped, e.g. the ASP.NET adapter, never hits it for remote calls — the <see cref="CallContext"/> wins).
-/// </summary>
-public sealed class CallPrincipalSource(IServiceProvider? services)
-{
-    private IPrincipalAccessor? _accessor;
-    private bool _resolved;
+    /// <summary>The current caller.</summary>
+    public IAuthorizationContext Current => CallContext.Current?.Caller ?? Accessor?.Current ?? CallContext.Anonymous;
 
-    /// <summary>See <see cref="CallAuthorization.CurrentAuth"/>.</summary>
-    public IAuthContext Current => CallContext.Current?.Auth ?? Accessor?.Current ?? CallContext.Anonymous;
-
+    // Lazy: a host whose accessor is scoped (ASP.NET Core) never resolves it for remote calls — the CallContext wins.
     private IPrincipalAccessor? Accessor
     {
         get
         {
-            if (_resolved) return _accessor;
-            _accessor = services?.GetService<IPrincipalAccessor>();
-            _resolved = true;
+            if (_accessorResolved) return _accessor;
+            _accessor = _services?.GetService<IPrincipalAccessor>();
+            _accessorResolved = true;
             return _accessor;
         }
     }
 
-    /// <summary>Stage 2 for <paramref name="message"/> as the current caller.</summary>
-    public bool Authorize(Func<ClaimsPrincipal, object, bool>? authorize, object message)
-        => authorize is null || CallAuthorization.Authorize(authorize, message, Current);
+    /// <summary>Full (authoritative) check of <paramref name="message"/> as the current caller. No gate = allowed.</summary>
+    public ValueTask<AuthorizationVerdict> AuthorizeAsync(object message, CancellationToken cancellationToken)
+        => Authorization is { } gate
+            ? gate.AuthorizeAsync(message.GetType(), message, Current, cancellationToken)
+            : new(AuthorizationVerdict.Allowed);
+
+    /// <summary>Quick check (client UX): undecidable parts hide. No gate = visible.</summary>
+    public bool IsVisible(Type messageType) => Authorization?.IsVisible(messageType, Current) ?? true;
+
+    /// <summary>Quick check with the reason (client UX). No gate = allowed.</summary>
+    public AuthorizationVerdict QuickCheck(Type messageType)
+        => Authorization?.QuickCheck(messageType, Current) ?? AuthorizationVerdict.Allowed;
+
+    /// <summary>
+    /// Fail-closed startup check: every message type of <paramref name="registry"/> that declares authorization requirements must be
+    /// known to <paramref name="gate"/> (i.e. exported by <see cref="CqrsAuthorizationConfiguration"/>).
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Requirements are declared but no gate is registered, or the gate misses some.</exception>
+    public static void EnsureConfigured(CompiledMessagingRegistry registry, IMessageAuthorization? gate)
+    {
+        if (!registry.HasAuthorizationRequirements) return;
+        if (gate is null)
+            throw new InvalidOperationException(
+                $"YFex.Cqrs: {registry.AuthorizationRequirements.Count} message type(s) declare authorization requirements " +
+                $"(e.g. {registry.AuthorizationRequirements.Keys.First().Name}) but no IMessageAuthorization is registered. " +
+                "Call services.AddYFexAuthorization(...).");
+        List<string>? missing = null;
+        foreach (var type in registry.AuthorizationRequirements.Keys)
+            if (!gate.HasPolicy(type)) (missing ??= []).Add(type.Name);
+        if (missing is not null)
+            throw new InvalidOperationException(
+                "YFex.Cqrs: authorization requirements of " + string.Join(", ", missing) + " are not in the authorization registry. " +
+                "Call services.AddYFexCqrsAuthorizationConfiguration() (the Messaging.Rpc and Wolverine registrations do it).");
+    }
 }
 
 /// <summary>
@@ -77,7 +90,7 @@ public sealed class CallPrincipalSource(IServiceProvider? services)
 /// </summary>
 public sealed class CallContextPrincipalAccessor(IPrincipalAccessor? inner) : IPrincipalAccessor
 {
-    public IAuthContext Current => CallContext.Current?.Auth ?? inner?.Current ?? CallContext.Anonymous;
+    public IAuthorizationContext Current => CallContext.Current?.Caller ?? inner?.Current ?? CallContext.Anonymous;
 
     /// <summary>Replaces the current <see cref="IPrincipalAccessor"/> registration (keeping its lifetime) with the decorator.</summary>
     public static IServiceCollection Decorate(IServiceCollection services)
@@ -89,6 +102,9 @@ public sealed class CallContextPrincipalAccessor(IPrincipalAccessor? inner) : IP
             if (d.ServiceType != typeof(IPrincipalAccessor)) continue;
             if (IsDecorated(services)) return services;
             services.RemoveAt(i);
+            // A type registration stays a container registration of the concrete type (no ActivatorUtilities reflection).
+            if (d.ImplementationType is { } type && type != typeof(IPrincipalAccessor))
+                services.Add(ServiceDescriptor.Describe(type, type, d.Lifetime));
             services.Add(ServiceDescriptor.Describe(typeof(IPrincipalAccessor),
                 sp => new CallContextPrincipalAccessor(Create(d, sp)), d.Lifetime));
             services.Add(ServiceDescriptor.Singleton(new DecoratedMarker()));
@@ -114,6 +130,6 @@ public sealed class CallContextPrincipalAccessor(IPrincipalAccessor? inner) : IP
     {
         if (d.ImplementationInstance is IPrincipalAccessor instance) return instance;
         if (d.ImplementationFactory is { } factory) return (IPrincipalAccessor)factory(sp);
-        return (IPrincipalAccessor)ActivatorUtilities.CreateInstance(sp, d.ImplementationType!);
+        return (IPrincipalAccessor)sp.GetRequiredService(d.ImplementationType!);
     }
 }

@@ -24,7 +24,7 @@ public static class RpcMessagingExtensions
     /// <summary>
     /// Registers the full YFex client-side Rpc stack:
     /// Fusion client, ICache, IOutbox, ISyncFailureLog, SyncStatus,
-    /// FusionMessageBus (IDispatcher), OutboxReplayer, and FusionNetworkStatus.
+    /// FusionMessageBus (IDispatcher), OutboxReplayer, and FusionServerConnection (IServerConnection).
     /// </summary>
     public static IServiceCollection AddYFexMessagingRpcClient(
         this IServiceCollection services,
@@ -43,6 +43,9 @@ public static class RpcMessagingExtensions
         fusion.AddClient<ICallPermissions>();
         if (opts.CallContextBuilder is { } callContext) services.AddSingleton(callContext);
 
+        // Central anchor for the trusted clock (time T2): AddYFexTime(time => time.UseCentralAnchor()) samples it.
+        fusion.Rpc.AddClient<ICentralTime>();
+
         // Live-state factory backed by Fusion
         services.AddSingleton<ILiveStateFactory>(sp =>
         {
@@ -56,37 +59,21 @@ public static class RpcMessagingExtensions
         services.TryAddSingleton<IKeyValueStore, MemoryKeyValueStore>();
         services.TryAddSingleton<ICache, InMemoryCache>();
 
-        // Outbox + failure log (cross-wired after construction)
-        services.AddSingleton<InMemoryOutbox>();
-        services.AddSingleton<IOutbox>(sp =>
-        {
-            var outbox = sp.GetRequiredService<InMemoryOutbox>();
-            if (sp.GetService<InMemorySyncFailureLog>() is { } log)
-                outbox.SetFailureLog(log);
-            return outbox;
-        });
-
-        services.AddSingleton<InMemorySyncFailureLog>();
-        services.AddSingleton<ISyncFailureLog>(sp =>
-        {
-            var log = sp.GetRequiredService<InMemorySyncFailureLog>();
-            if (sp.GetService<InMemoryOutbox>() is { } outbox)
-                log.SetOutbox(outbox);
-            return log;
-        });
-        services.AddSingleton<IWritableSyncFailureLog>(sp =>
-            sp.GetRequiredService<InMemorySyncFailureLog>());
+        // Outbox + failure log (cross-wired after construction). Offline design F14: the durable pair over the registered
+        // IKeyValueStore was never wired, so queued commands were lost on restart even with SQLite registered. Now:
+        // Storage = InMemory, or an in-memory store → in-memory pair; otherwise (Auto/Sqlite/IndexedDb with a durable store)
+        // → StorageBackedOutbox + StorageBackedSyncFailureLog. Offline design F4: the outbox records who queued each command.
+        services.TryAddSingleton<IOutboxCallerCapture, DefaultOutboxCallerCapture>();
+        services.AddSingleton(sp => OutboxPair.Create(sp, opts));
+        services.AddSingleton<IOutbox>(sp => sp.GetRequiredService<OutboxPair>().Outbox);
+        services.AddSingleton<ISyncFailureLog>(sp => sp.GetRequiredService<OutboxPair>().FailureLog);
+        services.AddSingleton<IWritableSyncFailureLog>(sp => sp.GetRequiredService<OutboxPair>().FailureLog);
 
         // Bindable sync status singleton
         services.AddSingleton<SyncStatus>();
 
-        // Network status (Fusion-backed)
-        services.AddSingleton<INetworkStatus>(sp =>
-        {
-            var status = new FusionNetworkStatus(sp.GetRequiredService<RpcHub>());
-            NetworkStatusProvider.Configure(status);
-            return status;
-        });
+        // Our RPC connection to the server (networking ⚑N4; Fusion default client peer).
+        services.AddSingleton<IServerConnection>(sp => new FusionServerConnection(sp.GetRequiredService<RpcHub>()));
 
         // Inner event bus + RPC-forwarding composite bus
         services.AddSingleton<DefaultEventBus>();
@@ -105,13 +92,14 @@ public static class RpcMessagingExtensions
         // The caller must register CompiledMessagingRegistry (via AddYFexConfigurations or manually).
         services.TryAddSingleton<CompiledMessagingRegistry>(_ =>
             CompiledMessagingRegistry.Build([])); // empty fallback; generator registration overrides
+        services.AddYFexCqrsAuthorizationConfiguration();   // Cqrs requirements → the one message policy (04 §2)
         services.AddSingleton<FusionMessageBusBuilder>();
         services.AddSingleton<IDispatcher>(sp =>
         {
             var builder = sp.GetRequiredService<FusionMessageBusBuilder>();
             var bus = builder.Build(
                 sp.GetRequiredService<CompiledMessagingRegistry>(),
-                sp.GetRequiredService<INetworkStatus>(),
+                sp.GetRequiredService<IServerConnection>(),
                 sp.GetRequiredService<ICache>(),
                 sp.GetRequiredService<IOutbox>(),
                 sp.GetRequiredService<IEventBus>(),
@@ -135,7 +123,7 @@ public static class RpcMessagingExtensions
     /// <summary>
     /// Registers server-side Fusion RPC infrastructure: Fusion core, IHandlerInvoker
     /// (defaults to <see cref="LocalHandlerInvoker"/>; override with Wolverine adapter),
-    /// AlwaysConnectedNetworkStatus, and ASP.NET endpoint mapping helpers.
+    /// AlwaysConnectedServer, and ASP.NET endpoint mapping helpers.
     /// </summary>
     public static IServiceCollection UseYFexMessagingRpcServer(
         this IServiceCollection services,
@@ -148,6 +136,14 @@ public static class RpcMessagingExtensions
         var fusion = services.AddFusion();
         AddCallContextServer(services, fusion, opts.CallContextBuilder ?? new CallContextServerBuilder().FromConnection());
 
+        // The central anchor of every client's trusted clock (time T2). Answers with the registered TimeProvider: central registers
+        // AddYFexTime(time => time.TrustDeviceClock()); without it the reply is "unsynchronized" and no client anchors to it.
+        if (!services.Any(static d => d.ServiceType == typeof(CentralTimeService)))
+        {
+            services.AddSingleton(sp => new CentralTimeService(sp.GetService<TimeProvider>()));
+            fusion.Rpc.AddServer<ICentralTime, CentralTimeService>();
+        }
+
         // Source-generated typed handler-invoke map. Empty fallback so LocalHandlerInvoker always
         // resolves; the generated AddYFexLocalHandlers() (call at startup) replaces this with the
         // populated map so handler resolution is reflection-free (no MakeGenericType).
@@ -159,9 +155,14 @@ public static class RpcMessagingExtensions
         // Validation stages 1/5 for every message entering the server through the invoker (D25).
         ValidatingHandlerInvoker.Decorate(services);
 
+        // At-most-once command execution by idempotency key (offline design F3); ValidatingHandlerInvoker consults it first.
+        // Replace IIdempotencyStore with a shared store for farms and restarts.
+        services.TryAddSingleton<IIdempotencyStore>(_ => new InMemoryIdempotencyStore());
+        services.TryAddSingleton(sp => new IdempotentExecution(
+            sp.GetRequiredService<IIdempotencyStore>(), sp.GetRequiredService<CompiledMessagingRegistry>()));
+
         // Server is always "connected" from its own perspective.
-        services.TryAddSingleton<INetworkStatus>(AlwaysConnectedNetworkStatus.Instance);
-        NetworkStatusProvider.Configure(AlwaysConnectedNetworkStatus.Instance);
+        services.TryAddSingleton<IServerConnection>(AlwaysConnectedServer.Instance);
 
         // No-op stubs for outbox/cache so LocalDispatcher can be injected on the server too.
         services.TryAddSingleton<ICache, InMemoryCache>();
@@ -179,6 +180,7 @@ public static class RpcMessagingExtensions
         // Same fallback registry as on the client side.
         services.TryAddSingleton<CompiledMessagingRegistry>(_ =>
             CompiledMessagingRegistry.Build([]));
+        services.AddYFexCqrsAuthorizationConfiguration();   // Cqrs requirements → the one message policy (04 §2)
 
         // LocalDispatcher: server uses this for in-process static helper calls.
         services.AddSingleton<IDispatcher>(sp =>
@@ -186,7 +188,7 @@ public static class RpcMessagingExtensions
             var dispatcher = new LocalDispatcher(
                 sp.GetRequiredService<IHandlerInvoker>(),
                 sp.GetRequiredService<CompiledMessagingRegistry>(),
-                sp.GetRequiredService<INetworkStatus>(),
+                sp.GetRequiredService<IServerConnection>(),
                 sp.GetRequiredService<ICache>(),
                 sp.GetRequiredService<IOutbox>(),
                 sp.GetRequiredService<IEventBus>(),
@@ -200,16 +202,17 @@ public static class RpcMessagingExtensions
 
     // ── Call context (D29) ────────────────────────────────────────────────────
 
-    // Server: identity sources + RPC middleware (stage 2 outside the compute cache), connection capture, permission
-    // versions/signals, the ICallPermissions compute service, and the IPrincipalAccessor decorator.
+    // Server: identity sources + RPC middleware (stage 2 outside the compute cache), connection capture, the authorization
+    // signals (YFex.Authorization) + their RPC observer (invalidate the pushed snapshot, disconnect on revoke), the
+    // ICallPermissions compute service, and the IPrincipalAccessor decorator.
     private static void AddCallContextServer(IServiceCollection services, FusionBuilder fusion, CallContextServerBuilder options)
     {
         if (services.Any(static d => d.ServiceType == typeof(CallContextServerBuilder))) return;   // idempotent
         services.AddSingleton(options);
-        services.TryAddSingleton<IPermissionsVersions, PermissionsVersions>();
+        services.AddYFexAuthorizationSignals();
         var connections = new CallContextConnections(options);
         services.AddSingleton(connections);
-        services.AddSingleton<CallContextSignals>();
+        services.AddSingleton<IAuthorizationChangeObserver>(sp => new RpcAuthorizationChangeObserver(connections, sp));
 
         fusion.Rpc.AddMiddleware<CallContextMiddleware>();
         fusion.AddServer<ICallPermissions, CallPermissionsService>();
@@ -227,34 +230,27 @@ public static class RpcMessagingExtensions
         CallContextPrincipalAccessor.Decorate(services);
     }
 
-    // ── CQRS authorization wiring (Gate 1) ─────────────────────────────────────
-
     /// <summary>
-    /// Rebuilds the <see cref="CompiledMessagingRegistry"/> with YFex.Authorization plugged in, so
-    /// command/query authorizers declared via <c>RequirePermission</c> / <c>RequireRoles</c> /
-    /// <c>RequireAuthorization</c> actually evaluate through <see cref="IPolicyEvaluator"/> instead of
-    /// failing closed. Without this call, any command carrying such an authorizer is denied.
-    ///
-    /// <para>
-    /// Call this in the composition root <b>after</b> <c>AddYFexAuthorization(...)</c> (which registers
-    /// the evaluator + <see cref="IAuthContextFactory"/>) and after the generated
-    /// <c>AddYFexConfigurations()</c> (which registers the <see cref="IAggregateConfiguration"/> classes).
-    /// Aggregate configurations are resolved from the container; the registry is (re)registered as the
-    /// authoritative singleton regardless of call order relative to the RPC client/server helpers.
-    /// </para>
+    /// Client: the UI sees the permissions the server resolved for this user (authorization-consolidation 05 §3). Registers
+    /// <see cref="SnapshotPrincipalAccessor"/> as the <see cref="IPrincipalAccessor"/> (NavigatR, Capabilities, view-model
+    /// commands and the client bus's quick check read it) and a hosted feed that keeps it in sync with
+    /// <see cref="ICallPermissions"/> (refreshed by the server's pushed invalidations).
+    /// <code>
+    /// services.AddYFexMessagingRpcClient(…).UseServerPermissions();
+    /// </code>
+    /// Online only (Phase 3a): until the first answer the caller is anonymous; the signed offline copy comes with Phase 3b.
     /// </summary>
-    public static IServiceCollection AddYFexCqrsAuthorization(this IServiceCollection services)
+    public static IServiceCollection UseServerPermissions(this IServiceCollection services)
     {
-        services.RemoveAll<CompiledMessagingRegistry>();
-        services.AddSingleton(sp =>
+        services.AddYFexAuthorizationSignals();
+        services.TryAddSingleton(sp => new SnapshotPrincipalAccessor(sp.GetService<IAuthorizationSignals>()));
+        services.RemoveAll<IPrincipalAccessor>();
+        services.AddSingleton<IPrincipalAccessor>(sp => sp.GetRequiredService<SnapshotPrincipalAccessor>());
+        if (!services.Any(static d => d.ServiceType == typeof(ServerPermissionsFeed)))
         {
-            var factory = sp.GetRequiredService<IAuthContextFactory>();
-            return CompiledMessagingRegistry.Build(
-                baseline: sp.GetServices<IAggregateConfiguration>(),
-                policyEvaluator: sp.GetRequiredService<IPolicyEvaluator>(),
-                // Reuses the caller's already-resolved context (versioned per connection on the server, D29).
-                principalFactory: principal => CallAuthorization.ContextFor(principal, factory));
-        });
+            services.AddSingleton<ServerPermissionsFeed>();
+            services.AddHostedService(sp => sp.GetRequiredService<ServerPermissionsFeed>());
+        }
         return services;
     }
 

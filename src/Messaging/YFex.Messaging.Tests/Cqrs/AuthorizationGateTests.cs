@@ -1,152 +1,328 @@
-using System.Security.Claims;
+using Microsoft.Extensions.DependencyInjection;
 using YFex.Authorization;
 using YFex.Authorization.Public;
+using YFex.Authorization.Testing;
 using YFex.Cqrs;
 using YFex.Cqrs.Configuration;
+using YFex.Diagnostics;
+using YFex.Messaging.Rpc;
+using YFex.Messaging.Rpc.Wolverine;
 using YFex.Messaging.Tests.Fixtures;
-using SClaim = System.Security.Claims.Claim;
 
 namespace YFex.Messaging.Tests.Cqrs;
 
+/// <summary>Permissions of the gate tests (a real catalog: ids are declared, so they can be granted).</summary>
+[PermissionCatalog]
+public static partial class GatePermissions
+{
+    [Permission("gate.orders.edit", Name = "Editar pedidos")]
+    public static partial Permission OrdersEdit { get; }
+
+    [Permission("gate.orders.void", Name = "Cancelar pedidos")]
+    public static partial Permission OrdersVoid { get; }
+}
+
+/// <summary>A command whose requirement is declared ONLY by an attribute on the record (⚑Z6) — enforced on dispatch (D1).</summary>
+public partial class GateAggregate
+{
+    public static partial class Commands
+    {
+        [RequirePermission(GatePermissions.Ids.OrdersVoid)]
+        public partial record VoidOrder(int Id) : ICommand;
+    }
+}
+
 /// <summary>
-/// Gate 1 — CQRS authorization rerouted through YFex.Authorization's IPolicyEvaluator.
-/// Verifies the PolicyName/TypeRef enforcement fix (previously silently unenforced) and the new
-/// Permission/Role[] builder overloads, while proving Authenticated/Roles/inline are unchanged.
+/// The ONE message gate (authorization-consolidation 04 §2, Phase 2a): Cqrs builder verbs, <c>ForMessage&lt;T&gt;()</c> rows and
+/// <c>[RequirePermission]</c> on records feed one policy that LocalDispatcher, the server invoker and Wolverine enforce through
+/// <see cref="IMessageAuthorization"/> (D1); named policies and requirement classes really run (D3); roles are case-insensitive
+/// (D4); uncatalogued permissions fail at startup (D5); a missing gate fails closed; denials are emitted as events.
 /// </summary>
 [Trait("Category", "Cqrs")]
 public sealed class AuthorizationGateTests
 {
-    private static readonly Permission OrdersEdit = Permission.Parse("orders.edit");
+    private static readonly TestAggregate.Commands.DeleteCommand Delete = new(1);
 
-    private static ClaimsPrincipal Principal(bool authenticated, string[]? roles = null, string[]? permissions = null)
+    private sealed class Config(Action<CommandConfigurationBuilder<TestAggregate.Commands.DeleteCommand>> configure) : IAggregateConfiguration<TestAggregate>
     {
-        var claims = new List<SClaim>();
-        foreach (var r in roles ?? []) claims.Add(new SClaim(ClaimTypes.Role, r));
-        foreach (var p in permissions ?? []) claims.Add(new SClaim("permission", p));
-        var identity = authenticated ? new ClaimsIdentity(claims, "test") : new ClaimsIdentity(claims);
-        return new ClaimsPrincipal(identity);
+        public void Configure(AggregateConfigurationBuilder<TestAggregate> b) => configure(b.Command<TestAggregate.Commands.DeleteCommand>());
     }
 
-    // Wires a real evaluator + a principal factory that resolves permissions from "permission" claims.
-    private static (IPolicyEvaluator, Func<ClaimsPrincipal, IAuthContext>) Authz()
+    private sealed class NoRequirements : IAggregateConfiguration<TestAggregate>
     {
-        var provider = new DefaultPermissionProvider();
-        Func<ClaimsPrincipal, IAuthContext> factory = p => new AuthContext(p, provider.PermissionsFor(p));
-        return (new PolicyEvaluator(), factory);
+        public void Configure(AggregateConfigurationBuilder<TestAggregate> b) => b.Command<TestAggregate.Commands.DeleteCommand>();
     }
 
-    private sealed class PermissionConfig : IAggregateConfiguration<TestAggregate>
+    private sealed class Harness
     {
-        public void Configure(AggregateConfigurationBuilder<TestAggregate> b)
-            => b.Command<TestAggregate.Commands.DeleteCommand>().RequirePermission(OrdersEdit);
+        public required LocalDispatcher Dispatcher { get; init; }
+        public required TestPrincipalAccessor Caller { get; init; }
+        public required IServiceProvider Services { get; init; }
+        public required CompiledMessagingRegistry Registry { get; init; }
+
+        public async Task<QueueableResult> SendAsync<TCommand>(TCommand command, IAuthorizationContext caller) where TCommand : ICommand
+        {
+            Caller.Current = caller;
+            return await Dispatcher.CommandAsync(command);
+        }
     }
 
-    private sealed class PolicyNameConfig : IAggregateConfiguration<TestAggregate>
+    private static Harness Build(IAggregateConfiguration config, Action<AuthorizationConfigurator>? authorization = null,
+        Action<IServiceCollection>? services = null, bool wireAuthorization = true, bool exportCqrs = true)
     {
-        public void Configure(AggregateConfigurationBuilder<TestAggregate> b)
-            => b.Command<TestAggregate.Commands.DeleteCommand>().RequireAuthorization("orders-policy");
+        var registry = CompiledMessagingRegistry.Build([config]);
+        var collection = new ServiceCollection();
+        collection.AddLogging();
+        collection.AddSingleton(registry);
+        if (wireAuthorization) collection.AddYFexAuthorization(authorization);
+        if (exportCqrs) collection.AddYFexCqrsAuthorizationConfiguration();
+        var caller = new TestPrincipalAccessor();
+        collection.AddSingleton<IPrincipalAccessor>(caller);
+        collection.AddTransient<ICommandHandler<TestAggregate.Commands.DeleteCommand>, TestDispatcherFixture.DeleteCommandHandler>();
+        collection.AddTransient<ICommandHandler<GateAggregate.Commands.VoidOrder>, VoidOrderHandler>();
+        services?.Invoke(collection);
+        var sp = collection.BuildServiceProvider();
+        var dispatcher = new LocalDispatcher(
+            new LocalHandlerInvoker(sp, YFexLocalHandlerRegistrations.BuildLocalHandlerInvokerRegistry()),
+            registry, new ManualServerConnection(true), new InMemoryCache(), new InMemoryOutbox(new OutboxOptions()), new DefaultEventBus(), sp);
+        return new Harness { Dispatcher = dispatcher, Caller = caller, Services = sp, Registry = registry };
     }
 
-    private sealed class DenyAuthorizer : ICommandAuthorizer<TestAggregate.Commands.DeleteCommand>
+    public sealed class VoidOrderHandler : ICommandHandler<GateAggregate.Commands.VoidOrder>
     {
-        public bool Authorize(ClaimsPrincipal user, TestAggregate.Commands.DeleteCommand command) => true; // never actually invoked
+        public Task HandleAsync(GateAggregate.Commands.VoidOrder command, CancellationToken ct) => Task.CompletedTask;
     }
 
-    private sealed class TypeRefConfig : IAggregateConfiguration<TestAggregate>
+    private static IAuthorizationContext Holder(params Permission[] permissions) => TestCaller.Authenticated("ana").WithPermissions(permissions).Build();
+
+    private static void ShouldBeDenied(QueueableResult result, string? naming = null)
     {
-        public void Configure(AggregateConfigurationBuilder<TestAggregate> b)
-            => b.Command<TestAggregate.Commands.DeleteCommand>().Authorize<DenyAuthorizer>();
+        result.TryGetError(out var error).Should().BeTrue();
+        error.Kind.Should().BeOneOf(ErrorKind.Forbidden, ErrorKind.Unauthenticated);
+        if (naming is not null) error.Message.Should().Contain(naming);
     }
 
-    private sealed class AuthenticatedConfig : IAggregateConfiguration<TestAggregate>
-    {
-        public void Configure(AggregateConfigurationBuilder<TestAggregate> b)
-            => b.Command<TestAggregate.Commands.DeleteCommand>().RequireAuthenticated();
-    }
-
-    private sealed class RolesValueObjectConfig : IAggregateConfiguration<TestAggregate>
-    {
-        public void Configure(AggregateConfigurationBuilder<TestAggregate> b)
-            => b.Command<TestAggregate.Commands.DeleteCommand>().RequireRoles((Role)"Manager");
-    }
-
-    private static Func<ClaimsPrincipal, object, bool>? Gate(
-        IAggregateConfiguration config,
-        bool wireAuthz)
-    {
-        var (eval, factory) = wireAuthz ? Authz() : (null, null);
-        var registry = CompiledMessagingRegistry.Build(
-            baseline: [config], policyEvaluator: eval, principalFactory: factory);
-        return registry.Commands[typeof(TestAggregate.Commands.DeleteCommand)].Authorize;
-    }
-
-    private static readonly TestAggregate.Commands.DeleteCommand Cmd = new(1);
-
-    // ── Permission ─────────────────────────────────────────────────────────────
+    // ── D1: every declaration path is enforced on dispatch ────────────────────────────────────────────────────────────
 
     [Fact]
-    public void RequirePermission_allows_when_granted()
+    public async Task Cqrs_configuration_permission_allows_the_holder()
     {
-        var gate = Gate(new PermissionConfig(), wireAuthz: true)!;
-        gate(Principal(true, permissions: ["orders.edit"]), Cmd).Should().BeTrue();
+        var fx = Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit)));
+        (await fx.SendAsync(Delete, Holder(GatePermissions.OrdersEdit))).IsSuccess.Should().BeTrue();
     }
 
     [Fact]
-    public void RequirePermission_denies_when_missing()
+    public async Task Cqrs_configuration_permission_denies_naming_the_missing_permission()
     {
-        var gate = Gate(new PermissionConfig(), wireAuthz: true)!;
-        gate(Principal(true), Cmd).Should().BeFalse();
+        var fx = Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit)));
+        ShouldBeDenied(await fx.SendAsync(Delete, Holder()), "gate.orders.edit");
     }
 
     [Fact]
-    public void RequirePermission_fails_closed_without_evaluator()
+    public async Task ForMessage_rows_are_enforced_on_cqrs_dispatch()
     {
-        var gate = Gate(new PermissionConfig(), wireAuthz: false)!;
-        gate.Should().NotBeNull();
-        gate(Principal(true, permissions: ["orders.edit"]), Cmd).Should().BeFalse();
-    }
-
-    // ── The security fix: PolicyName / TypeRef now enforce (deny) ────────────────
-
-    [Fact]
-    public void RequireAuthorization_policyName_now_denies_instead_of_silently_allowing()
-    {
-        var gate = Gate(new PolicyNameConfig(), wireAuthz: true);
-        gate.Should().NotBeNull("PolicyName must no longer compile to a null (unenforced) predicate");
-        gate!(Principal(true), Cmd).Should().BeFalse();
+        var fx = Build(new NoRequirements(), a => a.AddConfiguration(new DelegateConfig(b =>
+            b.ForMessage<TestAggregate.Commands.DeleteCommand>().RequirePermission(GatePermissions.OrdersVoid))));
+        ShouldBeDenied(await fx.SendAsync(Delete, Holder(GatePermissions.OrdersEdit)), "gate.orders.void");
+        (await fx.SendAsync(Delete, Holder(GatePermissions.OrdersVoid))).IsSuccess.Should().BeTrue();
     }
 
     [Fact]
-    public void Authorize_typeRef_now_denies_instead_of_silently_allowing()
+    public async Task RequirePermission_attribute_on_a_record_is_enforced_without_wiring()
     {
-        var gate = Gate(new TypeRefConfig(), wireAuthz: true);
-        gate.Should().NotBeNull();
-        gate!(Principal(true), Cmd).Should().BeFalse();
+        var fx = Build(new NoRequirements());
+        ShouldBeDenied(await fx.SendAsync(new GateAggregate.Commands.VoidOrder(7), Holder(GatePermissions.OrdersEdit)), "gate.orders.void");
+        (await fx.SendAsync(new GateAggregate.Commands.VoidOrder(7), Holder(GatePermissions.OrdersVoid))).IsSuccess.Should().BeTrue();
     }
 
     [Fact]
-    public void PolicyName_fails_closed_without_evaluator()
+    public async Task Configuration_and_ForMessage_rows_merge_with_AND()
     {
-        var gate = Gate(new PolicyNameConfig(), wireAuthz: false);
-        gate.Should().NotBeNull();
-        gate!(Principal(true), Cmd).Should().BeFalse();
-    }
-
-    // ── Unchanged behaviours ─────────────────────────────────────────────────────
-
-    [Fact]
-    public void RequireAuthenticated_unchanged()
-    {
-        var gate = Gate(new AuthenticatedConfig(), wireAuthz: true)!;
-        gate(Principal(true), Cmd).Should().BeTrue();
-        gate(Principal(false), Cmd).Should().BeFalse();
+        var fx = Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit)), a => a.AddConfiguration(new DelegateConfig(b =>
+            b.ForMessage<TestAggregate.Commands.DeleteCommand>().RequirePermission(GatePermissions.OrdersVoid))));
+        ShouldBeDenied(await fx.SendAsync(Delete, Holder(GatePermissions.OrdersEdit)), "gate.orders.void");
+        (await fx.SendAsync(Delete, Holder(GatePermissions.OrdersEdit, GatePermissions.OrdersVoid))).IsSuccess.Should().BeTrue();
     }
 
     [Fact]
-    public void RequireRoles_valueobject_overload_works()
+    public async Task Unauthenticated_caller_is_told_to_authenticate()
     {
-        var gate = Gate(new RolesValueObjectConfig(), wireAuthz: true)!;
-        gate(Principal(true, roles: ["Manager"]), Cmd).Should().BeTrue();
-        gate(Principal(true, roles: ["Clerk"]), Cmd).Should().BeFalse();
+        var fx = Build(new Config(c => c.RequireAuthenticated()));
+        var anonymous = await fx.SendAsync(Delete, TestCaller.Anonymous);
+        ShouldBeDenied(anonymous, "Authentication required");
+        anonymous.TryGetError(out var error).Should().BeTrue();
+        error.Kind.Should().Be(ErrorKind.Unauthenticated);
+        (await fx.SendAsync(Delete, Holder())).IsSuccess.Should().BeTrue();
+    }
+
+    // ── D3: named policies and requirement classes actually run ──────────────────────────────────────────────────────
+
+    private sealed class ManagersOnly : INamedPolicyHandler
+    {
+        public PolicyName Name { get; } = PolicyName.Parse("managers-only");
+        public ValueTask<bool> HandleAsync(IAuthorizationContext caller, object? resource, CancellationToken cancellationToken)
+            => new(caller.Actor.Subject == "manager");
+    }
+
+    [Fact]
+    public async Task RequirePolicy_is_decided_by_its_registered_handler()
+    {
+        var fx = Build(new Config(c => c.RequirePolicy(PolicyName.Parse("managers-only"))),
+            services: s => s.AddSingleton<INamedPolicyHandler, ManagersOnly>());
+        ShouldBeDenied(await fx.SendAsync(Delete, TestCaller.Authenticated("cashier").Build()), "managers-only");
+        (await fx.SendAsync(Delete, TestCaller.Authenticated("manager").Build())).IsSuccess.Should().BeTrue();
+    }
+
+    public sealed class SmallIdsOnly : IAuthorizationRequirement<TestAggregate.Commands.DeleteCommand>
+    {
+        public bool IsSatisfied(IAuthorizationContext caller, TestAggregate.Commands.DeleteCommand command) => command.Id < 100;
+    }
+
+    public sealed class RegisterOpen : IAsyncAuthorizationRequirement<TestAggregate.Commands.DeleteCommand>
+    {
+        public bool Open { get; set; } = true;
+        public async ValueTask<bool> IsSatisfiedAsync(IAuthorizationContext caller, TestAggregate.Commands.DeleteCommand command, CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            return Open;
+        }
+    }
+
+    [Fact]
+    public async Task Authorize_with_a_sync_requirement_class()
+    {
+        var fx = Build(new Config(c => c.Authorize<SmallIdsOnly>()), services: s => s.AddSingleton<SmallIdsOnly>());
+        (await fx.SendAsync(new TestAggregate.Commands.DeleteCommand(5), Holder())).IsSuccess.Should().BeTrue();
+        ShouldBeDenied(await fx.SendAsync(new TestAggregate.Commands.DeleteCommand(500), Holder()), "SmallIdsOnly");
+    }
+
+    [Fact]
+    public async Task Authorize_with_an_async_requirement_class()
+    {
+        var fx = Build(new Config(c => c.Authorize<RegisterOpen>()), services: s => s.AddSingleton<RegisterOpen>());
+        (await fx.SendAsync(Delete, Holder())).IsSuccess.Should().BeTrue();
+        fx.Services.GetRequiredService<RegisterOpen>().Open = false;
+        ShouldBeDenied(await fx.SendAsync(Delete, Holder()), "RegisterOpen");
+    }
+
+    [Fact]
+    public async Task Inline_predicate_receives_the_caller_and_the_command()
+    {
+        var fx = Build(new Config(c => c.Authorize((caller, command) => command.Id < 10 || caller.Actor.Subject == "boss")));
+        (await fx.SendAsync(new TestAggregate.Commands.DeleteCommand(3), Holder())).IsSuccess.Should().BeTrue();
+        ShouldBeDenied(await fx.SendAsync(new TestAggregate.Commands.DeleteCommand(30), Holder()));
+        (await fx.SendAsync(new TestAggregate.Commands.DeleteCommand(30), TestCaller.Authenticated("boss").Build())).IsSuccess.Should().BeTrue();
+    }
+
+    // ── D4: role names compare case-insensitively ────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Roles_are_case_insensitive_on_dispatch()
+    {
+        var fx = Build(new Config(c => c.RequireRoles(Role.Parse("Supervisor"))));
+        (await fx.SendAsync(Delete, TestCaller.Authenticated().WithRoles(Role.Parse("SUPERVISOR")).Build())).IsSuccess.Should().BeTrue();
+        ShouldBeDenied(await fx.SendAsync(Delete, TestCaller.Authenticated().WithRoles(Role.Parse("caixa")).Build()));
+    }
+
+    // ── D5 + fail-closed startup ─────────────────────────────────────────────────────────────────────────────────────
+
+    [Fact]
+    public void Uncatalogued_cqrs_permission_fails_startup_listing_it()
+    {
+        var act = () => Build(new Config(c => c.RequirePermission(Permission.Parse("gate.orders.typo"))));
+        act.Should().Throw<AuthorizationConfigurationException>().WithMessage("*gate.orders.typo*DeleteCommand*");
+    }
+
+    [Fact]
+    public void Requirements_without_AddYFexAuthorization_fail_at_construction()
+    {
+        var act = () => Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit)), wireAuthorization: false);
+        act.Should().Throw<InvalidOperationException>().WithMessage("*AddYFexAuthorization*");
+    }
+
+    [Fact]
+    public void Requirements_not_exported_to_the_authorization_registry_fail_at_construction()
+    {
+        var act = () => Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit)), exportCqrs: false);
+        act.Should().Throw<InvalidOperationException>().WithMessage("*AddYFexCqrsAuthorizationConfiguration*");
+    }
+
+    // ── Server invoker and Wolverine dispatcher ask the same gate ────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task ValidatingHandlerInvoker_denies_with_the_reason()
+    {
+        var fx = Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit)));
+        var invoker = new ValidatingHandlerInvoker(
+            new LocalHandlerInvoker(fx.Services, YFexLocalHandlerRegistrations.BuildLocalHandlerInvokerRegistry()), fx.Registry, fx.Services);
+        fx.Caller.Current = Holder();
+
+        var act = () => invoker.InvokeAsync(Delete, default);
+        (await act.Should().ThrowAsync<ErrorResultException>()).Which.TypedError.Message.Should().Contain("gate.orders.edit");
+    }
+
+    [Fact]
+    public async Task Wolverine_dispatcher_denies_configuration_and_attribute_requirements_before_the_bus()
+    {
+        var fx = Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit)));
+        var wolverine = new WolverineLocalDispatcher(bus: null!, new DefaultEventBus(), fx.Registry, fx.Services);   // a denial never reaches the bus
+        fx.Caller.Current = Holder();
+
+        ShouldBeDenied(await wolverine.CommandAsync(Delete), "gate.orders.edit");
+        ShouldBeDenied(await wolverine.CommandAsync(new GateAggregate.Commands.VoidOrder(1)), "gate.orders.void");
+    }
+
+    [Fact]
+    public async Task Wolverine_dispatcher_denies_ForMessage_rows()
+    {
+        var fx = Build(new NoRequirements(), a => a.AddConfiguration(new DelegateConfig(b =>
+            b.ForMessage<TestAggregate.Commands.DeleteCommand>().RequirePermission(GatePermissions.OrdersVoid))));
+        var wolverine = new WolverineLocalDispatcher(bus: null!, new DefaultEventBus(), fx.Registry, fx.Services);
+        fx.Caller.Current = Holder(GatePermissions.OrdersEdit);
+
+        ShouldBeDenied(await wolverine.CommandAsync(Delete), "gate.orders.void");
+    }
+
+    // ── Events (⚑Z17): server-side denials go through the core probe ─────────────────────────────────────────────────
+
+    [Fact]
+    public async Task Denied_is_emitted_through_the_core_probe()
+    {
+        var engine = new CapturingEngine();
+        Operations.Install(engine, allowReinstall: true);
+        try
+        {
+            var fx = Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit)));
+            await fx.SendAsync(Delete, TestCaller.Authenticated("denied-event-subject").Build());
+        }
+        finally
+        {
+            Operations.Uninstall(engine);
+        }
+
+        var denied = engine.Denied.Should().ContainSingle(e => e.Actor.Subject == "denied-event-subject").Subject;
+        denied.Missing.Should().Be("gate.orders.edit");
+        denied.Reason.Should().Be(DenialKind.MissingPermission);
+        denied.Target.Should().Be(nameof(TestAggregate.Commands.DeleteCommand));
+    }
+
+    private sealed class DelegateConfig(Action<AuthorizationBuilder> configure) : IAuthorizationConfiguration
+    {
+        public void Configure(AuthorizationBuilder builder) => configure(builder);
+    }
+
+    private sealed class CapturingEngine : IOperationEngine
+    {
+        public System.Collections.Concurrent.ConcurrentBag<AuthorizationEvent> Denied { get; } = [];
+        public TraceContext Current => default;
+        public bool IsEnabled(OperationDescriptor descriptor, LogLevel level) => ReferenceEquals(descriptor, AuthorizationEvents.Denied);
+        public ActiveOperation Start(OperationDescriptor descriptor) => default;
+        public ActiveOperation Start<T>(OperationDescriptor<T> descriptor, in T value) => default;
+        public ActiveOperation StartLinked(OperationDescriptor descriptor, in OperationLink link) => default;
+        public void Mark(OperationDescriptor descriptor, LogLevel level, OperationOutcome outcome, int code) { }
+        public void Mark<T>(OperationDescriptor<T> descriptor, in T value, LogLevel level, OperationOutcome outcome, int code)
+        {
+            if (value is AuthorizationEvent e) Denied.Add(e);
+        }
     }
 }

@@ -39,7 +39,7 @@ public class PublishTests
         var f = new AdminFixture();
         var r = await f.Dispatcher.CommandAsync<Commands.PublishTable, long>(Table(0, new SeatTable.Row(Is(Plan.Pro), 100)));
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.Unauthorized);
+        e.Kind.Should().Be(ErrorKind.Forbidden);
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class PublishTests
         var r = await f.Dispatcher.CommandAsync<Commands.PublishTable, long>(Table(0, new SeatTable.Row(Is(Plan.Basic), 5), new(Is(Plan.Pro), 900)));
 
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.ValidationProblem);
+        e.Kind.Should().Be(ErrorKind.ValidationProblem);
         e.Violations[0].Path.ToString().Should().Be("Rows[1].MaxSeats");
         e.Violations[0].Code.Value.Should().Be("pricing.seats.above-legal");
     }
@@ -64,7 +64,7 @@ public class PublishTests
 
         var r = await f.Dispatcher.CommandAsync<Commands.PublishTable, long>(Table(0, new SeatTable.Row(Is(Plan.Pro), 70)));   // editor opened v0
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.Conflict);
+        e.Kind.Should().Be(ErrorKind.Conflict);
     }
 
     [Fact]
@@ -117,14 +117,14 @@ public class PublishTests
         var f = new AdminFixture();
         var denied = await f.Dispatcher.CommandAsync<Commands.ApproveDecision, ApprovalToken>(new("sales.discount.override", 42));
         denied.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.Unauthorized);
+        e.Kind.Should().Be(ErrorKind.Forbidden);
 
         f.User.Name = "mgr42";
         f.User.Permissions.Add("sales.discount.override");
         var ok = await f.Dispatcher.CommandAsync<Commands.ApproveDecision, ApprovalToken>(new("sales.discount.override", 42));
         ok.TryGetValue(out ApprovalToken? token).Should().BeTrue();
         token!.ApproverId.Should().Be("mgr42");
-        var request = new ApprovalRequest("sales.discount.override", default, default);
+        var request = new ApprovalRequest(PricingPermissions.DiscountOverride, default, default);
         f.Tokens.Verify(token.ToToken(), in request, 42, token.IssuedAt).IsValid.Should().BeTrue();
     }
 

@@ -19,7 +19,7 @@ public sealed class CommandConfigurationBuilder<TCommand>
 {
     private List<ContextRuleFactory>?           _validators;
     private RulesConfig?                        _rules;
-    private List<AuthorizerDescriptor>?         _authorizers;
+    private List<Requirement>?         _authorization;
     private List<InvalidationRuleDescriptor>?   _invalidates;
     private Func<object, string>?               _idempotencyKey;
     private ConflictPolicy                      _conflict = ConflictPolicy.Escalate;
@@ -133,46 +133,41 @@ public sealed class CommandConfigurationBuilder<TCommand>
 
     // â”€â”€ Authorization â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-    public CommandConfigurationBuilder<TCommand> RequireAuthenticated()
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustBeAuthenticated());
-        return this;
-    }
+    // ── Authorization: the verbs record Requirements; CqrsAuthorizationConfiguration exports them to the ONE message policy
+    //    every dispatcher enforces through IMessageAuthorization (authorization-consolidation 04 §2) ──
 
-    public CommandConfigurationBuilder<TCommand> RequireRoles(params string[] roles)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHaveRoles(roles));
-        return this;
-    }
+    /// <summary>The caller must be authenticated.</summary>
+    public CommandConfigurationBuilder<TCommand> RequireAuthenticated() => AddRequirement(Requirement.RequireAuthenticated());
 
-    public CommandConfigurationBuilder<TCommand> RequireRoles(params Role[] roles)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHaveRoles(Array.ConvertAll(roles, static r => r.Value)));
-        return this;
-    }
+    /// <summary>The caller must be in at least one of <paramref name="roles"/> (case-insensitive).</summary>
+    public CommandConfigurationBuilder<TCommand> RequireRoles(params Role[] roles) => AddRequirement(Requirement.RequireRoles(roles));
 
-    public CommandConfigurationBuilder<TCommand> RequirePermission(Permission permission)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHavePermission(permission));
-        return this;
-    }
+    /// <summary>The caller must hold <paramref name="permission"/> (a catalog property, e.g. <c>SalesPermissions.SaleVoid</c>).</summary>
+    public CommandConfigurationBuilder<TCommand> RequirePermission(Permission permission) => AddRequirement(Requirement.Require(permission));
 
-    public CommandConfigurationBuilder<TCommand> RequireAuthorization(string policyName)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustSatisfyPolicy(policyName));
-        return this;
-    }
+    /// <summary>The caller must hold at least one of <paramref name="permissions"/>.</summary>
+    public CommandConfigurationBuilder<TCommand> RequireAnyPermission(params Permission[] permissions) => AddRequirement(Requirement.RequireAny(permissions));
 
-    public CommandConfigurationBuilder<TCommand> Authorize(Func<ClaimsPrincipal, TCommand, bool> predicate)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.Inline((u, c) => predicate(u, (TCommand)c)));
-        return this;
-    }
+    /// <summary>
+    /// A named policy decided on the server by an <c>INamedPolicyHandler</c>. Hidden on the quick (client/UI) check, so declare it
+    /// in the server overrides when clients must still send the message.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> RequirePolicy(PolicyName policy) => AddRequirement(Requirement.RequirePolicy(policy));
 
-    public CommandConfigurationBuilder<TCommand> Authorize<TAuthorizer>()
-        where TAuthorizer : ICommandAuthorizer<TCommand>
+    /// <summary>An inline predicate over (caller, message). Does not affect visibility (menus, search, AI).</summary>
+    public CommandConfigurationBuilder<TCommand> Authorize(Func<IAuthorizationContext, TCommand, bool> predicate)
+        => AddRequirement(Requirement.RequireResource(ResourceRequirement.FromDelegate(predicate)));
+
+    /// <summary>
+    /// A requirement class — <see cref="IAuthorizationRequirement{TResource}"/> or <see cref="IAsyncAuthorizationRequirement{TResource}"/>
+    /// of <typeparamref name="TCommand"/> — registered as a DI singleton (its <c>VisibleWith</c> refines visibility).
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> Authorize<TRequirement>() where TRequirement : class
+        => AddRequirement(Requirement.RequireResource(ResourceRequirement.FromService<TRequirement, TCommand>()));
+
+    private CommandConfigurationBuilder<TCommand> AddRequirement(in Requirement requirement)
     {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.FromType(typeof(TAuthorizer)));
+        (_authorization ??= []).Add(requirement);
         return this;
     }
 
@@ -372,7 +367,7 @@ public sealed class CommandConfigurationBuilder<TCommand>
         IsQueueable          = typeof(IQueueable).IsAssignableFrom(typeof(TCommand)),
         Validators           = _validators?.ToArray(),
         Rules                = _rules?.Build(typeof(TCommand), isQuery: false),
-        Authorizers          = _authorizers?.ToArray(),
+        Authorization          = _authorization?.ToArray(),
         Invalidates          = _invalidates?.ToArray(),
         IdempotencyKey       = _idempotencyKey,
         ConflictPolicy       = _conflict,
@@ -398,7 +393,7 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
 {
     private List<ContextRuleFactory>?           _validators;
     private RulesConfig?                        _rules;
-    private List<AuthorizerDescriptor>?         _authorizers;
+    private List<Requirement>?         _authorization;
     private List<InvalidationRuleDescriptor>?   _invalidates;
     private Func<object, string>?               _idempotencyKey;
     private ConflictPolicy                      _conflict = ConflictPolicy.Escalate;
@@ -508,47 +503,41 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
         return this;
     }
 
-    public CommandConfigurationBuilder<TCommand, TResult> RequireAuthenticated()
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustBeAuthenticated());
-        return this;
-    }
+    // ── Authorization: the verbs record Requirements; CqrsAuthorizationConfiguration exports them to the ONE message policy
+    //    every dispatcher enforces through IMessageAuthorization (authorization-consolidation 04 §2) ──
 
-    public CommandConfigurationBuilder<TCommand, TResult> RequireRoles(params string[] roles)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHaveRoles(roles));
-        return this;
-    }
+    /// <summary>The caller must be authenticated.</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> RequireAuthenticated() => AddRequirement(Requirement.RequireAuthenticated());
 
-    public CommandConfigurationBuilder<TCommand, TResult> RequireRoles(params Role[] roles)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHaveRoles(Array.ConvertAll(roles, static r => r.Value)));
-        return this;
-    }
+    /// <summary>The caller must be in at least one of <paramref name="roles"/> (case-insensitive).</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> RequireRoles(params Role[] roles) => AddRequirement(Requirement.RequireRoles(roles));
 
-    public CommandConfigurationBuilder<TCommand, TResult> RequirePermission(Permission permission)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHavePermission(permission));
-        return this;
-    }
+    /// <summary>The caller must hold <paramref name="permission"/> (a catalog property, e.g. <c>SalesPermissions.SaleVoid</c>).</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> RequirePermission(Permission permission) => AddRequirement(Requirement.Require(permission));
 
-    public CommandConfigurationBuilder<TCommand, TResult> RequireAuthorization(string policyName)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustSatisfyPolicy(policyName));
-        return this;
-    }
+    /// <summary>The caller must hold at least one of <paramref name="permissions"/>.</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> RequireAnyPermission(params Permission[] permissions) => AddRequirement(Requirement.RequireAny(permissions));
 
-    public CommandConfigurationBuilder<TCommand, TResult> Authorize(
-        Func<ClaimsPrincipal, TCommand, bool> predicate)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.Inline((u, c) => predicate(u, (TCommand)c)));
-        return this;
-    }
+    /// <summary>
+    /// A named policy decided on the server by an <c>INamedPolicyHandler</c>. Hidden on the quick (client/UI) check, so declare it
+    /// in the server overrides when clients must still send the message.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand, TResult> RequirePolicy(PolicyName policy) => AddRequirement(Requirement.RequirePolicy(policy));
 
-    public CommandConfigurationBuilder<TCommand, TResult> Authorize<TAuthorizer>()
-        where TAuthorizer : ICommandAuthorizer<TCommand>
+    /// <summary>An inline predicate over (caller, message). Does not affect visibility (menus, search, AI).</summary>
+    public CommandConfigurationBuilder<TCommand, TResult> Authorize(Func<IAuthorizationContext, TCommand, bool> predicate)
+        => AddRequirement(Requirement.RequireResource(ResourceRequirement.FromDelegate(predicate)));
+
+    /// <summary>
+    /// A requirement class — <see cref="IAuthorizationRequirement{TResource}"/> or <see cref="IAsyncAuthorizationRequirement{TResource}"/>
+    /// of <typeparamref name="TCommand"/> — registered as a DI singleton (its <c>VisibleWith</c> refines visibility).
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand, TResult> Authorize<TRequirement>() where TRequirement : class
+        => AddRequirement(Requirement.RequireResource(ResourceRequirement.FromService<TRequirement, TCommand>()));
+
+    private CommandConfigurationBuilder<TCommand, TResult> AddRequirement(in Requirement requirement)
     {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.FromType(typeof(TAuthorizer)));
+        (_authorization ??= []).Add(requirement);
         return this;
     }
 
@@ -743,7 +732,7 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
         IsQueueable          = typeof(IQueueable).IsAssignableFrom(typeof(TCommand)),
         Validators           = _validators?.ToArray(),
         Rules                = _rules?.Build(typeof(TCommand), isQuery: false),
-        Authorizers          = _authorizers?.ToArray(),
+        Authorization          = _authorization?.ToArray(),
         Invalidates          = _invalidates?.ToArray(),
         IdempotencyKey       = _idempotencyKey,
         ConflictPolicy       = _conflict,

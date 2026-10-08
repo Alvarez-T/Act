@@ -21,7 +21,3 @@ public sealed record SyncFailureEvent(
     string CommandTypeName,
     string Reason) : IEvent;
 
-/// <summary>Published when the device's network state transitions.</summary>
-public sealed record NetworkStatusChangedEvent(
-    SyncState Previous,
-    SyncState Current) : IEvent;

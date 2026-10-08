@@ -14,7 +14,7 @@ marked **(new proposal)**.
 
 **API added by these examples** (to fold into 02/03/06/08 once approved, ⚑L13): `[LogValue(DataSensitivity, Mask)]` + `LogMasks`;
 `LogWriter.WriteNull` / `WriteSpanFormattable`; `Operations.MarkWith<T>`; `OperationRegistry.RegisterMessage`; `LogRecords.Begin/Commit`
-(generated `[Log]` bodies); per-level handlers `LogInformationHandler`, …; `UseYFexLogging()` (ASP.NET Core); `.FromConfiguration`,
+(generated `[Log]` bodies); per-level handlers `LogInformationHandler`, … (methods `Information`/`Warning`, full names); `UseYFexLogging()` (ASP.NET Core); `.FromConfiguration`,
 `.LiveTap()`; `AddYFexLoggingRelay`; `AddYFexLoggingAlerts` + `AlertSeverity`/`AlertGroup`; `Logging.Commands.GrantVerbose`;
 `LogCapture`; diagnostic YFL0031 (secret-looking member captured).
 
@@ -35,7 +35,7 @@ user and trace.
 | How screen state is logged | nothing to do: role inferred from State attributes (12) | user input → edit timeline, screen state → not logged |
 | Which operations are audited | `[Audited]` on the message or `.Logging(l => l.Audit())` | denials, impersonation, rule approvals, payments, dead letters |
 | Levels per kind/module/operation, sampling, slow thresholds | fluent config or `appsettings.json` | Information emit, Debug in the flight recorder, failures always kept |
-| Manual logs in custom services | `ILog<T>` (`log.Info($"…")`), `[Log]` partial methods, `log.Operation(...)` | — |
+| Manual logs in custom services | `ILog<T>` (`log.Information($"…")`), `[Log]` partial methods, `log.Operation(...)` | — |
 | Alert rules and who gets notified | `AddYFexLoggingAlerts` on the log server (or edited at run time) | new issue in prod + any Critical → dev channel |
 | Opt out | `[NoLog]` / `<YFexInstrumentation>false</YFexInstrumentation>` | instrumented |
 
@@ -337,8 +337,9 @@ with no boxing, and redacted according to its class.
 [Route(typeof(CaixaRoute))]
 public partial class CaixaViewModel : PageViewModel
 {
-    [Observable, LogChanges] public partial decimal Desconto { get; set; }
-    [Observable]             public partial Cpf? Cliente { get; set; }
+    [Observable, Undoable] public partial decimal Desconto { get; set; }   // user input → edit timeline via History (12)
+    [Observable]           public partial Cpf? Cliente { get; set; }       // user input (feeds FinalizarCommand.Cliente)
+    [Observable]           public partial bool PainelAberto { get; set; }  // screen state → not logged
 
     [StateCommand]
     async Task FinalizarAsync(CancellationToken ct)
@@ -364,9 +365,8 @@ private async global::System.Threading.Tasks.Task __Execute_FinalizarAsync(globa
     catch (global::System.Exception __ex) { __operation.Fail(__ex); throw; }
 }
 
-// [LogChanges] → inside the generated setter, after the change is committed:
-if (global::YFex.Diagnostics.Operations.IsEnabled(__CaixaViewModelOps.Desconto_Changed, global::YFex.Diagnostics.LogLevel.Debug))
-    global::YFex.Diagnostics.Operations.MarkWith(__CaixaViewModelOps.Desconto_Changed, value);   // decimal → RawValue, no boxing
+// Property roles are inferred (12 §2): Desconto is recorded by the History observer (no setter code),
+// Cliente gets a one-line setter hook, PainelAberto gets nothing. Full generated code in 12 §5.
 ```
 
 The NavigatR generator registers a descriptor per route (`Route:Caixa`, `Route:Recibo`), and the navigator records each
@@ -402,17 +402,17 @@ public sealed class CatalogoSync(ILog<CatalogoSync> log, ICatalogoApi api)
         using var operation = log.Operation("Catalogo.Sync");                     // a span with duration + outcome
         var sw = Stopwatch.StartNew();
         var itens = await api.PullAsync(ct);
-        log.Info($"Recebidos {itens.Count} itens de {api.Fonte} em {sw.Elapsed}");
-        if (itens.Count == 0) log.Warn($"Catálogo vazio vindo de {api.Fonte}");
+        log.Information($"Recebidos {itens.Count} itens de {api.Fonte} em {sw.Elapsed}");
+        if (itens.Count == 0) log.Warning($"Catálogo vazio vindo de {api.Fonte}");
         operation.Complete(OperationOutcome.Ok);
     }
 }
 ```
 
-**⚙ What the C# compiler lowers `log.Info($"…")` to** (no generator involved, standard interpolated-string handler):
+**⚙ What the C# compiler lowers `log.Information($"…")` to** (no generator involved, standard interpolated-string handler):
 
 ```csharp
-var __h = new LogInformationHandler(literalLength: 22, formattedCount: 3, log, out bool __enabled);
+var __h = new LogInformationHandler(literalLength: 22, formattedCount: 3, log, out bool __enabled);   // one static byte load when off
 if (__enabled)                                       // disabled → arguments are NOT evaluated, nothing allocated
 {
     __h.AppendLiteral("Recebidos ");                 // stores the literal's reference (no copy)
@@ -422,7 +422,7 @@ if (__enabled)                                       // disabled → arguments a
     __h.AppendLiteral(" em ");
     __h.AppendFormatted(sw.Elapsed, "sw.Elapsed");   // TimeSpan → ticks
 }
-log.Info(ref __h);                                   // commit slot → queue
+log.Information(ref __h);                            // commit slot → queue
 ```
 
 **👁 Result**
@@ -664,7 +664,7 @@ public sealed class FinalizarVendaTests
 
         var r = await Venda.Commands.Finalizar(VendaId.New(), Cpf.Parse("123.456.789-09"), Money.Of(149.90m), 4);
 
-        capture.Op<Venda.Commands.FinalizarCommand>()
+        capture.Operation<Venda.Commands.FinalizarCommand>()
                .ShouldEnd(OperationOutcome.Ok)
                .ShouldHaveField("total", Money.Of(149.90m))
                .ShouldHaveRedacted("cliente");

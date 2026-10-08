@@ -37,7 +37,7 @@ public sealed class QueryCoercionTests
         var r = await fx.Dispatcher.QueryAsync<CachedSearch, List<string>>(new CachedSearch("a", 0));
 
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.ValidationProblem);
+        e.Kind.Should().Be(ErrorKind.ValidationProblem);
         (await fx.Cache.GetKeysWithPrefixAsync("query:")).Should().BeEmpty();
         fx.Log.Entries.Should().BeEmpty();
     }
@@ -52,6 +52,6 @@ public sealed class QueryCoercionTests
         var r = await fx.Dispatcher.QueryAsync<CachedSearch, List<string>>(new CachedSearch("a", 0));
 
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.ValidationProblem, "shape is checked before the offline cache path");
+        e.Kind.Should().Be(ErrorKind.ValidationProblem, "shape is checked before the offline cache path");
     }
 }

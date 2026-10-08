@@ -31,7 +31,8 @@ public static class WolverineRpcExtensions
         services.AddSingleton<IHandlerInvoker, WolverineHandlerInvoker>();
         ValidatingHandlerInvoker.Decorate(services);   // RemoveAll above dropped the decorator (D25)
 
-        // Override the IDispatcher with the Wolverine-direct dispatcher
+        // Override the IDispatcher with the Wolverine-direct dispatcher (full authorization check, 04 §2)
+        services.AddYFexCqrsAuthorizationConfiguration();
         services.RemoveAll<IDispatcher>();
         services.AddSingleton<IDispatcher>(sp =>
         {

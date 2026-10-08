@@ -14,22 +14,27 @@ namespace YFex.Messaging.Rpc;
 public sealed class StorageBackedOutbox : IOutbox
 {
     private const string Prefix = "outbox:";
+    // Deliberately NOT under "outbox:" so key enumeration of entries never sees it.
+    private const string SequenceKey = "outbox-sequence";
 
     private readonly IKeyValueStore _storage;
     private readonly OutboxOptions _options;
     private readonly SemaphoreSlim _writeLock = new(1, 1);
     private readonly JsonSerializerContext? _commandJsonContext;
+    private readonly IOutboxCallerCapture? _callerCapture;
+    private long _lastSequence = -1; // -1 = not loaded yet (guarded by _writeLock)
     private IWritableSyncFailureLog? _failureLog;
     private int _pendingCount = -1; // -1 = needs scan
 
     internal void SetFailureLog(IWritableSyncFailureLog log) => _failureLog = log;
 
     public StorageBackedOutbox(IKeyValueStore storage, OutboxOptions options,
-        JsonSerializerContext? commandJsonContext = null)
+        JsonSerializerContext? commandJsonContext = null, IOutboxCallerCapture? callerCapture = null)
     {
         _storage = storage;
         _options = options;
         _commandJsonContext = commandJsonContext;
+        _callerCapture = callerCapture;
     }
 
     public int PendingCount
@@ -48,12 +53,12 @@ public sealed class StorageBackedOutbox : IOutbox
 
     public async ValueTask<Queued> EnqueueAsync<T>(T command, CancellationToken ct = default) where T : ICommand
     {
-        var key = Guid.NewGuid();
+        var key = Guid.CreateVersion7();
         var payload = OutboxCommandPayload.Serialize(command, _commandJsonContext);
-        var entry = new OutboxEntry(key, typeof(T).AssemblyQualifiedName ?? typeof(T).FullName!,
-            payload, DateTimeOffset.UtcNow, 0, null, null);
+        var caller = _callerCapture?.Capture() ?? default;
 
         OutboxEntry? evicted = null;
+        OutboxEntry entry;
         await _writeLock.WaitAsync(ct);
         try
         {
@@ -61,6 +66,8 @@ public sealed class StorageBackedOutbox : IOutbox
             if (keys.Count >= _options.MaxEntries && keys.Count > 0)
                 evicted = await EvictOldestAsync(keys, ct);
 
+            entry = new OutboxEntry(key, typeof(T).AssemblyQualifiedName ?? typeof(T).FullName!,
+                payload, DateTimeOffset.UtcNow, 0, null, null, caller.Subject, caller.Scope, await NextSequenceAsync(ct));
             await WriteEntryAsync(entry, ct);
             _pendingCount = -1;
         }
@@ -76,9 +83,15 @@ public sealed class StorageBackedOutbox : IOutbox
 
     internal async ValueTask EnqueueRawAsync(Guid key, string typeName, byte[] payload, CancellationToken ct)
     {
-        var entry = new OutboxEntry(key, typeName, payload, DateTimeOffset.UtcNow, 0, null, null);
+        OutboxEntry entry;
         await _writeLock.WaitAsync(ct);
-        try { await WriteEntryAsync(entry, ct); _pendingCount = -1; }
+        try
+        {
+            entry = new OutboxEntry(key, typeName, payload, DateTimeOffset.UtcNow, 0, null, null,
+                Sequence: await NextSequenceAsync(ct));
+            await WriteEntryAsync(entry, ct);
+            _pendingCount = -1;
+        }
         finally { _writeLock.Release(); }
         Enqueued?.Invoke(entry);
     }
@@ -96,7 +109,7 @@ public sealed class StorageBackedOutbox : IOutbox
                 if (e is not null) entries.Add(e.ToEntry());
             }
         }
-        entries.Sort(static (a, b) => a.EnqueuedAt.CompareTo(b.EnqueuedAt));
+        entries.Sort(OutboxEntry.CompareReplayOrder);   // sequence, never the wall clock (offline design F5)
         return entries;
     }
 
@@ -124,6 +137,21 @@ public sealed class StorageBackedOutbox : IOutbox
 
     // ── private helpers ──────────────────────────────────────────────────────
 
+    // Persisted monotonic sequence (caller holds _writeLock). Survives restarts; a clock set back cannot reorder replays.
+    private async ValueTask<long> NextSequenceAsync(CancellationToken ct)
+    {
+        if (_lastSequence < 0)
+        {
+            var stored = await _storage.GetAsync(SequenceKey, ct);
+            _lastSequence = stored is { Length: 8 } ? System.Buffers.Binary.BinaryPrimitives.ReadInt64LittleEndian(stored) : 0;
+        }
+        var next = ++_lastSequence;
+        var bytes = new byte[8];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt64LittleEndian(bytes, next);
+        await _storage.SetAsync(SequenceKey, bytes, ct: ct);
+        return next;
+    }
+
     private async ValueTask WriteEntryAsync(OutboxEntry e, CancellationToken ct)
     {
         var dto = OutboxEntryDto.From(e);
@@ -140,7 +168,7 @@ public sealed class StorageBackedOutbox : IOutbox
             if (bytes is null) continue;
             var e = JsonSerializer.Deserialize(bytes, RpcInternalJsonContext.Default.OutboxEntryDto)?.ToEntry();
             if (e is null) continue;
-            if (oldest is null || e.EnqueuedAt < oldest.EnqueuedAt) oldest = e;
+            if (oldest is null || OutboxEntry.CompareReplayOrder(e, oldest) < 0) oldest = e;
         }
         if (oldest is null) return null;
         await _storage.DeleteAsync(Prefix + oldest.IdempotencyKey.ToString(), ct);
@@ -156,12 +184,16 @@ public sealed class StorageBackedOutbox : IOutbox
         public int AttemptCount { get; set; }
         public string? LastFailure { get; set; }
         public long? LastAttemptAtMs { get; set; }
+        public string? Subject { get; set; }
+        public string? Scope { get; set; }
+        public long Sequence { get; set; }
 
         public OutboxEntry ToEntry() => new(
             Guid.Parse(Key), TypeName, Payload,
             DateTimeOffset.FromUnixTimeMilliseconds(EnqueuedAtMs),
             AttemptCount, LastFailure,
-            LastAttemptAtMs.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(LastAttemptAtMs.Value) : null);
+            LastAttemptAtMs.HasValue ? DateTimeOffset.FromUnixTimeMilliseconds(LastAttemptAtMs.Value) : null,
+            Subject, Scope, Sequence);
 
         public static OutboxEntryDto From(OutboxEntry e) => new()
         {
@@ -171,7 +203,10 @@ public sealed class StorageBackedOutbox : IOutbox
             EnqueuedAtMs = e.EnqueuedAt.ToUnixTimeMilliseconds(),
             AttemptCount = e.AttemptCount,
             LastFailure = e.LastFailure,
-            LastAttemptAtMs = e.LastAttemptAt?.ToUnixTimeMilliseconds()
+            LastAttemptAtMs = e.LastAttemptAt?.ToUnixTimeMilliseconds(),
+            Subject = e.Subject,
+            Scope = e.Scope,
+            Sequence = e.Sequence
         };
     }
 }

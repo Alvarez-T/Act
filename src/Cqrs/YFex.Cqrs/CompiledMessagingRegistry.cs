@@ -16,7 +16,7 @@ public enum ConfigurationValidationLevel { Off, Loose, Strict }
 /// <summary>
 /// Builder-authored capability facts for a single message type, compiled once at startup into
 /// <see cref="CompiledMessagingRegistry.Capabilities"/>. Everything a capability/search/AI consumer
-/// needs without reflecting over the message type or cracking open the opaque authorizer delegate.
+/// needs without reflecting over the message type.
 /// </summary>
 /// <param name="RequiredPermission">The permission from the first builder <c>.RequirePermission(...)</c>, or null.</param>
 /// <param name="Description">Authored via <c>.Describe(...)</c>, or null.</param>
@@ -48,6 +48,16 @@ public sealed class CompiledMessagingRegistry
     public FrozenDictionary<Type, EventPolicy>   Events   { get; }
 
     /// <summary>
+    /// Authorization requirements recorded by the builder verbs (<c>.RequirePermission</c>, <c>.RequireRoles</c>,
+    /// <c>.RequirePolicy</c>, <c>.Authorize(...)</c>…) per message type. Not enforced here: <see cref="CqrsAuthorizationConfiguration"/>
+    /// exports them to the one message policy table that every dispatcher asks through <c>IMessageAuthorization</c>.
+    /// </summary>
+    public FrozenDictionary<Type, Requirement[]> AuthorizationRequirements { get; }
+
+    /// <summary>True when any message declares an authorization requirement (dispatchers then fail closed without a gate).</summary>
+    public bool HasAuthorizationRequirements => AuthorizationRequirements.Count > 0;
+
+    /// <summary>
     /// Capability metadata for every registered command / query / event, keyed by message type.
     /// Separate from the hot-path <see cref="Commands"/>/<see cref="Queries"/> tables: this table
     /// carries builder-authored enrichment (description, keywords, irreversibility), the
@@ -60,8 +70,9 @@ public sealed class CompiledMessagingRegistry
         FrozenDictionary<Type, CommandPolicy> commands,
         FrozenDictionary<Type, QueryPolicy>   queries,
         FrozenDictionary<Type, EventPolicy>   events,
-        FrozenDictionary<Type, CqrsCapabilityInfo> capabilities)
-    { Commands = commands; Queries = queries; Events = events; Capabilities = capabilities; }
+        FrozenDictionary<Type, CqrsCapabilityInfo> capabilities,
+        FrozenDictionary<Type, Requirement[]> authorization)
+    { Commands = commands; Queries = queries; Events = events; Capabilities = capabilities; AuthorizationRequirements = authorization; }
 
     // ─────────────────────────────────────────────────────────────────────────
     // Build — three-phase: Collect → Expand → Compile
@@ -71,9 +82,7 @@ public sealed class CompiledMessagingRegistry
         IEnumerable<IAggregateConfiguration>  baseline,
         IEnumerable<IAggregateConfiguration>? serverOverrides     = null,
         IEnumerable<IAggregateConfiguration>? clientOverrides     = null,
-        Assembly[]?                           scanForImplementers = null,
-        IPolicyEvaluator?                     policyEvaluator     = null,
-        Func<ClaimsPrincipal, IAuthContext>?  principalFactory    = null)
+        Assembly[]?                           scanForImplementers = null)
     {
         var queryTable   = new Dictionary<Type, QueryAccumulator>();
         var commandTable = new Dictionary<Type, CommandAccumulator>();
@@ -112,11 +121,11 @@ public sealed class CompiledMessagingRegistry
         // ── Phase 3: Compile ─────────────────────────────────────────────────
         var compiledCommands = new Dictionary<Type, CommandPolicy>(commandTable.Count);
         foreach (var (type, acc) in commandTable)
-            compiledCommands[type] = CompileCommandPolicy(acc, policyEvaluator, principalFactory);
+            compiledCommands[type] = CompileCommandPolicy(acc);
 
         var compiledQueries = new Dictionary<Type, QueryPolicy>(queryTable.Count);
         foreach (var (type, acc) in queryTable)
-            compiledQueries[type] = CompileQueryPolicy(acc, policyEvaluator, principalFactory);
+            compiledQueries[type] = CompileQueryPolicy(acc);
 
         // ── Phase 3b: capability table (separate from hot-path policy tables) ─────
         var capabilities =
@@ -128,18 +137,26 @@ public sealed class CompiledMessagingRegistry
         foreach (var type in eventTable.Keys)
             capabilities[type] = BuildMarkerOnlyCapability(type);
 
+        // ── Phase 3c: authorization requirements (exported, enforced by IMessageAuthorization) ───────
+        var authorization = new Dictionary<Type, Requirement[]>();
+        foreach (var (type, acc) in commandTable)
+            if (acc.Authorization is { Count: > 0 } requirements) authorization[type] = requirements.ToArray();
+        foreach (var (type, acc) in queryTable)
+            if (acc.Authorization is { Count: > 0 } requirements) authorization[type] = requirements.ToArray();
+
         return new CompiledMessagingRegistry(
             compiledCommands.ToFrozenDictionary(),
             compiledQueries.ToFrozenDictionary(),
             eventTable.ToFrozenDictionary(),
-            capabilities.ToFrozenDictionary());
+            capabilities.ToFrozenDictionary(),
+            authorization.ToFrozenDictionary());
     }
 
     // ── Capability projection (authoring metadata → compiled table) ─────────────
 
     private static CqrsCapabilityInfo BuildCommandCapability(Type type, CommandAccumulator acc)
         => new(
-            FirstPermission(acc.Authorizers),
+            FirstPermission(acc.Authorization),
             acc.Description,
             acc.Keywords,
             acc.Irreversible,
@@ -150,7 +167,7 @@ public sealed class CompiledMessagingRegistry
 
     private static CqrsCapabilityInfo BuildQueryCapability(Type type, QueryAccumulator acc)
         => new(
-            FirstPermission(acc.Authorizers),
+            FirstPermission(acc.Authorization),
             acc.Description,
             acc.Keywords,
             Irreversible: false,
@@ -172,14 +189,13 @@ public sealed class CompiledMessagingRegistry
             typeof(IQueueable).IsAssignableFrom(type),
             typeof(ICacheable).IsAssignableFrom(type));
 
-    // The permission is otherwise invisible downstream — it is compiled into an opaque authorizer
-    // delegate. Read it here from the first Permission-kind authorizer descriptor.
-    private static YFex.Authorization.Public.Permission? FirstPermission(List<AuthorizerDescriptor>? authorizers)
+    // Display hint for capability consumers: the first permission requirement (Phase 5 moves them to the full policy).
+    private static YFex.Authorization.Public.Permission? FirstPermission(List<Requirement>? requirements)
     {
-        if (authorizers is null) return null;
-        for (int i = 0; i < authorizers.Count; i++)
-            if (authorizers[i].Kind == AuthorizerKind.Permission)
-                return authorizers[i].Permission;
+        if (requirements is null) return null;
+        for (int i = 0; i < requirements.Count; i++)
+            if (requirements[i].Kind == RequirementKind.Permission)
+                return new YFex.Authorization.Public.Permission(requirements[i].PermissionKey);
         return null;
     }
 
@@ -284,13 +300,9 @@ public sealed class CompiledMessagingRegistry
 
     // ── Phase 3: Compilation ──────────────────────────────────────────────────
 
-    private static CommandPolicy CompileCommandPolicy(
-        CommandAccumulator acc,
-        IPolicyEvaluator? evaluator,
-        Func<ClaimsPrincipal, IAuthContext>? principalFactory)
+    private static CommandPolicy CompileCommandPolicy(CommandAccumulator acc)
         => new(
             BuildContextValidator(acc.Validators),
-            BuildCompositeAuthorizer(acc.Authorizers, evaluator, principalFactory),
             acc.IdempotencyKey,
             acc.ConflictPolicy,
             acc.ConflictResolverType,
@@ -305,13 +317,9 @@ public sealed class CompiledMessagingRegistry
             acc.Resilience,
             acc.Rules);
 
-    private static QueryPolicy CompileQueryPolicy(
-        QueryAccumulator acc,
-        IPolicyEvaluator? evaluator,
-        Func<ClaimsPrincipal, IAuthContext>? principalFactory)
+    private static QueryPolicy CompileQueryPolicy(QueryAccumulator acc)
         => new(
             BuildContextValidator(acc.Validators),
-            BuildCompositeAuthorizer(acc.Authorizers, evaluator, principalFactory),
             acc.Cache,
             acc.Scope,
             acc.ScopeKey,
@@ -328,97 +336,6 @@ public sealed class CompiledMessagingRegistry
 
     private static MessageValidator? BuildContextValidator(List<ContextRuleFactory>? factories)
         => factories is null || factories.Count == 0 ? null : factories[0].CreateValidator(factories);
-
-    // Translates registration-phase authorizer descriptors into ONE pre-compiled AND-predicate.
-    //
-    // Context-only kinds that need YFex.Authorization semantics (Permission, PolicyName, TypeRef)
-    // are folded into a single Policy evaluated through the injected IPolicyEvaluator. The sync
-    // evaluator path decides Permission (frozen-set lookup); PolicyName/TypeRef are resolvable only
-    // on the async authoritative path, so they are HIDDEN → deny here (fail-closed).
-    //
-    // BEHAVIOUR CHANGE (release note): previously PolicyName/TypeRef descriptors compiled to a null
-    // predicate and were therefore SILENTLY UNENFORCED on the local dispatch path. They now deny.
-    // Authenticated / Roles / inline predicates keep their exact previous behaviour (inline needs
-    // the message object, which the evaluator's context-only path cannot carry).
-    //
-    // If a Permission/PolicyName/TypeRef authorizer is declared but no evaluator is wired, the gate
-    // fails closed rather than silently allowing.
-    private static Func<ClaimsPrincipal, object, bool>?
-        BuildCompositeAuthorizer(
-            List<AuthorizerDescriptor>? descriptors,
-            IPolicyEvaluator? evaluator,
-            Func<ClaimsPrincipal, IAuthContext>? principalFactory)
-    {
-        if (descriptors is null || descriptors.Count == 0) return null;
-
-        var predicates = new List<Func<ClaimsPrincipal, object, bool>>(descriptors.Count);
-        List<Requirement>? evalRequirements = null;   // folded into one evaluator-backed Policy
-
-        for (int i = 0; i < descriptors.Count; i++)
-        {
-            var d = descriptors[i];
-            switch (d.Kind)
-            {
-                case AuthorizerKind.RequireAuthenticated:
-                    predicates.Add(static (u, _) => u.Identity?.IsAuthenticated == true);
-                    break;
-
-                case AuthorizerKind.Roles when d.Roles is { } roles:
-                    predicates.Add((u, _) =>
-                    {
-                        for (int j = 0; j < roles.Length; j++)
-                            if (u.IsInRole(roles[j])) return true;
-                        return false;
-                    });
-                    break;
-
-                case AuthorizerKind.Inline when d.InlinePredicate is not null:
-                    predicates.Add(d.InlinePredicate);
-                    break;
-
-                case AuthorizerKind.Permission:
-                    (evalRequirements ??= []).Add(Requirement.Require(d.Permission));
-                    break;
-
-                case AuthorizerKind.PolicyName when d.PolicyName is { } name:
-                    (evalRequirements ??= []).Add(
-                        Requirement.RequirePolicy(YFex.Authorization.Public.PolicyName.Parse(name)));
-                    break;
-
-                case AuthorizerKind.TypeRef when d.AuthorizerType is { } t:
-                    (evalRequirements ??= []).Add(
-                        Requirement.RequirePolicy(YFex.Authorization.Public.PolicyName.Parse("type:" + t.FullName)));
-                    break;
-            }
-        }
-
-        if (evalRequirements is { Count: > 0 })
-        {
-            if (evaluator is not null && principalFactory is not null)
-            {
-                var policy = new Policy(default, evalRequirements.ToArray());
-                var eval = evaluator;
-                var factory = principalFactory;
-                predicates.Add((u, _) => eval.IsAllowed(policy, factory(u)));
-            }
-            else
-            {
-                // A permission/policy/type authorizer was declared but authorization is not wired.
-                predicates.Add(static (_, _) => false);
-            }
-        }
-
-        if (predicates.Count == 0) return null;
-        if (predicates.Count == 1) return predicates[0];
-
-        var arr = predicates.ToArray();
-        return (user, obj) =>
-        {
-            for (int i = 0; i < arr.Length; i++)
-                if (!arr[i](user, obj)) return false;
-            return true;
-        };
-    }
 
     private static InvalidationTarget[]? CompileInvalidationTargets(
         List<InvalidationRuleDescriptor>? rules)
@@ -495,7 +412,7 @@ public sealed class CompiledMessagingRegistry
     {
         public List<ContextRuleFactory>?         Validators;
         public RulesStage?                       Rules;
-        public List<AuthorizerDescriptor>?       Authorizers;
+        public List<Requirement>?                Authorization;
         public CachePolicy?                      Cache;
         public CacheScope                        Scope      = CacheScope.Global;
         public Func<ICacheScopeContext, string>? ScopeKey;
@@ -510,7 +427,7 @@ public sealed class CompiledMessagingRegistry
         {
             if (m.Validators    is { } v)   (Validators    ??= []).AddRange(v);
             if (m.Rules         is not null) Rules = m.Rules;
-            if (m.Authorizers   is { } a)   (Authorizers   ??= []).AddRange(a);
+            if (m.Authorization is { } a)   (Authorization ??= []).AddRange(a);
             if (m.InvalidatedBy is { } inv) (InvalidatedBy ??= []).AddRange(inv);
             if (m.Cache      is not null) Cache      = m.Cache;
             if (m.StaleAfter is not null) StaleAfter = m.StaleAfter;
@@ -527,7 +444,7 @@ public sealed class CompiledMessagingRegistry
     {
         public List<ContextRuleFactory>?         Validators;
         public RulesStage?                       Rules;
-        public List<AuthorizerDescriptor>?       Authorizers;
+        public List<Requirement>?                Authorization;
         public List<InvalidationRuleDescriptor>? Invalidates;
         public Func<object, string>?             IdempotencyKey;
         public ConflictPolicy                    ConflictPolicy = ConflictPolicy.Escalate;
@@ -546,7 +463,7 @@ public sealed class CompiledMessagingRegistry
         {
             if (m.Validators  is { } v) (Validators  ??= []).AddRange(v);
             if (m.Rules       is not null) Rules = m.Rules;
-            if (m.Authorizers is { } a) (Authorizers ??= []).AddRange(a);
+            if (m.Authorization is { } a) (Authorization ??= []).AddRange(a);
             if (m.Invalidates is { } i) (Invalidates ??= []).AddRange(i);
             if (m.IdempotencyKey       is not null) IdempotencyKey    = m.IdempotencyKey;
             if (m.ConflictResolverType is not null) ConflictResolverType = m.ConflictResolverType;

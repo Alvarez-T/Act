@@ -58,7 +58,7 @@ public sealed class OutboxReplayGeneratedTests
     [Fact]
     public async Task OutboxReplayer_DrainsQueuedCommand_ViaGeneratedRegistry()
     {
-        var network = new ManualNetworkStatus(connected: false);
+        var network = new ManualServerConnection(connected: false);
         var outbox = new InMemoryOutbox(new OutboxOptions());
         var failureLog = new InMemorySyncFailureLog();
         outbox.SetFailureLog(failureLog);

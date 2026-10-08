@@ -55,6 +55,21 @@ public static class RawValueConvert
         return RawConverterCache<T>.Get()?.Type;
     }
 
+    /// <summary>
+    /// <paramref name="value"/> as a value of the numeric type <paramref name="type"/> (a primitive or an app amount type such as
+    /// Money or Mass): integral storages truncate, typed storages keep the type id. Engines that compute in <see cref="decimal"/>
+    /// (YFex.Rules, YFex.Expressions) use it to hand results back in the caller's type.
+    /// </summary>
+    /// <exception cref="InvalidOperationException"><paramref name="type"/> is not numeric.</exception>
+    public static RawValue FromDecimal(decimal value, RawType type) => type.Storage switch
+    {
+        ValueKind.Decimal => type.IsPrimitive ? RawValue.From(value) : RawValue.Typed(type, value),
+        ValueKind.Int64 => type.IsPrimitive ? RawValue.From((long)value) : RawValue.Typed(type, (long)value),
+        ValueKind.Int32 => RawValue.From((int)value).WithType(type),
+        ValueKind.Double => type.IsPrimitive ? RawValue.From((double)value) : RawValue.Typed(type, (double)value),
+        _ => throw new InvalidOperationException($"Raw type '{type.Key}' is not numeric."),
+    };
+
     /// <summary>Typed read of <paramref name="raw"/> as <typeparamref name="T"/> (numeric widening as in the typed <c>TryGet</c>s).</summary>
     public static bool TryGet<T>(in RawValue raw, out T value)
     {

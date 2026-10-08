@@ -15,15 +15,19 @@ public sealed class InMemoryOutbox : IOutbox
     private readonly OutboxOptions _options;
     private readonly object _lock = new();
     private readonly JsonSerializerContext? _commandJsonContext;
+    private readonly IOutboxCallerCapture? _callerCapture;
+    private long _sequence;
 
     // Injected to handle overflow → failure log
     private IWritableSyncFailureLog? _failureLog;
     public void SetFailureLog(IWritableSyncFailureLog log) => _failureLog = log;
 
-    public InMemoryOutbox(OutboxOptions options, JsonSerializerContext? commandJsonContext = null)
+    public InMemoryOutbox(OutboxOptions options, JsonSerializerContext? commandJsonContext = null,
+        IOutboxCallerCapture? callerCapture = null)
     {
         _options = options;
         _commandJsonContext = commandJsonContext;
+        _callerCapture = callerCapture;
     }
 
     public int PendingCount
@@ -36,10 +40,11 @@ public sealed class InMemoryOutbox : IOutbox
 
     public async ValueTask<Queued> EnqueueAsync<T>(T command, CancellationToken ct = default) where T : ICommand
     {
-        var key = Guid.NewGuid();
+        var key = Guid.CreateVersion7();
         var payload = OutboxCommandPayload.Serialize(command, _commandJsonContext);
+        var caller = _callerCapture?.Capture() ?? default;
         var entry = new OutboxEntry(key, typeof(T).AssemblyQualifiedName ?? typeof(T).FullName!, payload,
-            DateTimeOffset.UtcNow, 0, null, null);
+            DateTimeOffset.UtcNow, 0, null, null, caller.Subject, caller.Scope, Interlocked.Increment(ref _sequence));
 
         OutboxEntry? evicted = null;
         lock (_lock)
@@ -62,7 +67,12 @@ public sealed class InMemoryOutbox : IOutbox
 
     public ValueTask<IReadOnlyList<OutboxEntry>> ListPendingAsync(CancellationToken ct = default)
     {
-        lock (_lock) return new([.._entries]);
+        lock (_lock)
+        {
+            var pending = _entries.ToArray();
+            Array.Sort(pending, OutboxEntry.CompareReplayOrder);
+            return new(pending);
+        }
     }
 
     public ValueTask MarkAttemptedAsync(Guid key, string? failure, CancellationToken ct = default)
@@ -96,7 +106,8 @@ public sealed class InMemoryOutbox : IOutbox
     /// <summary>Re-enqueues a raw entry (used by <see cref="InMemorySyncFailureLog.RetryAsync"/>).</summary>
     internal ValueTask EnqueueRawAsync(Guid key, string typeName, byte[] payload, CancellationToken ct = default)
     {
-        var entry = new OutboxEntry(key, typeName, payload, DateTimeOffset.UtcNow, 0, null, null);
+        var entry = new OutboxEntry(key, typeName, payload, DateTimeOffset.UtcNow, 0, null, null,
+            Sequence: Interlocked.Increment(ref _sequence));
         lock (_lock) _entries.Add(entry);
         Enqueued?.Invoke(entry);
         return ValueTask.CompletedTask;

@@ -13,8 +13,8 @@ public class GeneratorTests
         paths.Add(typeof(YFex.Rules.ISituation<>).Assembly.Location);
         paths.Add(typeof(YFex.Validation.ViolationWriter).Assembly.Location);
         paths.Add(typeof(YFex.Money).Assembly.Location);
-        paths.Add(typeof(YFex.Rules.Dynamic.RuleFunction).Assembly.Location);
         paths.Add(typeof(System.Collections.Immutable.ImmutableArray).Assembly.Location);
+        paths.Add(typeof(YFex.Authorization.Public.Permission).Assembly.Location);
         return [.. paths.Distinct(StringComparer.OrdinalIgnoreCase).Where(File.Exists).Select(p => (MetadataReference)MetadataReference.CreateFromFile(p))];
     });
 
@@ -135,6 +135,40 @@ public class GeneratorTests
         """, "YFR0107")]
     public void Reports_diagnostics(string code, string id)
         => Run(Usings + Situation + RuleSet + code).Diagnostics.Select(d => d.Id).Should().Contain(id);
+
+    [Fact]
+    public void An_unresolvable_permission_argument_is_an_error_not_a_silent_null()
+        => Run(Usings + Situation + RuleSet + """
+            [DecisionTable<Order>("t", Group = nameof(OrderRules.Limits), PublishPermission = Ghost.Ids.Publish)]
+            public partial class GhostTable { public readonly partial record struct Row([property: When("Pay")] Match<Pay> Pay, [property: Then(DirectiveKind.LimitMax, "Installments")] int Max); }
+            """).Diagnostics.Select(d => d.Id).Should().Contain("YFR0108");
+
+    [Fact]
+    public void Permissions_are_typed_and_a_same_assembly_catalog_constant_becomes_its_accessor()
+    {
+        // The Authorization generator does not run here, so Perms.Ids does not exist — exactly what this generator sees when the
+        // catalog lives in the same compilation (authorization-consolidation Phase 4a).
+        var (output, diags) = Run(Usings + Situation + RuleSet + """
+            [YFex.Authorization.Public.PermissionCatalog]
+            public static partial class Perms
+            {
+                [YFex.Authorization.Public.Permission("order.cash.publish")] public static partial YFex.Authorization.Public.Permission CashPublish { get; }
+            }
+            [DecisionTable<Order>("order.cash", Group = nameof(OrderRules.Limits), PublishPermission = Perms.Ids.CashPublish)]
+            public partial class CashTable
+            {
+                public readonly partial record struct Row([property: When("Pay")] Match<Pay> Pay,
+                    [property: Then(DirectiveKind.LimitMax, "Installments", OnExceed = Exceed.RequireApproval, ApprovalPermission = "order.installments.override")] int Max,
+                    [property: Then(DirectiveKind.RequireApproval)] string? Approver);
+            }
+            """);
+        diags.Where(d => d.Severity == DiagnosticSeverity.Error).Should().BeEmpty();
+        var table = output.SyntaxTrees.Single(t => t.FilePath.EndsWith(".Table.g.cs", StringComparison.Ordinal)).ToString();
+        table.Should().Contain("global::App.Perms.CashPublish", "the catalog accessor, not a string");
+        table.Should().Contain("global::YFex.Authorization.Public.Permission.Parse(\"order.installments.override\")");
+        table.Should().Contain("PermissionKey.TryGetDeclared(row.Approver", "publish rejects an undeclared approval permission in row data");
+        table.Should().Contain("authorization.permission.unknown");
+    }
 
     [Fact]
     public void SituationSource_mismatched_member_is_an_error()
@@ -271,56 +305,5 @@ public class GeneratorTests
         var text = string.Join("\n", output.SyntaxTrees.Select(t => t.ToString()));
         text.Should().Contain("RuleTierPath.Of(").And.Contain(".Amount<global::YFex.Mass>()").And.Contain("global::App.Temperature.RawType")
             .And.Contain("tier: 2").And.Contain("d.Increase(global::YFex.Rules.AdjustTarget.Line, row.Padding)");
-    }
-
-    // ── Rule functions (YFex.Rules.Dynamic, Phase 6) ─────────────────────────
-
-    private const string FunctionUsings = """
-        using System;
-        using YFex;
-        using YFex.Rules.Dynamic;
-        namespace App;
-        public enum Tier { Basic, Gold }
-
-        """;
-
-    [Fact]
-    public void Rule_function_classes_and_contract_interfaces_compile_clean()
-    {
-        var (output, diags) = Run(FunctionUsings + """
-            [RuleFunctions(Category = "app")]
-            public static partial class AppFunctions
-            {
-                [RuleFunction("discountFor", Description = "Percent for a tier.")]
-                public static decimal DiscountFor(Tier tier) => tier == Tier.Gold ? 5m : 0m;
-                [RuleFunction(Description = "Money rounded to tens.")]
-                public static Money Tens(Money value) => new(Math.Round(value.Amount / 10m) * 10m);
-            }
-            [RuleFunctions]
-            public partial interface ICalendar
-            {
-                [RuleFunction("isHoliday", Description = "Public holiday.")]
-                static abstract bool IsHoliday(DateOnly date);
-            }
-            public sealed class Calendar : ICalendar { public static bool IsHoliday(DateOnly date) => false; }
-            public static class Use { public static int N => AppFunctions.All.Length + ICalendar.Contracts.Length + ICalendar.Implement<Calendar>().Length; }
-            """);
-        diags.Where(d => d.Severity >= DiagnosticSeverity.Warning).Should().BeEmpty();
-        Problems(output).Should().BeEmpty();
-        var text = string.Join("\n", output.SyntaxTrees.Select(t => t.ToString()));
-        text.Should().Contain("static partial class AppFunctions").And.Contain("RuleFunctionArgs.GetEnum<global::App.Tier>(a[0])")
-            .And.Contain("TImpl.IsHoliday(").And.Contain("RuleFunction.Contract(\"isHoliday\"");
-    }
-
-    [Theory]
-    [InlineData("public static class F { [RuleFunction(Description = \"x\")] public static int A() => 1; }", "YFR0040")]
-    [InlineData("public static partial class F { [RuleFunction(Description = \"x\")] public static int A(object o) => 1; }", "YFR0041")]
-    [InlineData("public static partial class F { [RuleFunction(Description = \"x\")] public static void A() { } }", "YFR0042")]
-    [InlineData("public static partial class F { [RuleFunction(\"a\", Description = \"x\")] public static int A() => 1; [RuleFunction(\"a\", Description = \"y\")] public static int B() => 2; }", "YFR0043")]
-    [InlineData("public static partial class F { [RuleFunction] public static int A() => 1; }", "YFR0044")]
-    public void Rule_function_diagnostics(string declaration, string id)
-    {
-        var (_, diags) = Run(FunctionUsings + "[RuleFunctions]\n" + declaration);
-        diags.Select(d => d.Id).Should().Contain(id);
     }
 }

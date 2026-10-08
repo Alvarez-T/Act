@@ -1,4 +1,6 @@
+using YFex.Authorization.Public;
 using System.Buffers;
+using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using MemoryPack;
@@ -25,7 +27,8 @@ public static class RpcResultFormatters
     // v3: RawValue carries its RawType id (semantic types are open — Money/Mass/app types), storage kinds renumbered;
     //     approvals carry the rule tier depth (same byte as v2's layer: Code 0, Tenant 1, Store 2 ≙ tiers 0, 1, 2).
     // v1/v2 payloads are still read (legacy kinds mapped by RawValueLegacy).
-    internal const byte Version = 3;
+    // v4 (authorization-consolidation Phase 2b): Error = [Union] kind tag + case payload (Forbidden carries the Denial).
+    internal const byte Version = 4;
     private static int s_registered;
 
     /// <summary>Registers the non-generic formatters (idempotent; also run by the module initializer).</summary>
@@ -36,6 +39,7 @@ public static class RpcResultFormatters
         MemoryPackFormatterProvider.Register(new ValidationResultFormatter());
         MemoryPackFormatterProvider.Register(new ResultFormatter());
         MemoryPackFormatterProvider.Register(new QueueableResultFormatter());
+        MemoryPackFormatterProvider.Register(new PermissionSnapshotFormatter());
         RpcErrorResults<Result>.Factory = static error => error;
         RpcErrorResults<QueueableResult>.Factory = static error => error;
         if (RuntimeFeature.IsDynamicCodeSupported) RegisterOpenGenerics();
@@ -67,46 +71,123 @@ public static class RpcResultFormatters
 
     // ── Shared pieces ──────────────────────────────────────────────────────────
 
+    // v4 (authorization-consolidation Phase 2b, ⚑Z11): Error is a [Union] — kind tag, display message, then ONLY the case payload.
     internal static void WriteError<TBuffer>(ref MemoryPackWriter<TBuffer> writer, in Error error)
         where TBuffer : IBufferWriter<byte>
     {
-        writer.WriteUnmanaged((byte)error.Type);
+        writer.WriteUnmanaged((byte)error.Kind);
         writer.WriteString(error.Message);
-        WriteViolations(ref writer, error.Violations);
-        // v2: approvals + fingerprint (ErrorType.ApprovalRequired, YFex.Rules 09 §6)
-        var approvals = error.Approvals;
-        writer.WriteUnmanaged(approvals.Count);
-        for (int i = 0; i < approvals.Count; i++)
+        switch (error.Kind)
         {
-            ref readonly var a = ref approvals[i];
-            writer.WriteString(a.Permission);
-            WriteViolations(ref writer, ViolationList.From([a.Reason]));
-            writer.WriteString(a.Rule.Code);
-            writer.WriteUnmanaged(a.Rule.Version, (byte)a.Rule.Tier, a.Rule.DataVersion, a.Rule.RowId);
+            case ErrorKind.ValidationProblem or ErrorKind.Conflict:
+                WriteViolations(ref writer, error.Violations);
+                break;
+            case ErrorKind.Forbidden:
+                error.TryGetValue(out Forbidden forbidden);
+                var denial = forbidden.Denial;
+                writer.WriteUnmanaged((byte)denial.Kind);
+                writer.WriteString(denial.Missing.Value.Length == 0 ? null : denial.Missing.Value);   // ids, never ordinals
+                writer.WriteString(denial.Policy.IsEmpty ? null : denial.Policy.Value);
+                writer.WriteString(denial.Code);
+                break;
+            case ErrorKind.ApprovalRequired:
+                error.TryGetValue(out ApprovalRequired approval);
+                WriteViolations(ref writer, approval.Violations);
+                WriteApprovals(ref writer, approval.Approvals);
+                writer.WriteUnmanaged(approval.DecisionFingerprint);
+                break;
         }
-        writer.WriteUnmanaged(error.DecisionFingerprint);
     }
 
     internal static Error ReadError(ref MemoryPackReader reader, byte version = Version)
     {
-        var type = (ErrorType)reader.ReadUnmanaged<byte>();
+        if (version < 4) return ReadLegacyError(ref reader, version);
+        var kind = (ErrorKind)reader.ReadUnmanaged<byte>();
+        string message = reader.ReadString() ?? "";
+        Error error;
+        switch (kind)
+        {
+            case ErrorKind.NotFound: error = new NotFound(message); break;
+            case ErrorKind.Failed: error = new Failed(message); break;
+            case ErrorKind.Unauthenticated: error = new Unauthenticated(message); break;
+            case ErrorKind.ValidationProblem: error = new ValidationProblem(ReadViolations(ref reader, version)); break;
+            case ErrorKind.Conflict: error = new Conflict(message, ReadViolations(ref reader, version)); break;
+            case ErrorKind.Forbidden:
+                var denialKind = (DenialKind)reader.ReadUnmanaged<byte>();
+                string? missing = reader.ReadString();
+                string? policy = reader.ReadString();
+                string? code = reader.ReadString();
+                error = new Forbidden(new Denial(denialKind,
+                    PermissionKey.TryParse(missing, null, out var key) ? new Permission(key) : default,
+                    PolicyName.TryParse(policy, null, out var name) ? name : default,
+                    code));
+                break;
+            case ErrorKind.ApprovalRequired:
+                var violations = ReadViolations(ref reader, version);
+                var approvals = ReadApprovals(ref reader, version);
+                error = Error.ApprovalRequired(approvals, reader.ReadUnmanaged<ulong>(), violations);
+                break;
+            default: return default;
+        }
+        return error.WithMessage(message);   // the sender's display text wins (it may be custom)
+    }
+
+    // v1–v3: flat Error (ErrorType byte: 0 None, 1 NotFound, 2 Fail, 3 Unauthorized, 4 ValidationProblem, 5 Conflict, 6 ApprovalRequired).
+    private static Error ReadLegacyError(ref MemoryPackReader reader, byte version)
+    {
+        byte type = reader.ReadUnmanaged<byte>();
         string message = reader.ReadString() ?? "";
         var violations = ReadViolations(ref reader, version);
-        if (version < 2) return new Error(type, message, violations);
+        ApprovalRequestList approvals = default;
+        ulong fingerprint = 0;
+        if (version >= 2)
+        {
+            approvals = ReadApprovals(ref reader, version);
+            fingerprint = reader.ReadUnmanaged<ulong>();
+        }
+        Error error = type switch
+        {
+            1 => new NotFound(message),
+            2 => new Failed(message),
+            3 => new Forbidden(new Denial(DenialKind.None)),
+            4 => new ValidationProblem(violations),
+            5 => new Conflict(message, violations),
+            6 => Error.ApprovalRequired(approvals, fingerprint, violations),
+            _ => default,
+        };
+        return error.HasValue ? error.WithMessage(message) : error;
+    }
 
+    private static void WriteApprovals<TBuffer>(ref MemoryPackWriter<TBuffer> writer, in ApprovalRequestList approvals)
+        where TBuffer : IBufferWriter<byte>
+    {
+        writer.WriteUnmanaged(approvals.Count);
+        for (int i = 0; i < approvals.Count; i++)
+        {
+            ref readonly var a = ref approvals[i];
+            writer.WriteString(a.Permission.Value);                         // the id (unchanged wire)
+            WriteViolations(ref writer, ViolationList.From([a.Reason]));
+            writer.WriteString(a.Rule.Code);
+            writer.WriteUnmanaged(a.Rule.Version, (byte)a.Rule.Tier, a.Rule.DataVersion, a.Rule.RowId);
+        }
+    }
+
+    private static ApprovalRequestList ReadApprovals(ref MemoryPackReader reader, byte version)
+    {
         int count = reader.ReadUnmanaged<int>();
-        ApprovalRequest[]? approvals = count > 0 ? new ApprovalRequest[count] : null;
+        if (count == 0) return default;
+        var approvals = new ApprovalRequest[count];
         for (int i = 0; i < count; i++)
         {
             string permission = reader.ReadString() ?? "";
             var reason = ReadViolations(ref reader, version);
             string code = reader.ReadString() ?? "";
             reader.ReadUnmanaged(out int ruleVersion, out byte tier, out long dataVersion, out Guid rowId);
-            approvals![i] = new ApprovalRequest(permission, reason.IsEmpty ? default : reason[0],
+            approvals[i] = new ApprovalRequest(PermissionKey.TryParse(permission, null, out var key) ? new Permission(key) : default,
+                reason.IsEmpty ? default : reason[0],
                 new RuleRef(code, ruleVersion, tier, dataVersion, rowId));
         }
-        ulong fingerprint = reader.ReadUnmanaged<ulong>();
-        return new Error(type, message, violations, approvals is null ? default : ApprovalRequestList.From(approvals), fingerprint);
+        return ApprovalRequestList.From(approvals);
     }
 
     internal static void WriteViolations<TBuffer>(ref MemoryPackWriter<TBuffer> writer, in ViolationList list)
@@ -322,5 +403,62 @@ public sealed class QueueableResultFormatter<T> : MemoryPackFormatter<QueueableR
             3 => QueueableResult<T>.Queue(reader.ReadUnmanaged<Guid>()),
             _ => default,
         };
+    }
+}
+
+/// <summary>
+/// <see cref="PermissionSnapshot"/> over Fusion RPC (<see cref="ICallPermissions"/>): YFex.Authorization.Public is a leaf and
+/// must not reference MemoryPack. Layout v1: version byte, subject, authenticated flag, scope, version, permission ids, role
+/// names, relation byte. Ids and names only — never process-local ordinals.
+/// </summary>
+public sealed class PermissionSnapshotFormatter : MemoryPackFormatter<PermissionSnapshot>
+{
+    internal const byte Version = 1;
+
+    public override void Serialize<TBuffer>(ref MemoryPackWriter<TBuffer> writer, scoped ref PermissionSnapshot? value)
+    {
+        if (value is null) { writer.WriteNullObjectHeader(); return; }
+        writer.WriteObjectHeader(1);
+        writer.WriteUnmanaged(Version);
+        writer.WriteString(value.Subject);
+        writer.WriteUnmanaged(value.IsAuthenticated);
+        writer.WriteString(value.Scope);
+        writer.WriteUnmanaged(value.Version);
+        WriteStrings(ref writer, value.Permissions);
+        WriteStrings(ref writer, value.Roles);
+        writer.WriteUnmanaged((byte)value.Relation);
+    }
+
+    public override void Deserialize(ref MemoryPackReader reader, scoped ref PermissionSnapshot? value)
+    {
+        if (!reader.TryReadObjectHeader(out _)) { value = null; return; }
+        var version = reader.ReadUnmanaged<byte>();
+        if (version != Version)
+            throw new MemoryPackSerializationException($"Unsupported PermissionSnapshot wire version {version} (expected {Version}).");
+        var subject = reader.ReadString();
+        var authenticated = reader.ReadUnmanaged<bool>();
+        var scope = reader.ReadString();
+        var snapshotVersion = reader.ReadUnmanaged<long>();
+        var permissions = ReadStrings(ref reader);
+        var roles = ReadStrings(ref reader);
+        var relation = (ActorRelation)reader.ReadUnmanaged<byte>();
+        value = new PermissionSnapshot(subject, authenticated, scope, snapshotVersion, permissions, roles, relation);
+    }
+
+    private static void WriteStrings<TBuffer>(ref MemoryPackWriter<TBuffer> writer, ImmutableArray<string> values)
+        where TBuffer : IBufferWriter<byte>
+    {
+        writer.WriteUnmanaged(values.IsDefault ? 0 : values.Length);
+        if (values.IsDefault) return;
+        foreach (var item in values) writer.WriteString(item);
+    }
+
+    private static ImmutableArray<string> ReadStrings(ref MemoryPackReader reader)
+    {
+        var count = reader.ReadUnmanaged<int>();
+        if (count < 0 || count > 1 << 20) throw new MemoryPackSerializationException($"Invalid PermissionSnapshot list length {count}.");
+        var builder = ImmutableArray.CreateBuilder<string>(count);
+        for (int i = 0; i < count; i++) builder.Add(reader.ReadString() ?? "");
+        return builder.MoveToImmutable();
     }
 }

@@ -103,7 +103,7 @@ public sealed class Explanation
 
         var approvals = ImmutableArray.CreateBuilder<ExplanationLine>(d.Approvals.Count);
         foreach (ref readonly var a in d.Approvals.AsSpan())
-            approvals.Add(new(a.Permission, Format(catalog, a.Reason, culture, schema), a.Rule, default, null, default, ExplanationKind.Approval));
+            approvals.Add(new(a.Permission.Value, Format(catalog, a.Reason, culture, schema), a.Rule, default, null, default, ExplanationKind.Approval));
 
         return new(applied.ToImmutable(), notApplied.ToImmutable(), limits.ToImmutable(), approvals.ToImmutable(),
             d.Totals.Initial, d.Totals.Final);

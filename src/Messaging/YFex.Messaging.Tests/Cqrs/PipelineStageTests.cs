@@ -22,7 +22,7 @@ public sealed class PipelineStageTests
         var r = await fx.Dispatcher.CommandAsync<CreateCustomer, int>(new CreateCustomer("", "nope", "1"));
 
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.ValidationProblem);
+        e.Kind.Should().Be(ErrorKind.ValidationProblem);
         e.Violations.Count.Should().Be(2, "Name required + Email format, from fluent-only rules");
         fx.Log.Entries.Should().BeEmpty("shape runs first and is pure");
     }
@@ -35,7 +35,7 @@ public sealed class PipelineStageTests
         var r = await fx.Dispatcher.CommandAsync<CreateCustomer, int>(Valid);
 
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.Unauthorized);
+        e.Kind.Should().Be(ErrorKind.Forbidden);
         fx.Log.Entries.Should().Equal(["authorize"], "a uniqueness check must not leak existence to unauthorized callers");
     }
 
@@ -59,7 +59,7 @@ public sealed class PipelineStageTests
         var r = await fx.Dispatcher.CommandAsync<CreateCustomer, int>(Valid with { Email = EmailNotRegistered.TakenEmail });
 
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.ValidationProblem);
+        e.Kind.Should().Be(ErrorKind.ValidationProblem);
         e.Violations[0].Path.ToString().Should().Be("Email");
         e.Violations[0].Code.Value.Should().Be("customer.email-taken");
         fx.Log.Entries.Should().Equal("context");
@@ -73,7 +73,7 @@ public sealed class PipelineStageTests
         var r = await fx.Dispatcher.QueryAsync<SearchCustomers, List<string>>(new SearchCustomers("a", 0));
 
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.ValidationProblem);
+        e.Kind.Should().Be(ErrorKind.ValidationProblem);
         e.Violations[0].Path.ToString().Should().Be("Take");
     }
 
@@ -85,7 +85,7 @@ public sealed class PipelineStageTests
 
         var invalid = await fx.Dispatcher.CommandAsync<CreateCustomer, int>(new CreateCustomer("", "x@y.co", "1"));
         invalid.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.ValidationProblem);
+        e.Kind.Should().Be(ErrorKind.ValidationProblem);
         fx.Outbox.PendingCount.Should().Be(0);
 
         var valid = await fx.Dispatcher.CommandAsync<CreateCustomer, int>(Valid);
@@ -103,7 +103,7 @@ public sealed class PipelineStageTests
         (await shape.Should().ThrowAsync<ErrorResultException>()).Which.TypedError.Violations[0].Code.Value.Should().Be("required");
 
         var context = () => fx.Invoker.InvokeAsync<int>(Valid with { Email = EmailNotRegistered.TakenEmail }, default);
-        (await context.Should().ThrowAsync<ErrorResultException>()).Which.TypedError.Type.Should().Be(ErrorType.ValidationProblem);
+        (await context.Should().ThrowAsync<ErrorResultException>()).Which.TypedError.Kind.Should().Be(ErrorKind.ValidationProblem);
 
         (await fx.Invoker.InvokeAsync<int>(Valid, default)).Should().Be(42);
     }

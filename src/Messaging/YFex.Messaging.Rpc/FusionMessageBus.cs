@@ -103,7 +103,7 @@ public sealed class FusionMessageBusBuilder
 
     public FusionMessageBus Build(
         CompiledMessagingRegistry registry,
-        INetworkStatus networkStatus,
+        IServerConnection server,
         ICache cache,
         IOutbox outbox,
         IEventBus eventBus,
@@ -113,7 +113,7 @@ public sealed class FusionMessageBusBuilder
             _queries.ToFrozenDictionary(x => x.QueryType, x => x.Entry),
             _commands.ToFrozenDictionary(x => x.CommandType, x => x.Entry),
             _voidCommands.ToFrozenDictionary(x => x.CommandType, x => x.Entry),
-            registry, networkStatus, cache, outbox, eventBus, sp);
+            registry, server, cache, outbox, eventBus, sp);
     }
 }
 
@@ -125,8 +125,9 @@ public sealed class FusionMessageBusBuilder
 /// policy logic as <see cref="LocalDispatcher"/>.
 /// </summary>
 /// <remarks>
-/// Stage 2 (authorize) runs here too, against the client's <see cref="YFex.Authorization.Public.IPrincipalAccessor"/> —
-/// for UX only (fail fast, no round trip); the server enforces it again (validation D29). With the per-call header option
+/// Stage 2 (authorize) runs here too as the QUICK check (<c>IMessageAuthorization.QuickCheck</c>: undecidable parts hide) against
+/// the client's <see cref="YFex.Authorization.Public.IPrincipalAccessor"/> — for UX only (fail fast, no round trip); the server
+/// runs the full check again (validation D29, authorization-consolidation ⚑Z8). With the per-call header option
 /// (<see cref="YFexMessagingRpcClientOptions.CallContext"/>) each call carries the token (and tenant) as RPC headers.
 /// </remarks>
 public sealed class FusionMessageBus : IDispatcher
@@ -135,7 +136,7 @@ public sealed class FusionMessageBus : IDispatcher
     private readonly FrozenDictionary<Type, CommandDispatchEntry> _commands;
     private readonly FrozenDictionary<Type, VoidCommandDispatchEntry> _voidCommands;
     private readonly CompiledMessagingRegistry _registry;
-    private readonly INetworkStatus _networkStatus;
+    private readonly IServerConnection _server;
     private readonly ICache _cache;
     private readonly IOutbox _outbox;
     private readonly IEventBus _eventBus;
@@ -149,7 +150,7 @@ public sealed class FusionMessageBus : IDispatcher
         FrozenDictionary<Type, CommandDispatchEntry> commands,
         FrozenDictionary<Type, VoidCommandDispatchEntry> voidCommands,
         CompiledMessagingRegistry registry,
-        INetworkStatus networkStatus,
+        IServerConnection server,
         ICache cache,
         IOutbox outbox,
         IEventBus eventBus,
@@ -159,27 +160,38 @@ public sealed class FusionMessageBus : IDispatcher
         _commands = commands;
         _voidCommands = voidCommands;
         _registry = registry;
-        _networkStatus = networkStatus;
+        _server = server;
         _cache = cache;
         _outbox = outbox;
         _eventBus = eventBus;
         _sp = sp;
-        _principal = new CallPrincipalSource(sp);
+        _principal = new CallPrincipalSource(sp, registry);
         _callContext = sp.GetService<CallContextClientBuilder>();
         _scope = _callContext?.Tenant == true ? sp.GetService<IScopeContext>() : null;
     }
 
     // ── Call context (D29): per-call headers ─────────────────────────────────
 
-    private async ValueTask<RpcHeader[]?> HeadersAsync(CancellationToken ct)
+    // Offline design F3: every command dispatch sends an idempotency key; an outbox replay re-sends the key its entry was
+    // queued with (OutboxReplayContext), so a replay after a lost reply is executed once by the server.
+    private static Guid CommandIdempotencyKey() => OutboxReplayContext.Current?.IdempotencyKey ?? Guid.CreateVersion7();
+
+    private async ValueTask<RpcHeader[]?> HeadersAsync(CancellationToken ct, Guid? idempotencyKey = null)
     {
-        if (_callContext is null) return null;
         RpcHeader[]? headers = null;
+        if (idempotencyKey is { } key)
+            headers = headers.With(new RpcHeader(IdempotencyHeaders.Key, key.ToString("N")));
+        if (_callContext is null) return headers;
         if (_callContext.TokenProvider is { } provider
             && await provider(_sp, ct).ConfigureAwait(false) is { Length: > 0 } token)
             headers = headers.With(new RpcHeader(_callContext.TokenHeader, _callContext.TokenScheme + " " + token));
-        if (_callContext.Tenant && _scope.EffectiveIdentity() is { IsEmpty: false } scope)
-            headers = headers.With(new RpcHeader(CallContextHeaders.Scope, scope.ToString()));
+        if (_callContext.Tenant)
+        {
+            // Offline design F4: a replay sends the scope captured when the command was queued, not the scope active now.
+            var scope = OutboxReplayContext.Current?.Scope
+                ?? (_scope.EffectiveIdentity() is { IsEmpty: false } current ? current.ToString() : null);
+            if (scope is { Length: > 0 }) headers = headers.With(new RpcHeader(CallContextHeaders.Scope, scope));
+        }
         return headers;
     }
 
@@ -208,7 +220,7 @@ public sealed class FusionMessageBus : IDispatcher
         if (!MessagePipeline.CheckShape(in query, out var shape))
             return CacheableQueryResult<TResult>.ValidationProblem(shape);
 
-        if (!_networkStatus.IsConnected)
+        if (!_server.IsConnected)
         {
             if (query is not ICacheable) return CacheableQueryResult<TResult>.Fail("No network connectivity.");
             _registry.Queries.TryGetValue(typeof(TQuery), out var offlinePolicy);
@@ -229,9 +241,9 @@ public sealed class FusionMessageBus : IDispatcher
             return CacheableQueryResult<TResult>.Fail($"No Fusion route registered for {typeof(TQuery).Name}. Ensure the source generator has run.");
 
         // Stage 2 client-side (UX; the server re-checks).
-        _registry.Queries.TryGetValue(typeof(TQuery), out var queryPolicy);
-        if (!_principal.Authorize(queryPolicy?.Authorize, query!))
-            return CacheableQueryResult<TResult>.Unauthorized();
+        var quickCheck = _principal.QuickCheck(typeof(TQuery));
+        if (!quickCheck.IsAllowed)
+            return Error.From(quickCheck);
 
         var headers = await HeadersAsync(ct).ConfigureAwait(false);
         TResult result;
@@ -253,8 +265,8 @@ public sealed class FusionMessageBus : IDispatcher
         if (query is ICacheable)
         {
             _registry.Queries.TryGetValue(typeof(TQuery), out var policy);
-            var cacheKey = QueryCacheKey.For(typeof(TQuery), query!, policy, _sp)!;
-            await _cache.SetAsync(cacheKey, result, QueryCacheKey.Options(typeof(TQuery), policy, query!), ct).ConfigureAwait(false);
+            if (QueryCacheKey.For(typeof(TQuery), query!, policy, _sp) is { } cacheKey)
+                await _cache.SetAsync(cacheKey, result, QueryCacheKey.Options(typeof(TQuery), policy, query!), ct).ConfigureAwait(false);
         }
 
         return new Fresh<TResult>(result);
@@ -264,7 +276,7 @@ public sealed class FusionMessageBus : IDispatcher
         TCommand cmd, CancellationToken ct = default)
         where TCommand : ICommand<TResult>
     {
-        if (!_networkStatus.IsConnected)
+        if (!_server.IsConnected)
             return await OfflineCommandAsync<TCommand, TResult>(cmd, ct).ConfigureAwait(false);
 
         if (!_commands.TryGetValue(typeof(TCommand), out var entry))
@@ -274,11 +286,11 @@ public sealed class FusionMessageBus : IDispatcher
             return QueueableResult<TResult>.Invalid(shape);
 
         // Stage 2 client-side (UX; the server re-checks).
-        _registry.Commands.TryGetValue(typeof(TCommand), out var commandPolicy);
-        if (!_principal.Authorize(commandPolicy?.Authorize, cmd!))
-            return QueueableResult<TResult>.Unauthorized("Unauthorized.");
+        var quickCheck = _principal.QuickCheck(typeof(TCommand));
+        if (!quickCheck.IsAllowed)
+            return Error.From(quickCheck);
 
-        var headers = await HeadersAsync(ct).ConfigureAwait(false);
+        var headers = await HeadersAsync(ct, CommandIdempotencyKey()).ConfigureAwait(false);
         TResult result;
         switch (entry.Call)
         {
@@ -303,7 +315,7 @@ public sealed class FusionMessageBus : IDispatcher
         TCommand cmd, CancellationToken ct = default)
         where TCommand : ICommand
     {
-        if (!_networkStatus.IsConnected)
+        if (!_server.IsConnected)
             return await OfflineCommandVoidAsync(cmd, ct).ConfigureAwait(false);
 
         if (!_voidCommands.TryGetValue(typeof(TCommand), out var entry))
@@ -313,11 +325,11 @@ public sealed class FusionMessageBus : IDispatcher
             return QueueableResult.Invalid(shape);
 
         // Stage 2 client-side (UX; the server re-checks).
-        _registry.Commands.TryGetValue(typeof(TCommand), out var commandPolicy);
-        if (!_principal.Authorize(commandPolicy?.Authorize, cmd!))
-            return QueueableResult.Unauthorized("Unauthorized.");
+        var quickCheck = _principal.QuickCheck(typeof(TCommand));
+        if (!quickCheck.IsAllowed)
+            return Error.From(quickCheck);
 
-        var headers = await HeadersAsync(ct).ConfigureAwait(false);
+        var headers = await HeadersAsync(ct, CommandIdempotencyKey()).ConfigureAwait(false);
         switch (entry.Call)
         {
             case Func<TCommand, CancellationToken, Task<QueueableResult>> typed:

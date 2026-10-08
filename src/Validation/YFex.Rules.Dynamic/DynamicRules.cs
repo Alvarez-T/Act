@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using YFex.Helpers;
 using YFex.Localization;
@@ -22,11 +23,15 @@ public sealed class DynamicRules<TSituation> : IRuntimeRuleCodec<TSituation> whe
 {
     private const int MaxMemoryEntries = 2048;
     private readonly ConcurrentDictionary<ulong, CompiledRule<TSituation>> _compiled = new();
+    private readonly ConditionalWeakTable<RuleSetDefinition<TSituation>, ExprCompileOptions> _options = new();
 
     public DynamicRules(FunctionCatalog? functions = null)
     {
         Functions = functions ?? FunctionCatalog.BuiltIn;
+        _createOptions = s => RuleExpressions.Options(s, Functions);       // one delegate, not one closure per compile
     }
+
+    private readonly ConditionalWeakTable<RuleSetDefinition<TSituation>, ExprCompileOptions>.CreateValueCallback _createOptions;
 
     public FunctionCatalog Functions { get; }
 
@@ -53,9 +58,12 @@ public sealed class DynamicRules<TSituation> : IRuntimeRuleCodec<TSituation> whe
         if (set.FindGroup(spec.Group)?.Dynamic is { } policy && !TSituation.Schema.AllowsTier(policy.EditableAt, tierPath.Depth))
             errors.Add(new Violation(FieldPath.Of("group"), DynamicRuleCodes.TierNotAllowed,
                 detail: $"group '{spec.Group}' takes runtime rules at {string.Join(", ", policy.EditableAt.ToArray())}, not at {TSituation.Schema.TierName(tierPath.Depth)}"));
-        RuleCompiler<TSituation>.Compile(set, Functions, spec, errors);
+        RuleCompiler<TSituation>.Compile(set, OptionsFor(set), spec, errors);
         return errors.Count == 0 ? ValidationResult.Valid : ValidationResult.Of(ViolationList.From([.. errors]));
     }
+
+    /// <summary>The expression options of <paramref name="set"/> (situation schema, <see cref="Functions"/>, specials, rule codes) — built once per rule set.</summary>
+    internal ExprCompileOptions OptionsFor(RuleSetDefinition<TSituation> set) => _options.GetValue(set, _createOptions);
 
     public byte[] Canonicalize(RuleSetDefinition<TSituation> set, ReadOnlySpan<byte> payload) => RuleSpecJson.Write(RuleSpecJson.Read(payload));
 
@@ -78,7 +86,7 @@ public sealed class DynamicRules<TSituation> : IRuntimeRuleCodec<TSituation> whe
 
         var spec = RuleSpecJson.Read(payload);
         var errors = new List<Violation>();
-        var rule = RuleCompiler<TSituation>.Compile(set, Functions, spec, errors);
+        var rule = RuleCompiler<TSituation>.Compile(set, OptionsFor(set), spec, errors);
         if (rule is null)
         {
             bool unimplemented = errors.Exists(static e => e.Code.Value == DynamicRuleCodes.Unimplemented);
@@ -102,32 +110,10 @@ public sealed class DynamicRules<TSituation> : IRuntimeRuleCodec<TSituation> whe
         var h = StableHash64.Create(0xD1A3);
         h.Append(set.Name);
         h.Append(unchecked((long)set.CodeVersion));
-        h.Append(unchecked((long)SchemaHash));
+        h.Append(unchecked((long)SituationExprSchema<TSituation>.Schema.Hash));
         h.Append(unchecked((long)Functions.Version));
         h.Append(payload);
         return h.Finish();
-    }
-
-    private static readonly ulong SchemaHash = ComputeSchemaHash();
-
-    private static ulong ComputeSchemaHash()
-    {
-        var h = StableHash64.Create(0x5C4E);
-        Append(ref h, TSituation.Schema);
-        return h.Finish();
-
-        static void Append(ref StableHash64 h, SituationSchema schema)
-        {
-            h.Append(schema.Name);
-            foreach (var f in schema.Fields)
-            {
-                h.Append((int)f.Id);
-                h.Append(f.Name);
-                h.Append(f.Type.Key);
-                h.Append(f.Exposed);
-                if (f.LineSchema is { } lines) Append(ref h, lines);
-            }
-        }
     }
 
     // ── Authoring helpers ───────────────────────────────────────────────────

@@ -40,24 +40,21 @@ public class TenancyCacheScopeContextTests
     }
 
     [Fact]
-    public void User_is_a_principal_named_by_the_chain_up_to_the_user_level()
+    public void Subject_is_the_chain_up_to_the_user_level()
     {
         var ctx = Create(o => o.Tenant(TestScope.Tenant).User(TestScope.User));
         using (ScopeOverride.Enter(AcmeBob))
-        {
-            ctx.User.Identity!.IsAuthenticated.Should().BeTrue();
-            ctx.User.Identity.Name.Should().Be("0=acme/1=store7/2=bob");
-        }
+            ctx.Subject.Should().Be("0=acme/1=store7/2=bob");
     }
 
     [Fact]
-    public void Nothing_in_scope_yields_null_tenant_and_anonymous_user()
+    public void Nothing_in_scope_yields_null_tenant_and_subject()
     {
         var ctx = Create(o => o.Tenant(TestScope.Tenant).User(TestScope.User));
         using (ScopeOverride.EnterUnscoped())
         {
             ctx.TenantId.Should().BeNull();
-            ctx.User.Identity!.Name.Should().BeNull();
+            ctx.Subject.Should().BeNull();
         }
     }
 
@@ -84,7 +81,7 @@ public class TenancyCacheScopeContextTests
         var ctx = Create(o => o.Tenant(TestScope.Tenant), host);
         using (ScopeOverride.Enter(AcmeBob))
         {
-            ctx.User.Should().BeSameAs(host.User);
+            ctx.Subject.Should().Be(host.Subject);
             ctx.SessionId.Should().Be("sess-1");
             ctx.TenantId.Should().Be("0=acme/1=store7");
         }
@@ -139,7 +136,7 @@ public class TenancyCacheScopeContextTests
 
     private sealed class HostContext : ICacheScopeContext
     {
-        public ClaimsPrincipal User { get; } = new(new ClaimsIdentity([new Claim(ClaimTypes.Name, "host-user")], "test"));
+        public string? Subject => "host-user";
         public string? TenantId => "host-tenant";
         public string? SessionId => "sess-1";
     }

@@ -61,7 +61,7 @@ And one new principle that Validation/Rules makes possible:
 
 | # | Decision | Date |
 |---|---|---|
-| C1 | **Phase X approved:** extract `YFex.Expressions` from `YFex.Rules.Dynamic`. Rules.Dynamic keeps the rule envelope (`RuleSpec`, directives, group policies, caps, tiers, codec) and depends on Expressions; Composer uses Expressions directly. Function catalogs are layered (deterministic shared core → rule layer → screen-only layer such as `today()`, rejected by the binder inside rules). | 2026-10-01 |
+| C1 | **Phase X approved:** extract `YFex.Expressions` from `YFex.Rules.Dynamic`. Rules.Dynamic keeps the rule envelope (`RuleSpec`, directives, group policies, caps, tiers, codec) and depends on Expressions; Composer uses Expressions directly. Function catalogs are layered (deterministic shared core → rule layer → screen-only layer such as `today()`, rejected by the binder inside rules). Plan: [`expressions/phase-x-extraction.md`](expressions/phase-x-extraction.md). **Status:** X.0–X.4 implemented 2026-10-01 (uncommitted); function attributes were hard-renamed to `[ExprFunctions]` with **no alias** (XD2 supersedes the alias wording above). | 2026-10-01 |
 | C2 | **Promote-to-rule is explicit, never automatic.** The designer offers "enforce everywhere?" only when the preconditions hold (open `RuleGroup.Dynamic` group allowing `deny`, all referenced fields exposed in the situation, user holds the rule permission), shows a what-if first, then enacts through Rules.Admin. Users without rule permission never see the action; their screen checks stay UX-only ("never" fallback). | 2026-10-01 |
 | C3 | **Record read/construct lives in YFex.Validation**, opted in with a **separate `[RecordAccess]` attribute** (not a property on `[Validatable]`, not automatic). The Validation generator emits `IRecordAccess<T>` with the same `FieldIds`/`TypeShape` as validation. A type can have `[RecordAccess]` without any validation rules (query rows). `[RecordAccess(Construct = false)]` = read-only. Dispatch-by-key invokers come from the CQRS generator, not Composer (§7.2). | 2026-10-01 |
 | C4 | The generic runtime-configuration lifecycle library is **`YFex.Revisions`**, and the verb for "put a version in force" is **Enact**. "Publish" is avoided: it clashes with `dotnet publish` and `IDispatcher.PublishAsync`. Vocabulary in §11.1. Extracted from Rules.Admin when Composer reaches P3 (two consumers by then). | 2026-10-01 |
@@ -187,7 +187,7 @@ Layering:
 ```
 L0    YFex core (RawValue, RawType, IRawValue, FieldPath, OptionSet, Bounds, StableHash64, Localization)
 L0.5  YFex.Validation (+ IRecordAccess, [RecordAccess])    YFex.Expressions (→ core, Validation for Violation diagnostics)
-L1    YFex.Rules (→ Expressions)    YFex.State    YFex.Composer.Public    YFex.Revisions (→ core, Validation, Authorization.Public)
+L1    YFex.Rules (no Expressions dependency)    YFex.State    YFex.Composer.Public    YFex.Revisions (→ core, Validation, Authorization.Public)
 L1.5  YFex.Rules.Dynamic (→ Rules, Expressions, Persistence)    YFex.Revisions.Data (SQL over YFex.Data)
 L2    YFex.Cqrs    YFex.Composer.Catalog (→ Capabilities, Cqrs, Rules, Authorization.Public, Tenancy)
 L3    YFex.Revisions.Sync (device cache + incremental sync)    YFex.Composer.Runtime / Store / Extensions    YFex.Rules.Admin (→ Revisions)
@@ -407,7 +407,8 @@ violations consume, so storing it directly avoids conversions. Typed access is s
 Rules.Dynamic already has everything a screen formula needs: arithmetic over amounts, comparisons,
 `if`/`coalesce`, `in`/`between`/`isSet`, aggregates over lines (`sum/count/any/all/minOf/maxOf`),
 function calls with generics and contracts, literal typing (`"Pix"` → enum, `500` → Money), totality
-and size limits. It's coupled to `ISituation<TS>` in **only three places**:
+and size limits. Its main couplings to `ISituation<TS>` are these three (the full list of 10 is in
+the Phase X plan below):
 
 | Coupling | Today | Extracted |
 |---|---|---|
@@ -423,16 +424,18 @@ What's new in `YFex.Expressions` (benefits both):
   `ExprText` already renders the reverse; validation/13 lists "end-user text syntax: later".
 - **Named collections** (multiple grids per screen; `Sum(Items, Qty * Price)`). Today the engine has
   one lines field per situation.
-- Function attributes renamed `[ExprFunctions]`/`[ExprFunction]`, with `[RuleFunctions]` kept as an
-  alias for compatibility.
+- Function attributes renamed `[ExprFunctions]`/`[ExprFunction]`. The plan recommends a hard rename
+  without an alias (⚑ XD2 in the Phase X plan; confirming it updates C1).
 
 Rejected alternatives: (a) a second Composer-only language, since users and AI would face two
 dialects; (b) Composer generating a fake `ISituation` per screen, which can't work because screens
 are runtime schemas and `ISituation` is static-abstract.
 
-Regression guard for the extraction: the Rules.Dynamic suite (19 tests incl. traces/explanations)
-and the generated-functions tests must stay byte-identical, plus a benchmark showing no regression
-on the measured numbers (0.4 / 2.6 / 9.5 µs).
+**Detailed plan:** [`expressions/phase-x-extraction.md`](expressions/phase-x-extraction.md), with the
+exact coupling points found in the source (10, not 3: also enum typing, diagnostic codes, `Amounts`,
+operator names, and the function generator), the public API, steps X.0–X.7, the performance guard,
+and decisions XD1–XD7. Note: **YFex.Rules itself does not reference Expressions.** Only Rules.Dynamic
+does, and the `SituationSchema` → `ExprSchema` adapter lives there.
 
 ### 8.3 The three kinds of logic
 

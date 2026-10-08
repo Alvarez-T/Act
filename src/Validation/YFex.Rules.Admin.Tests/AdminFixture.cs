@@ -60,8 +60,19 @@ public readonly struct SeatGuard : IRowGuard<SeatTable.Row>
     }
 }
 
+/// <summary>The app's permissions (the seat table names its own publish permission; the checkout approval of PublishTests).</summary>
+[PermissionCatalog]
+public static partial class PricingPermissions
+{
+    [Permission("pricing.rules.seats.publish", Name = "Publicar tabela de assentos")]
+    public static partial Permission SeatsPublish { get; }
+
+    [Permission("sales.discount.override", Name = "Aprovar desconto acima do limite")]
+    public static partial Permission DiscountOverride { get; }
+}
+
 [DecisionTable<PricingSituation>("pricing.seats", HitPolicy.First, Group = nameof(PricingRules.Limits),
-    EditableAt = new[] { nameof(PricingSituation.Tenant) }, PublishPermission = "pricing.rules.seats.publish", Guardrail = typeof(SeatGuard))]
+    EditableAt = new[] { nameof(PricingSituation.Tenant) }, PublishPermission = PricingPermissions.Ids.SeatsPublish, Guardrail = typeof(SeatGuard))]
 public partial class SeatTable
 {
     public readonly partial record struct Row(
@@ -71,25 +82,39 @@ public partial class SeatTable
     public static readonly Row[] DefaultRows = [new(Is(Plan.Basic), 5), new(Is(Plan.Pro), 50)];
 }
 
-/// <summary>Test caller: authenticated with a mutable permission set.</summary>
-public sealed class TestPrincipal : IPrincipalAccessor, IAuthContext
+/// <summary>Test caller: authenticated with a mutable set of permission ids (declared ones become its <see cref="PermissionSet"/>).</summary>
+public sealed class TestPrincipal : IPrincipalAccessor, IAuthorizationContext
 {
     public HashSet<string> Permissions { get; } = new(StringComparer.Ordinal);
     public string Name { get; set; } = "ana";
     public bool Authenticated { get; set; } = true;
 
-    public IAuthContext Current => this;
+    public IAuthorizationContext Current => this;
     public ClaimsPrincipal Principal => new(Authenticated ? new ClaimsIdentity([new System.Security.Claims.Claim(ClaimTypes.Name, Name)], "test") : new ClaimsIdentity());
+    public ActorIdentity Actor => Authenticated ? new ActorIdentity(Name) : ActorIdentity.Anonymous;
+    public ActorIdentity? RealActor => null;
+    public ActorRelation Relation => ActorRelation.None;
+    public string? Scope => null;
+    PermissionSet IAuthorizationContext.Permissions
+    {
+        get
+        {
+            var set = new PermissionSet.Builder();
+            foreach (var id in Permissions) set.Add(id);
+            return set.Build();
+        }
+    }
+    public long Version => 0;
     public AccessToken? Token => null;
     public bool IsAuthenticated => Authenticated;
     public bool IsInRole(in Role role) => false;
-    public bool HasPermission(in Permission permission) => Permissions.Contains(permission.Value);
+    public bool HasPermission(in Permission permission) => ((IAuthorizationContext)this).Permissions.Contains(permission);
     public bool HasClaim(in YFex.Authorization.Public.Claim claim) => false;
 }
 
 public sealed class AdminFixture
 {
-    public AdminFixture(IRuleAuditSink? audit = null)
+    public AdminFixture(IRuleAuditSink? audit = null, Action<RuleAdminOptions>? options = null)
     {
         var services = new ServiceCollection();
         if (audit is not null) services.AddSingleton(audit);
@@ -99,12 +124,16 @@ public sealed class AdminFixture
         services.AddSingleton<IEventBus>(Events);
         services.AddSingleton<IOverrideTokenIssuer>(Tokens);
         services.AddYFexRuleSet(Host);
-        services.AddYFexRulesAdmin();
+        services.AddYFexRulesAdmin(options);
+        // The one message gate (authorization-consolidation 04 §2): RuleAdmin's requirements are enforced through it.
+        var registry = CompiledMessagingRegistry.Build(baseline: [new RuleAdminBaseline()]);
+        services.AddSingleton(registry);
+        YFex.Authorization.ServiceCollectionExtensions.AddYFexAuthorization(services);
+        services.AddYFexCqrsAuthorizationConfiguration();
         Services = services.BuildServiceProvider();
 
-        var registry = CompiledMessagingRegistry.Build(baseline: [new RuleAdminBaseline()]);
         var invoker = new LocalHandlerInvoker(Services, new LocalHandlerInvokerRegistryBuilder().AddRuleAdmin().Build());
-        Dispatcher = new LocalDispatcher(invoker, registry, new ManualNetworkStatus(true), new InMemoryCache(),
+        Dispatcher = new LocalDispatcher(invoker, registry, new ManualServerConnection(true), new InMemoryCache(),
             new InMemoryOutbox(new OutboxOptions()), Events, Services);
     }
 
@@ -132,10 +161,9 @@ public sealed class AdminFixture
     public static byte[] Json(string s) => Encoding.UTF8.GetBytes(s);
 }
 
-/// <summary>Always-online <see cref="INetworkStatus"/> (the admin commands run on the server).</summary>
-internal sealed class ManualNetworkStatus(bool connected = true) : INetworkStatus
+/// <summary>Always-online <see cref="IServerConnection"/> (the admin commands run on the server).</summary>
+internal sealed class ManualServerConnection(bool connected = true) : IServerConnection
 {
-    public bool IsConnected => connected;
-    public SyncState State => connected ? SyncState.Connected : SyncState.Disconnected;
-    public event Action<SyncState>? Changed { add { } remove { } }
+    public ServerConnectionState State => connected ? ServerConnectionState.Connected : ServerConnectionState.Disconnected;
+    public event Action<ServerConnectionChange>? Changed { add { } remove { } }
 }

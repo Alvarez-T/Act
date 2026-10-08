@@ -1,5 +1,7 @@
 # YFex.Authorization — System Design
 
+> **2026-10-02:** most of this design is implemented. Current state, defects and the consolidation proposal are in [`authorization-consolidation/`](authorization-consolidation/README.md); read that first.
+
 **Status:** Proposed (design/plan). See [`authorization-capabilities-overview.md`](authorization-capabilities-overview.md) for framing and cross-track reconciliations.
 **Framework:** `net11.0` (adapters), `netstandard2.0` (generator); LangVersion preview. TFMs follow the repo `Directory.Build.props`.
 **Scope:** one library owning authorization + auth primitives (permissions, roles, claims, policies, tokens) across four call surfaces — CQRS commands/queries, NavigatR routes, inbound HTTP endpoints, outbound HTTP clients.

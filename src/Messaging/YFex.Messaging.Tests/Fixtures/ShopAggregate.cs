@@ -106,7 +106,7 @@ public sealed class SearchCustomersHandler : IQueryHandler<ShopAggregate.Queries
 public sealed class ShopFixture
 {
     public ShopFixture(IEnumerable<IAggregateConfiguration>? serverOverrides = null,
-        Func<System.Security.Claims.ClaimsPrincipal, ShopAggregate.Commands.CreateCustomer, bool>? authorize = null,
+        Func<YFex.Authorization.Public.IAuthorizationContext, ShopAggregate.Commands.CreateCustomer, bool>? authorize = null,
         bool connected = true, bool decorateInvoker = false,
         Action<IServiceCollection>? configureServices = null)
     {
@@ -116,6 +116,10 @@ public sealed class ShopFixture
 
         var services = new ServiceCollection();
         services.AddSingleton(Log);
+        // The one message gate (authorization-consolidation 04 §2): the override's requirement is exported and enforced through it.
+        services.AddSingleton(Registry);
+        YFex.Authorization.ServiceCollectionExtensions.AddYFexAuthorization(services);
+        services.AddYFexCqrsAuthorizationConfiguration();
         services.AddTransient<ICommandHandler<ShopAggregate.Commands.CreateCustomer, int>, CreateCustomerHandler>();
         services.AddTransient<IQueryHandler<ShopAggregate.Queries.SearchCustomers, List<string>>, SearchCustomersHandler>();
         services.AddTransient<IQueryHandler<ShopAggregate.Queries.PagedCustomers, List<string>>, PagedCustomersHandler>();
@@ -131,7 +135,7 @@ public sealed class ShopFixture
             .Build());
         Invoker = decorateInvoker ? new ValidatingHandlerInvoker(invoker, Registry, Services) : invoker;
 
-        Network = new ManualNetworkStatus(connected);
+        Network = new ManualServerConnection(connected);
         Cache = new InMemoryCache();
         Outbox = new InMemoryOutbox(new OutboxOptions());
         Dispatcher = new LocalDispatcher(Invoker, Registry, Network, Cache, Outbox, new DefaultEventBus(), Services);
@@ -141,13 +145,13 @@ public sealed class ShopFixture
     public CompiledMessagingRegistry Registry { get; }
     public IServiceProvider Services { get; }
     public IHandlerInvoker Invoker { get; }
-    public ManualNetworkStatus Network { get; }
+    public ManualServerConnection Network { get; }
     public InMemoryCache Cache { get; }
     public InMemoryOutbox Outbox { get; }
     public LocalDispatcher Dispatcher { get; }
 
     private sealed class AuthorizeOverride(
-        Func<System.Security.Claims.ClaimsPrincipal, ShopAggregate.Commands.CreateCustomer, bool> authorize, StageLog log)
+        Func<YFex.Authorization.Public.IAuthorizationContext, ShopAggregate.Commands.CreateCustomer, bool> authorize, StageLog log)
         : IServerAggregateConfiguration<ShopAggregate>
     {
         public void Configure(AggregateConfigurationBuilder<ShopAggregate> b)

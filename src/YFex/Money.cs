@@ -40,8 +40,13 @@ public readonly record struct Money :
     IComparisonOperators<Money, Money, bool>,
     IMinMaxValue<Money>,
     IAdditiveIdentity<Money, Money>,
-    IAmount<Money>
+    IAmount<Money>,
+    global::YFex.Diagnostics.ILogValue<Money>
 {
+    /// <summary>Logs as its raw value: no boxing and no formatting on the caller (YFex.Diagnostics).</summary>
+    static void global::YFex.Diagnostics.ILogValue<Money>.Write(in Money value, ref global::YFex.Diagnostics.LogWriter writer, ushort field)
+        => writer.WriteRawValue(field, in value);
+
     /// <summary>Fixed monetary scale (2 decimal places).</summary>
     public const int Scale = 2;
 

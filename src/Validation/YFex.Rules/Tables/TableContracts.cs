@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using YFex.Helpers;
 using YFex.Validation;
+using YFex.Authorization.Public;
 
 namespace YFex.Rules;
 
@@ -215,7 +216,7 @@ public sealed class TableColumn(int index, string name, ColumnRole role, CellSha
 }
 
 /// <summary>Table metadata: code, hit policy, editability and columns.</summary>
-public sealed class TableSchema(string code, string situation, HitPolicy hitPolicy, string[]? editableAt, string? publishPermission,
+public sealed class TableSchema(string code, string situation, HitPolicy hitPolicy, string[]? editableAt, Permission? publishPermission,
     bool isLineTable, bool complete, TableColumn[] columns)
 {
     private readonly string[] _editableAt = editableAt ?? [];
@@ -227,7 +228,8 @@ public sealed class TableSchema(string code, string situation, HitPolicy hitPoli
     public ReadOnlySpan<string> EditableAt => _editableAt;
     /// <summary>False when only the code rows exist (no tier may publish, disable or replace it).</summary>
     public bool IsEditable => _editableAt.Length > 0;
-    public string? PublishPermission { get; } = publishPermission;
+    /// <summary>Permission that publishing a version requires (null = the host's fallback, e.g. Rules.Admin's option).</summary>
+    public Permission? PublishPermission { get; } = publishPermission;
     public bool IsLineTable { get; } = isLineTable;
     public bool Complete { get; } = complete;
     public ReadOnlySpan<TableColumn> Columns => columns;

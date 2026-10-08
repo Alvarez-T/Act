@@ -90,9 +90,6 @@ public readonly record struct SituationFieldRef(ushort Id, string Name)
     public override string ToString() => Name;
 }
 
-/// <summary>One enum member offered by a schema (editors show <see cref="Name"/>; wire/storage use <see cref="Code"/>).</summary>
-public readonly record struct EnumOption(long Value, string Code, string Name);
-
 /// <summary>Metadata of one situation field.</summary>
 public sealed class SituationFieldInfo(ushort id, string name, RawType type, FieldRole role = FieldRole.Normal,
     int tier = 0, bool exposed = true, EnumOption[]? enumOptions = null, SituationSchema? lineSchema = null,

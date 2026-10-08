@@ -23,7 +23,8 @@ internal sealed record CommandRegistrationMetadata
     public YFex.Cqrs.Runtime.RulesStage? Rules { get; init; }
 
     public YFex.Cqrs.Runtime.ContextRuleFactory[]?  Validators  { get; init; }
-    public AuthorizerDescriptor[]? Authorizers { get; init; }
+    /// <summary>Authorization requirements recorded by the builder verbs (exported to the one message policy).</summary>
+    public YFex.Authorization.Public.Requirement[]? Authorization { get; init; }
 
     public InvalidationRuleDescriptor[]? Invalidates { get; init; }
 

@@ -98,7 +98,12 @@ public enum OperationDescriptorFlags : ushort
     Breadcrumb = 16,    // kept in the per-session breadcrumb ring (navigation, UI actions)
 }
 
-public readonly record struct FieldSpec(string Name, DataSensitivity Sensitivity);
+public enum FieldCapture : byte { Value, Scrubbed, Count, Length, Shape, Redacted, Erased }   // how it is written (snapshot column)
+
+// Implemented (Phase 0): sensitivity is added here once the YFex.Privacy core contract lands (L14); until then FieldSpec says HOW
+// a field is written. TypeName/IsSearchKey feed the LogSchema snapshot.
+public readonly record struct FieldSpec(string Name, FieldCapture Capture = FieldCapture.Value)
+{ public string? TypeName { get; init; } public bool IsSearchKey { get; init; } }
 
 public abstract class OperationDescriptor
 {
@@ -116,8 +121,7 @@ public abstract class OperationDescriptor
 /// Typed descriptor: knows how to capture T's opted-in fields without boxing.
 public sealed class OperationDescriptor<T> : OperationDescriptor
 {
-    public delegate void CaptureFn(in T value, ref LogWriter writer);
-    public CaptureFn? Capture { get; }          // null = shape only (⚑L8)
+    public OperationCapture<T>? Capture { get; }   // null = shape only (⚑L8); delegate void OperationCapture<T>(in T value, ref LogWriter writer)
 }
 
 /// Static generic slot: the dispatcher finds the descriptor for TCommand with one static load.
@@ -172,7 +176,13 @@ public ref struct LogWriter
     public void WriteRawValue<T>(ushort field, in T v) where T : global::YFex.IRawValue<T>;   // v.ToRaw() – struct, no box
     public void WriteEnum<TEnum>(ushort field, TEnum v) where TEnum : unmanaged, global::System.Enum; // underlying + EnumTable id
     public void WriteFormatted<T>(ushort field, in T v) where T : global::System.IUtf8SpanFormattable; // formats on caller (cost!)
-    public void WriteRedacted(ushort field, DataSensitivity cls);          // records "a value existed" without the value
+    public void WriteErased(ushort field);                                 // records "a value existed" without the value (WriteOmitted + reason)
+    public void WriteScrubbed(ushort field, string? v, int maxChars = 256); // free text, scrubbed on the consumer
+    public void WriteNull(ushort field); WriteCount(ushort, int); WriteLength(ushort, long);
+    public void WriteSpanFormattable<T>(ushort field, in T v) where T : ISpanFormattable;   // UTF-16 on the caller
+    public void WriteShape<T>(ushort field, in T v);                       // LogShapeFor<T> (BeginObject/EndObject, depth 2)
+    public ushort Field(string name);                                      // ad-hoc names (interpolated holes) → reference table
+    // Sensitivity-driven redaction (WriteRedacted) arrives with the YFex.Privacy core contract (L14).
 }
 
 /// How a value object writes itself. Normally GENERATED from [LogValue] on the struct (11 §3); hand-written when you need
@@ -180,7 +190,7 @@ public ref struct LogWriter
 public interface ILogValue<TSelf> where TSelf : ILogValue<TSelf>
 {
     static abstract void Write(in TSelf value, ref LogWriter w, ushort field);
-    static virtual DataSensitivity Sensitivity => DataSensitivity.Internal;      // Cpf → SensitivePersonal
+    // No Sensitivity member (L14, privacy 02 §6): sensitivity comes from YFex.Privacy ([Sensitive] / IClassifiedData<T>).
     static virtual bool IsSearchKey => false;                                    // VendaId, ChaveNFe → true (13 §4)
 }
 

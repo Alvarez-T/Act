@@ -93,7 +93,8 @@ public sealed class RulesStage<TMessage, TSituation> : RulesStage where TSituati
         if (decision.Verdict.IsNeedsApproval)
         {
             var check = await CheckApprovalsAsync(decision, bound, services, ct).ConfigureAwait(false);
-            if (check.Error is { } rejected) return new(rejected, decision, false);
+            // Not `is { } rejected`: on a [Union] type a property pattern matches the case Value, not the union itself.
+            if (check.Error.HasValue) return new(check.Error.Value, decision, false);
             flagged |= check.Flagged;
         }
 
@@ -105,7 +106,7 @@ public sealed class RulesStage<TMessage, TSituation> : RulesStage where TSituati
                 case DecisionMismatchPolicy.Reject:
                     return new(Error.Validation(ValidationResult.Of(MismatchViolation(bound, decision))), decision, false);
                 case DecisionMismatchPolicy.Escalate:
-                    return new(new Error(ErrorType.Conflict, "The decision changed since the client evaluated it.",
+                    return new(new Conflict("The decision changed since the client evaluated it.",
                         ViolationList.From([MismatchViolation(bound, decision)])), decision, false);
                 case DecisionMismatchPolicy.AcceptAndFlag:
                     flagged = true;
@@ -154,7 +155,7 @@ public sealed class RulesStage<TMessage, TSituation> : RulesStage where TSituati
             bool ok = false;
             foreach (var token in tokens)
             {
-                if (!string.Equals(token.Permission, request.Permission, StringComparison.Ordinal)) continue;
+                if (!string.Equals(token.Permission, request.Permission.Value, StringComparison.Ordinal)) continue;
                 var v = verifier.Verify(in token, in request, d.Fingerprint, now);
                 if (!v.IsValid) continue;
                 // Device (offline) tokens: the approver's permission is re-checked now — the server didn't issue them.

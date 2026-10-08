@@ -58,8 +58,13 @@ public readonly record struct Length :
     IComparisonOperators<Length, Length, bool>,
     IMinMaxValue<Length>,
     IAdditiveIdentity<Length, Length>,
-    IAmount<Length>
+    IAmount<Length>,
+    global::YFex.Diagnostics.ILogValue<Length>
 {
+    /// <summary>Logs as its raw value: no boxing and no formatting on the caller (YFex.Diagnostics).</summary>
+    static void global::YFex.Diagnostics.ILogValue<Length>.Write(in Length value, ref global::YFex.Diagnostics.LogWriter writer, ushort field)
+        => writer.WriteRawValue(field, in value);
+
     /// <summary>Canonical scale (metres, 4 decimal places → 0.1&#160;mm resolution).</summary>
     public const int Scale = 4;
 

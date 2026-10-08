@@ -129,7 +129,7 @@ diagnostics.
 | | R: outbox | OutboxEnqueue, OutboxReplay | the enqueued trace context is stored **with the outbox entry**; replay = new trace with `Replay` link (05 §4) | conflict → Conflict | — |
 | | R: sync / `ISyncFailureLog` | Sync | conflicts, resolutions | Conflict | — |
 | **YFex.State** | G: `[StateCommand]` wrapper | StateCommand (trace root, Boundary) | command name, VM type, `CanExecute` false attempts (Debug) | Cancelled / Faulted | — |
-| | G: `[LogChanges]` (existing attribute, finally wired) | Mark (Debug, Leaf) | property, new value if capturable + `DataSensitivity` | — | opt-in |
+| | G: setter hooks by inferred `StateChangeRole` (12); History observer for `[Undoable]`; `[LogChanges]` becomes an alias of `[StateLog(UserInput)]` | Mark (Debug, Leaf), per-session edit ring | property, coalesced new value per type sensitivity, who changed it (user/command/server/undo) | — | no (shipped on failure/slow/audit/grant) |
 | | R: `OnAsyncValidationFaulted` | Mark (Warning) | validator, exception | Faulted | — |
 | **YFex.Validation** | R: called by stages → annotations only (too hot for operations) | — | server-side violation on a message the client already validated → `validation.server_mismatch` Warning (tampering / version skew) | — | — |
 | **YFex.Rules** | R: `RuleSetHost` evaluate | RuleEvaluation (Leaf, Debug) | rule set, version, tier path, fingerprint, verdict, applied rule count; explanation/trace at Trace level into the flight recorder | blocked → Rejected | **applied adjustments, overrides, approvals** (`IDecisionAuditSink` adapter); Rules.Admin publish/diff (`IRuleAuditSink` adapter) |

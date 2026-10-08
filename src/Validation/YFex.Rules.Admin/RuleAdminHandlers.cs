@@ -9,19 +9,22 @@ using static YFex.Rules.Admin.RuleAdmin;
 
 namespace YFex.Rules.Admin;
 
-/// <summary>Permissions not declared on tables (05 §7). Table publishing uses each table's <c>PublishPermission</c>.</summary>
+/// <summary>
+/// Permissions not declared on tables (05 §7), typed and catalog-checked (authorization-consolidation 04 §2.5). The gate enforces them
+/// through <see cref="RuleAdminRequirements"/>; table publishing uses each table's <c>PublishPermission</c>.
+/// </summary>
 public sealed class RuleAdminOptions
 {
-    /// <summary>Publishing parameter values (default <c>"rules.parameters.publish"</c>).</summary>
-    public string ParameterPublishPermission { get; set; } = "rules.parameters.publish";
-    /// <summary>Disabling / replacing rules (default <c>"rules.override"</c>).</summary>
-    public string OverridePermission { get; set; } = "rules.override";
-    /// <summary>Publishing runtime-authored rules (default <c>"rules.dynamic.publish"</c>).</summary>
-    public string RulePublishPermission { get; set; } = "rules.dynamic.publish";
-    /// <summary>Reading history / definitions (null = any authenticated user).</summary>
-    public string? ViewPermission { get; set; }
-    /// <summary>Fallback for tables without <c>PublishPermission</c> (default <c>"rules.tables.publish"</c>).</summary>
-    public string TablePublishPermission { get; set; } = "rules.tables.publish";
+    /// <summary>Publishing parameter values (default <see cref="RuleAdminPermissions.ParametersPublish"/>).</summary>
+    public Permission ParameterPublishPermission { get; set; } = RuleAdminPermissions.ParametersPublish;
+    /// <summary>Disabling / replacing rules (default <see cref="RuleAdminPermissions.Override"/>).</summary>
+    public Permission OverridePermission { get; set; } = RuleAdminPermissions.Override;
+    /// <summary>Publishing runtime-authored rules (default <see cref="RuleAdminPermissions.RulesPublish"/>).</summary>
+    public Permission RulePublishPermission { get; set; } = RuleAdminPermissions.RulesPublish;
+    /// <summary>Reading history / definitions (null = any authenticated user; e.g. <see cref="RuleAdminPermissions.View"/>).</summary>
+    public Permission? ViewPermission { get; set; }
+    /// <summary>Fallback for tables without <c>PublishPermission</c> (default <see cref="RuleAdminPermissions.TablesPublish"/>).</summary>
+    public Permission TablePublishPermission { get; set; } = RuleAdminPermissions.TablesPublish;
 }
 
 /// <summary>
@@ -30,7 +33,7 @@ public sealed class RuleAdminOptions
 /// </summary>
 public interface IRuleTierGuard
 {
-    bool CanPublishAt(IAuthContext user, in RuleTierPath tierPath);
+    bool CanPublishAt(IAuthorizationContext user, in RuleTierPath tierPath);
 }
 
 /// <summary>The rule sets hosted by this process (every registered <see cref="IRuleSetHost"/>).</summary>
@@ -51,7 +54,7 @@ public sealed class RuleSetRegistry
     public IRuleSetHost Get(string ruleSet)
         => _hosts.TryGetValue(ruleSet, out var h)
             ? h
-            : throw new ErrorResultException(new Error(ErrorType.NotFound, $"Rule set '{ruleSet}' is not hosted here."));
+            : throw new ErrorResultException(new NotFound($"Rule set '{ruleSet}' is not hosted here."));
 }
 
 /// <summary>An accepted publish (05 §4 audit record): who/when/note (<see cref="RuleDataInfo"/>) + the diff vs the base version.</summary>
@@ -68,29 +71,32 @@ public interface IRuleAuditSink
 }
 
 /// <summary>
-/// Shared publish pipeline (05 §4): authorize → validate → canonicalize → append (optimistic) → audit → apply → notify.
+/// Shared publish pipeline (05 §4): tier guard → validate → canonicalize → append (optimistic) → audit → apply → notify. The
+/// permission was already checked by the message gate (<see cref="RuleAdminRequirements"/>, authorization-consolidation 04 §2.5);
+/// a caller without it never reaches the pipeline and is reported as an <c>AuthorizationEvents.Denied</c> event, not to
+/// <see cref="IRuleAuditSink"/>.
 /// </summary>
-public sealed class RulePublisher(RuleSetRegistry registry, IRuleStore store, IPrincipalAccessor principal, RuleAdminOptions options,
+public sealed class RulePublisher(RuleSetRegistry registry, IRuleStore store, IPrincipalAccessor principal,
     IEventBus? events = null, IRuleTierGuard? tierGuard = null, IRuleAuditSink? audit = null)
 {
     internal RuleSetRegistry Registry => registry;
     internal IRuleStore Store => store;
 
     public async Task<long> PublishAsync(string ruleSet, RuleDataKind kind, string code, string tierPathText, long baseVersion, DateOnly effectiveFrom,
-        byte[] payload, string? note, string permission, Func<IRuleSetHost, RuleTierPath, ValidationResult> validate, CancellationToken ct)
+        byte[] payload, string? note, Func<IRuleSetHost, RuleTierPath, ValidationResult> validate, CancellationToken ct)
     {
         var host = registry.Get(ruleSet);
         var tierPath = ParseTierPath(tierPathText);
         var user = principal.Current;
-        string? actor = user.Principal.Identity?.Name ?? CallContextSubject();
+        string? actor = ActorOf(user);
         var key = new RuleDataKey(ruleSet, kind, code, tierPath);
 
         RuleDataInfo info;
         try
         {
-            Demand(user, permission);
+            if (!user.IsAuthenticated) throw new ErrorResultException(new Unauthenticated("Authentication required."));
             if (tierGuard is not null && !tierGuard.CanPublishAt(user, tierPath))
-                throw new ErrorResultException(new Error(ErrorType.Unauthorized, $"Not allowed to publish at {tierPath}."));
+                throw new ErrorResultException(new Error(new Forbidden(new Denial(DenialKind.ResourceDenied, Code: "rules.tier"))).WithMessage($"Not allowed to publish at {tierPath}."));
 
             var check = validate(host, tierPath);
             if (!check.IsValid) throw new ErrorResultException(Error.Validation(check));
@@ -103,7 +109,7 @@ public sealed class RulePublisher(RuleSetRegistry registry, IRuleStore store, IP
             }
             catch (RuleStoreConflictException conflict)
             {
-                throw new ErrorResultException(new Error(ErrorType.Conflict,
+                throw new ErrorResultException(new Conflict(
                     $"'{code}' was published as version {conflict.ActualVersion} meanwhile (base {conflict.ExpectedVersion}); reload and retry."));
             }
         }
@@ -133,27 +139,9 @@ public sealed class RulePublisher(RuleSetRegistry registry, IRuleStore store, IP
         return key.Kind == RuleDataKind.Table ? host.DefaultRowsJson(key.Code) : ReadOnlyMemory<byte>.Empty;
     }
 
-    /// <summary>The permission that publishing <paramref name="kind"/>/<paramref name="code"/> requires (simulation reuses it).</summary>
-    internal string PermissionFor(IRuleSetHost host, RuleDataKind kind, string code) => kind switch
-    {
-        RuleDataKind.Table => host.TryGetTable(code, out var schema) && schema.PublishPermission is { } p ? p : options.TablePublishPermission,
-        RuleDataKind.Parameters => options.ParameterPublishPermission,
-        RuleDataKind.Rule => options.RulePublishPermission,
-        _ => options.OverridePermission,
-    };
-
-    internal void Demand(IAuthContext user, string permission)
-    {
-        if (!user.IsAuthenticated || !Permission.TryParse(permission, null, out var p) || !user.HasPermission(in p))
-            throw new ErrorResultException(new Error(ErrorType.Unauthorized, $"Requires permission '{permission}'."));
-    }
-
-    internal void DemandView()
-    {
-        var user = principal.Current;
-        if (!user.IsAuthenticated) throw new ErrorResultException(new Error(ErrorType.Unauthorized, "Authentication required."));
-        if (options.ViewPermission is { } view) Demand(user, view);
-    }
+    /// <summary>The stable user key of <paramref name="user"/> (its actor subject; never the display name), or null.</summary>
+    internal static string? ActorOf(IAuthorizationContext user)
+        => user.Actor is { IsAnonymous: false } actor ? actor.Subject : CallContext.Current?.Subject;
 
     internal static RuleTierPath ParseTierPath(string text)
     {
@@ -161,32 +149,30 @@ public sealed class RulePublisher(RuleSetRegistry registry, IRuleStore store, IP
         catch (FormatException e) { throw new ErrorResultException(Error.Validation(ValidationResult.Of(new Violation(FieldPath.Of("TierPath"), RulePublishCodes.Malformed, detail: e.Message)))); }
     }
 
-    private static string? CallContextSubject() => CallContext.Current?.Subject;
 }
 
 public sealed class PublishTableHandler(RulePublisher publisher) : ICommandHandler<Commands.PublishTable, long>
 {
     public Task<long> HandleAsync(Commands.PublishTable c, CancellationToken ct)
         => publisher.PublishAsync(c.RuleSet, RuleDataKind.Table, c.TableCode, c.TierPath, c.BaseVersion, c.EffectiveFrom, c.RowsJson, c.Note,
-            publisher.PermissionFor(publisher.Registry.Get(c.RuleSet), RuleDataKind.Table, c.TableCode),
             (h, scope) => h.ValidateTable(c.TableCode, scope, c.RowsJson), ct);
 }
 
-public sealed class PublishParametersHandler(RulePublisher publisher, RuleAdminOptions options) : ICommandHandler<Commands.PublishParameters, long>
+public sealed class PublishParametersHandler(RulePublisher publisher) : ICommandHandler<Commands.PublishParameters, long>
 {
     public Task<long> HandleAsync(Commands.PublishParameters c, CancellationToken ct)
         => publisher.PublishAsync(c.RuleSet, RuleDataKind.Parameters, c.RuleCode, c.TierPath, c.BaseVersion, c.EffectiveFrom, c.ValuesJson, c.Note,
-            options.ParameterPublishPermission, (h, scope) => h.ValidateParameters(c.RuleCode, scope, c.ValuesJson), ct);
+            (h, scope) => h.ValidateParameters(c.RuleCode, scope, c.ValuesJson), ct);
 }
 
-public sealed class PublishRuleHandler(RulePublisher publisher, RuleAdminOptions options) : ICommandHandler<Commands.PublishRule, long>
+public sealed class PublishRuleHandler(RulePublisher publisher) : ICommandHandler<Commands.PublishRule, long>
 {
     public Task<long> HandleAsync(Commands.PublishRule c, CancellationToken ct)
         => publisher.PublishAsync(c.RuleSet, RuleDataKind.Rule, c.RuleCode, c.TierPath, c.BaseVersion, c.EffectiveFrom, c.Spec, c.Note,
-            options.RulePublishPermission, (h, tier) => h.ValidateRule(c.RuleCode, tier, c.Spec), ct);
+            (h, tier) => h.ValidateRule(c.RuleCode, tier, c.Spec), ct);
 }
 
-public sealed class SetRuleOverrideHandler(RulePublisher publisher, RuleAdminOptions options) : ICommandHandler<Commands.SetRuleOverride, long>
+public sealed class SetRuleOverrideHandler(RulePublisher publisher) : ICommandHandler<Commands.SetRuleOverride, long>
 {
     public Task<long> HandleAsync(Commands.SetRuleOverride c, CancellationToken ct)
     {
@@ -199,20 +185,21 @@ public sealed class SetRuleOverrideHandler(RulePublisher publisher, RuleAdminOpt
                 new Violation(FieldPath.Of("Action"), RulePublishCodes.Malformed, detail: "disable | enable | replace (+ReplacementCode)")))),
         };
         return publisher.PublishAsync(c.RuleSet, RuleDataKind.Override, c.RuleCode, c.TierPath, c.BaseVersion, c.EffectiveFrom,
-            RuleDataCodec.WriteOverride(action), c.Note, options.OverridePermission, (h, scope) => h.ValidateOverride(c.RuleCode, scope, action), ct);
+            RuleDataCodec.WriteOverride(action), c.Note, (h, scope) => h.ValidateOverride(c.RuleCode, scope, action), ct);
     }
 }
 
-public sealed class ApproveDecisionHandler(IOverrideTokenIssuer issuer, IPrincipalAccessor principal, RulePublisher publisher, TimeProvider? clock = null)
+public sealed class ApproveDecisionHandler(IOverrideTokenIssuer issuer, IPrincipalAccessor principal, TimeProvider? clock = null)
     : ICommandHandler<Commands.ApproveDecision, ApprovalToken>
 {
     public Task<ApprovalToken> HandleAsync(Commands.ApproveDecision c, CancellationToken ct)
     {
+        // The gate already checked that the APPROVER holds the permission (ApproveDecisionRequirement).
         var user = principal.Current;
-        publisher.Demand(user, c.Permission);                                  // the APPROVER must hold the permission
-        string approver = user.Principal.Identity?.Name ?? CallContext.Current?.Subject
-            ?? throw new ErrorResultException(new Error(ErrorType.Unauthorized, "Approver identity unknown."));
-        var token = issuer.Issue(approver, c.Permission, c.Fingerprint, (clock ?? TimeProvider.System).GetUtcNow());
+        string approver = RulePublisher.ActorOf(user)                          // the subject, never the display name
+            ?? throw new ErrorResultException(new Unauthenticated("Approver identity unknown."));
+        var permission = Permission.Parse(c.Permission).Value;                 // canonical id (the token binds it)
+        var token = issuer.Issue(approver, permission, c.Fingerprint, (clock ?? TimeProvider.System).GetUtcNow());
         return Task.FromResult(ApprovalToken.From(token));
     }
 }
@@ -221,7 +208,6 @@ public sealed class GetRuleDataHandler(RulePublisher publisher) : IQueryHandler<
 {
     public async Task<RuleDataPayload[]> HandleAsync(Queries.GetRuleData q, CancellationToken ct)
     {
-        publisher.DemandView();
         publisher.Registry.Get(q.RuleSet);
         var records = await publisher.Store.LoadAsync(q.RuleSet, q.AfterVersion, ct).ConfigureAwait(false);
         var result = new RuleDataPayload[records.Length];
@@ -235,11 +221,10 @@ public sealed class GetDataChangesHandler(RulePublisher publisher) : IQueryHandl
 {
     public async Task<RuleDataChanges> HandleAsync(Queries.GetDataChanges q, CancellationToken ct)
     {
-        publisher.DemandView();
         var host = publisher.Registry.Get(q.RuleSet);
         var key = new RuleDataKey(q.RuleSet, q.Kind, q.Code, RulePublisher.ParseTierPath(q.TierPath));
         var record = await publisher.Store.GetAsync(key, q.Version, ct).ConfigureAwait(false)
-            ?? throw new ErrorResultException(new Error(ErrorType.NotFound, $"'{key}' has no version {q.Version}."));
+            ?? throw new ErrorResultException(new NotFound($"'{key}' has no version {q.Version}."));
 
         long previous = 0;
         foreach (var h in await publisher.Store.GetVersionsAsync(key, ct).ConfigureAwait(false))   // newest first
@@ -250,15 +235,14 @@ public sealed class GetDataChangesHandler(RulePublisher publisher) : IQueryHandl
 }
 
 /// <summary>What-if (05 §4.0): validates the draft like a publish would, then replays <see cref="ISituationSamples"/> with it.</summary>
-public sealed class SimulateHandler(RulePublisher publisher, IPrincipalAccessor principal, ISituationSamples? samples = null)
+public sealed class SimulateHandler(RulePublisher publisher, ISituationSamples? samples = null)
     : IQueryHandler<Queries.Simulate, SimulationResult>
 {
     public async Task<SimulationResult> HandleAsync(Queries.Simulate q, CancellationToken ct)
     {
         var host = publisher.Registry.Get(q.RuleSet);
-        publisher.Demand(principal.Current, publisher.PermissionFor(host, q.Kind, q.Code));
         if (samples is null)
-            throw new ErrorResultException(new Error(ErrorType.NotFound, "No ISituationSamples registered — the app stores no situations to replay."));
+            throw new ErrorResultException(new NotFound("No ISituationSamples registered — the app stores no situations to replay."));
 
         var tierPath = RulePublisher.ParseTierPath(q.TierPath);
         var check = q.Kind switch
@@ -291,7 +275,6 @@ public sealed class GetDataVersionsHandler(RulePublisher publisher) : IQueryHand
 {
     public async Task<RuleDataHeader[]> HandleAsync(Queries.GetDataVersions q, CancellationToken ct)
     {
-        publisher.DemandView();
         var infos = await publisher.Store.GetVersionsAsync(new(q.RuleSet, q.Kind, q.Code, RulePublisher.ParseTierPath(q.TierPath)), ct).ConfigureAwait(false);
         var result = new RuleDataHeader[infos.Length];
         for (int i = 0; i < result.Length; i++) result[i] = RuleDataHeader.From(infos[i]);
@@ -303,7 +286,6 @@ public sealed class GetDataVersionHandler(RulePublisher publisher) : IQueryHandl
 {
     public async Task<RuleDataPayload[]> HandleAsync(Queries.GetDataVersion q, CancellationToken ct)
     {
-        publisher.DemandView();
         var record = await publisher.Store.GetAsync(new(q.RuleSet, q.Kind, q.Code, RulePublisher.ParseTierPath(q.TierPath)), q.Version, ct).ConfigureAwait(false);
         return record is null ? [] : [RuleDataPayload.From(record)];
     }
@@ -314,7 +296,6 @@ public sealed class GetRuleDefinitionHandler(RulePublisher publisher) : IQueryHa
 {
     public async Task<RuleDefinitionView> HandleAsync(Queries.GetRuleDefinition q, CancellationToken ct)
     {
-        publisher.DemandView();
         var host = publisher.Registry.Get(q.RuleSet);
         if (!host.Catalog.TryGet(q.Code, out var entry))
         {
@@ -327,7 +308,7 @@ public sealed class GetRuleDefinitionHandler(RulePublisher publisher) : IQueryHa
                 return new RuleDefinitionView(q.RuleSet, q.Code, group, "", false, false, q.Version, q.Tier, q.DataVersion, default,
                     Encoding.UTF8.GetString(spec.Payload.Span), spec.Info.PublishedBy, spec.Info.PublishedAt, spec.Info.Note);
             }
-            throw new ErrorResultException(new Error(ErrorType.NotFound, $"'{q.Code}' is not part of rule set '{q.RuleSet}'."));
+            throw new ErrorResultException(new NotFound($"'{q.Code}' is not part of rule set '{q.RuleSet}'."));
         }
 
         string? json = null, by = null, note = null;

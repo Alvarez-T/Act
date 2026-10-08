@@ -1,65 +1,48 @@
 using System.Collections.Concurrent;
 using ActualLab.Fusion;
-using MemoryPack;
-using YFex.Authorization;
 using YFex.Authorization.Public;
 
 namespace YFex.Messaging.Rpc;
 
 /// <summary>
 /// The caller's effective permissions, pushed to the client (validation D29): a Fusion compute method the server
-/// invalidates on <see cref="CallContextSignals.PermissionsChanged"/>, so a client UI bound to it (e.g. a computed state
-/// enabling buttons) refreshes. For UX only — the server re-checks every call (stage 2) and never trusts the client.
+/// invalidates on <see cref="IAuthorizationSignals"/> changes, so a client UI bound to it refreshes (the client feed of
+/// <c>UseServerPermissions()</c> applies it to <c>SnapshotPrincipalAccessor</c>, authorization-consolidation 05 §3). For UX
+/// only — the server re-checks every call (stage 2) and never trusts the client.
 /// </summary>
 /// <remarks>
 /// Proxies (<c>ActualLabProxies/ICallPermissionsProxy.cs</c>, <c>CallPermissionsServiceProxy.cs</c>) are ActualLab.Generators
 /// 13.0.12 output checked in verbatim (the library doesn't reference the generator); <c>ProxyGoldenTests</c> regenerates
-/// them from this file and fails on any difference.
+/// them from this file and fails on any difference. <see cref="PermissionSnapshot"/> travels through
+/// <c>PermissionSnapshotFormatter</c> (YFex.Authorization.Public must not reference MemoryPack).
 /// </remarks>
 public interface ICallPermissions : IComputeService
 {
     /// <param name="caller">Pass null. The server replaces it with the caller's key (tenant + subject) — the compute cache is
     /// keyed per caller and a client can't read someone else's permissions.</param>
     [ComputeMethod]
-    Task<CallPermissions> GetMyPermissionsAsync(string? caller = null, CancellationToken ct = default);
-}
-
-/// <summary>Snapshot of the caller's permissions.</summary>
-[MemoryPackable]
-public sealed partial record CallPermissions(string? Subject, bool IsAuthenticated, long Version, string[] Permissions)
-{
-    public static CallPermissions Anonymous { get; } = new(null, false, 0, []);
-
-    public bool Has(Permission permission) => Array.IndexOf(Permissions, permission.Key.Value) >= 0;
+    Task<PermissionSnapshot> GetMyPermissionsAsync(string? caller = null, CancellationToken ct = default);
 }
 
 /// <summary>Server implementation of <see cref="ICallPermissions"/> (registered by <c>UseYFexMessagingRpcServer</c>).</summary>
 public class CallPermissionsService : ICallPermissions
 {
-    private readonly IPermissionsVersions _versions;
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, byte>> _keysBySubject = new(StringComparer.Ordinal);
 
-    public CallPermissionsService(IPermissionsVersions versions) => _versions = versions;
-
     [ComputeMethod]
-    public virtual Task<CallPermissions> GetMyPermissionsAsync(string? caller = null, CancellationToken ct = default)
+    public virtual Task<PermissionSnapshot> GetMyPermissionsAsync(string? caller = null, CancellationToken ct = default)
     {
         // `caller` is only the compute-cache key: CallContextMiddleware overwrote it with the caller's own key. Anything else
         // (an in-process call, a key that isn't the caller's) gets the anonymous snapshot.
         var context = CallContext.Current;
         if (context is null || caller is null || !string.Equals(caller, CallerKey(context), StringComparison.Ordinal))
-            return Task.FromResult(CallPermissions.Anonymous);
+            return Task.FromResult(PermissionSnapshot.Anonymous);
         if (context.Subject is not { } subject)
-            return Task.FromResult(CallPermissions.Anonymous);
+            return Task.FromResult(PermissionSnapshot.Anonymous);
 
         _keysBySubject.GetOrAdd(subject, static _ => new(StringComparer.Ordinal)).TryAdd(caller, 0);
-        var granted = (context.Auth as AuthContext)?.Permissions;
-        var permissions = new string[granted?.Count ?? 0];
-        int i = 0;
-        if (granted is not null)
-            foreach (var key in granted) permissions[i++] = key.Value;
-        Array.Sort(permissions, StringComparer.Ordinal);
-        return Task.FromResult(new CallPermissions(subject, true, _versions.Get(subject), permissions));
+        // Ids, never process-local ordinals; the version is the one the caller was resolved at.
+        return Task.FromResult(PermissionSnapshot.From(context.Caller));
     }
 
     /// <summary>The compute-cache key of <paramref name="context"/>'s caller: tenant scope + subject.</summary>

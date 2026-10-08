@@ -10,7 +10,8 @@ namespace YFex.Cqrs.Runtime;
 /// Hot-path contract:
 /// • Every delegate is a pre-compiled composite (no LINQ, no list enumeration).
 /// • All fields are direct — no property-dispatch overhead on a sealed record.
-/// • Zero per-call allocations when all validators/authorizers complete synchronously.
+/// • Zero per-call allocations when all validators complete synchronously.
+/// Authorization is not here: every dispatcher asks <c>IMessageAuthorization</c> (authorization-consolidation 04 §2).
 /// </summary>
 public sealed record CommandPolicy(
     /// <summary>
@@ -20,12 +21,6 @@ public sealed record CommandPolicy(
     /// </summary>
     /// <summary>Stage 5 (context rules); stage 1 runs through ValidationSlot&lt;T&gt; without a policy.</summary>
     MessageValidator? Validation,
-
-    /// <summary>
-    /// Composite AND-predicate of all authorizers, merged at Build time.
-    /// Null if no authorization rules.
-    /// </summary>
-    Func<ClaimsPrincipal, object, bool>? Authorize,
 
     Func<object, string>? IdempotencyKey,
     ConflictPolicy        Conflict,

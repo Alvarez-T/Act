@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <TargetFramework>net11.0</TargetFramework>
@@ -41,6 +41,10 @@
     <ProjectReference Include="..\..\Persistence\YFex.Persistence.Encryption\YFex.Persistence.Encryption.csproj" />
     <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
     <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization\YFex.Authorization.csproj" />
+    <!-- One message gate (authorization-consolidation 04 §2): TestCaller, [PermissionCatalog]/[RequirePermission] on records, Wolverine path. -->
+    <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization.Testing\YFex.Authorization.Testing.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization.Generator\YFex.Authorization.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\YFex.Messaging.Rpc.Wolverine\YFex.Messaging.Rpc.Wolverine.csproj" />
     <ProjectReference Include="..\..\State\YFex.State\YFex.State.csproj" />
     <!-- Generators referenced as Analyzers for source generation in this project -->
     <ProjectReference Include="..\YFex.Messaging.Generator\YFex.Messaging.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />

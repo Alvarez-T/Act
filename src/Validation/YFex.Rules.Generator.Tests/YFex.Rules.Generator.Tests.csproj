@@ -22,7 +22,6 @@
   <ItemGroup>
     <ProjectReference Include="..\YFex.Rules.Generator\YFex.Rules.Generator.csproj" />
     <ProjectReference Include="..\YFex.Rules\YFex.Rules.csproj" />
-    <ProjectReference Include="..\YFex.Rules.Dynamic\YFex.Rules.Dynamic.csproj" />
   </ItemGroup>
 
   <ItemGroup>

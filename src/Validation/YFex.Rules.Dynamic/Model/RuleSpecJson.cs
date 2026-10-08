@@ -1,13 +1,13 @@
 using System.Buffers;
 using System.Collections.Immutable;
-using System.Globalization;
 using System.Text.Json;
 
 namespace YFex.Rules.Dynamic;
 
 /// <summary>
-/// JSON form of <see cref="RuleSpec"/> (hand-written reader/writer — AOT-safe, no STJ contracts). Expressions are
-/// JsonLogic-like: an operator/function name as the single key of an object, its operands as the value.
+/// JSON form of <see cref="RuleSpec"/> (hand-written reader/writer — AOT-safe, no STJ contracts). The envelope (code, group,
+/// directives, messages) is read here; every expression (<c>when</c>, directive values, message args) goes through
+/// <see cref="ExprJson"/> (YFex.Expressions), whose format is JsonLogic-like:
 /// <code>
 /// { "code": "tenant.pix-bonus", "group": "PaymentDisc", "priority": 10,
 ///   "when": { "and": [ { "==": [ { "var": "Payment" }, "Pix" ] }, { ">=": [ { "var": "Total" }, 500 ] } ] },
@@ -17,33 +17,6 @@ namespace YFex.Rules.Dynamic;
 /// </summary>
 public static class RuleSpecJson
 {
-    /// <summary>Operator keys (anything else is a function call).</summary>
-    private static readonly FrozenOps Ops = new();
-
-    private sealed class FrozenOps
-    {
-        public readonly Dictionary<string, ExprKind> ByName = new(StringComparer.Ordinal)
-        {
-            ["+"] = ExprKind.Add, ["-"] = ExprKind.Subtract, ["*"] = ExprKind.Multiply, ["/"] = ExprKind.Divide, ["neg"] = ExprKind.Negate,
-            ["=="] = ExprKind.Equal, ["!="] = ExprKind.NotEqual, ["<"] = ExprKind.Less, ["<="] = ExprKind.LessOrEqual,
-            [">"] = ExprKind.Greater, [">="] = ExprKind.GreaterOrEqual,
-            ["and"] = ExprKind.And, ["or"] = ExprKind.Or, ["not"] = ExprKind.Not,
-            ["in"] = ExprKind.In, ["between"] = ExprKind.Between, ["isSet"] = ExprKind.IsSet,
-            ["if"] = ExprKind.If, ["coalesce"] = ExprKind.Coalesce,
-            ["sum"] = ExprKind.Sum, ["count"] = ExprKind.Count, ["any"] = ExprKind.Any, ["all"] = ExprKind.All,
-            ["minOf"] = ExprKind.MinOf, ["maxOf"] = ExprKind.MaxOf,
-        };
-        public readonly Dictionary<ExprKind, string> ByKind = new();
-        public FrozenOps() { foreach (var (k, v) in ByName) ByKind[v] = k; }
-    }
-
-    internal static bool TryGetOperator(string name, out ExprKind kind) => Ops.ByName.TryGetValue(name, out kind);
-    internal static string OperatorName(ExprKind kind) => Ops.ByKind[kind];
-
-    /// <summary>Operators taking ONE operand (not an array).</summary>
-    internal static bool IsUnary(ExprKind k) => k is ExprKind.Negate or ExprKind.Not or ExprKind.IsSet
-        or ExprKind.Sum or ExprKind.Count or ExprKind.Any or ExprKind.All or ExprKind.MinOf or ExprKind.MaxOf;
-
     // ── Read ────────────────────────────────────────────────────────────────
 
     /// <summary>Parses a spec. Throws <see cref="JsonException"/> with the JSON path of the problem.</summary>
@@ -65,7 +38,7 @@ public static class RuleSpecJson
                 case "group": group = String(ref r, "$.group"); break;
                 case "description": description = String(ref r, "$.description"); break;
                 case "priority": priority = r.TokenType == JsonTokenType.Number ? r.GetInt32() : throw Error("$.priority", "a number"); break;
-                case "when": when = r.TokenType == JsonTokenType.Null ? null : ReadExpr(ref r, "$.when"); break;
+                case "when": when = r.TokenType == JsonTokenType.Null ? null : ExprJson.Read(ref r, "$.when"); break;
                 case "then": then = ReadDirectives(ref r); break;
                 case "messages": messages = ReadMessages(ref r); break;
                 default: r.Skip(); break;
@@ -75,84 +48,6 @@ public static class RuleSpecJson
         if (string.IsNullOrEmpty(group)) throw Error("$.group", "a group name");
         return new RuleSpec(code, group, priority, when, then, messages, description);
     }
-
-    /// <summary>Parses one expression (editor / AI helpers).</summary>
-    public static Expr ReadExpression(ReadOnlySpan<byte> json)
-    {
-        var r = new Utf8JsonReader(json);
-        r.Read();
-        return ReadExpr(ref r, "$");
-    }
-
-    private static Expr ReadExpr(ref Utf8JsonReader r, string path)
-    {
-        switch (r.TokenType)
-        {
-            case JsonTokenType.Number: return Expr.Lit(Number(ref r));
-            case JsonTokenType.String: return Expr.Lit(r.GetString()!);
-            case JsonTokenType.True: return Expr.Lit(true);
-            case JsonTokenType.False: return Expr.Lit(false);
-            case JsonTokenType.Null: return Expr.Null;
-            case JsonTokenType.StartObject: break;
-            default: throw Error(path, "an expression");
-        }
-        if (!Next(ref r, out string op)) throw Error(path, "an operator object with one key");
-        Expr result;
-        string at = path + "." + op;
-        if (op == "var") result = Expr.Var(String(ref r, at));
-        else if (op == "line") result = Expr.LineVar(String(ref r, at));
-        else if (TryGetOperator(op, out var kind))
-        {
-            if (kind == ExprKind.In) result = ReadIn(ref r, at);
-            else if (IsUnary(kind)) result = Expr.Op(kind, ReadExpr(ref r, at));
-            else result = Expr.Op(kind, ReadArgs(ref r, at));
-        }
-        else result = Expr.Call(op, ReadArgs(ref r, at));
-        if (Next(ref r, out string extra)) throw Error(path, $"one key per expression object (found '{op}' and '{extra}')");
-        return result;
-    }
-
-    private static ImmutableArray<Expr> ReadArgs(ref Utf8JsonReader r, string path)
-    {
-        if (r.TokenType != JsonTokenType.StartArray) throw Error(path, "an array of operands");
-        var b = ImmutableArray.CreateBuilder<Expr>();
-        int i = 0;
-        while (r.Read() && r.TokenType != JsonTokenType.EndArray) b.Add(ReadExpr(ref r, $"{path}[{i++}]"));
-        return b.ToImmutable();
-    }
-
-    private static Expr ReadIn(ref Utf8JsonReader r, string path)
-    {
-        if (r.TokenType != JsonTokenType.StartArray) throw Error(path, "[value, [list…]]");
-        r.Read();
-        var value = ReadExpr(ref r, path + "[0]");
-        r.Read();
-        var list = ReadLiteralList(ref r, path + "[1]");
-        r.Read();
-        if (r.TokenType != JsonTokenType.EndArray) throw Error(path, "exactly two operands");
-        return Expr.In(value, list);
-    }
-
-    private static ImmutableArray<RawValue> ReadLiteralList(ref Utf8JsonReader r, string path)
-    {
-        if (r.TokenType != JsonTokenType.StartArray) throw Error(path, "an array of literals");
-        var b = ImmutableArray.CreateBuilder<RawValue>();
-        while (r.Read() && r.TokenType != JsonTokenType.EndArray) b.Add(Literal(ref r, path));
-        return b.ToImmutable();
-    }
-
-    private static RawValue Literal(ref Utf8JsonReader r, string path) => r.TokenType switch
-    {
-        JsonTokenType.Number => Number(ref r),
-        JsonTokenType.String => RawValue.From(r.GetString()),
-        JsonTokenType.True => RawValue.From(true),
-        JsonTokenType.False => RawValue.From(false),
-        JsonTokenType.Null => RawValue.None,
-        _ => throw Error(path, "a literal"),
-    };
-
-    private static RawValue Number(ref Utf8JsonReader r)
-        => r.TryGetInt64(out long l) ? RawValue.From(l) : RawValue.From(r.GetDecimal());
 
     private static ImmutableArray<DirectiveSpec> ReadDirectives(ref Utf8JsonReader r)
     {
@@ -183,12 +78,12 @@ public static class RuleSpecJson
                     "path" => d with { Path = String(ref r, at) },
                     "code" => d with { Code = String(ref r, at) },
                     "permission" => d with { Permission = String(ref r, at) },
-                    "args" => d with { Args = ReadArgs(ref r, at) },
-                    "min" => d with { Min = ReadExpr(ref r, at) },
-                    "max" => d with { Max = ReadExpr(ref r, at) },
-                    "percent" => d with { Percent = ReadExpr(ref r, at) },
-                    "amount" => d with { Amount = ReadExpr(ref r, at) },
-                    "options" => d with { Options = ReadLiteralList(ref r, at) },
+                    "args" => d with { Args = ExprJson.ReadArgs(ref r, at) },
+                    "min" => d with { Min = ExprJson.Read(ref r, at) },
+                    "max" => d with { Max = ExprJson.Read(ref r, at) },
+                    "percent" => d with { Percent = ExprJson.Read(ref r, at) },
+                    "amount" => d with { Amount = ExprJson.Read(ref r, at) },
+                    "options" => d with { Options = ExprJson.ReadLiteralList(ref r, at) },
                     "target" => d with
                     {
                         LineTarget = String(ref r, at) switch
@@ -263,7 +158,7 @@ public static class RuleSpecJson
             w.WriteString("group", spec.Group);
             if (spec.Priority != 0) w.WriteNumber("priority", spec.Priority);
             if (spec.Description is { } d) w.WriteString("description", d);
-            if (spec.When is { } when) { w.WritePropertyName("when"); WriteExpr(w, when); }
+            if (spec.When is { } when) { w.WritePropertyName("when"); ExprJson.Write(w, when); }
             w.WriteStartArray("then");
             foreach (var x in spec.Then) WriteDirective(w, x);
             w.WriteEndArray();
@@ -284,36 +179,6 @@ public static class RuleSpecJson
         return buffer.WrittenSpan.ToArray();
     }
 
-    public static void WriteExpr(Utf8JsonWriter w, Expr e)
-    {
-        switch (e.Kind)
-        {
-            case ExprKind.Literal: WriteLiteral(w, e.Literal); return;
-            case ExprKind.Var: w.WriteStartObject(); w.WriteString("var", e.Name); w.WriteEndObject(); return;
-            case ExprKind.Line: w.WriteStartObject(); w.WriteString("line", e.Name); w.WriteEndObject(); return;
-        }
-        w.WriteStartObject();
-        if (e.Kind == ExprKind.Call) w.WritePropertyName(e.Name!);
-        else w.WritePropertyName(OperatorName(e.Kind));
-        if (e.Kind == ExprKind.In)
-        {
-            w.WriteStartArray();
-            WriteExpr(w, e.Args[0]);
-            w.WriteStartArray();
-            foreach (var v in e.List) WriteLiteral(w, v);
-            w.WriteEndArray();
-            w.WriteEndArray();
-        }
-        else if (IsUnary(e.Kind)) WriteExpr(w, e.Args[0]);
-        else
-        {
-            w.WriteStartArray();
-            foreach (var a in e.Args) WriteExpr(w, a);
-            w.WriteEndArray();
-        }
-        w.WriteEndObject();
-    }
-
     private static void WriteDirective(Utf8JsonWriter w, DirectiveSpec d)
     {
         w.WriteStartObject();
@@ -330,38 +195,24 @@ public static class RuleSpecJson
         if (!d.Args.IsDefaultOrEmpty)
         {
             w.WriteStartArray("args");
-            foreach (var a in d.Args) WriteExpr(w, a);
+            foreach (var a in d.Args) ExprJson.Write(w, a);
             w.WriteEndArray();
         }
         if (d.Kind is DirectiveSpecKind.Decrease or DirectiveSpecKind.Increase) w.WriteString("target", d.LineTarget ? "line" : "total");
-        if (d.Percent is { } pc) { w.WritePropertyName("percent"); WriteExpr(w, pc); }
-        if (d.Amount is { } am) { w.WritePropertyName("amount"); WriteExpr(w, am); }
-        if (d.Min is { } min) { w.WritePropertyName("min"); WriteExpr(w, min); }
-        if (d.Max is { } max) { w.WritePropertyName("max"); WriteExpr(w, max); }
+        if (d.Percent is { } pc) { w.WritePropertyName("percent"); ExprJson.Write(w, pc); }
+        if (d.Amount is { } am) { w.WritePropertyName("amount"); ExprJson.Write(w, am); }
+        if (d.Min is { } min) { w.WritePropertyName("min"); ExprJson.Write(w, min); }
+        if (d.Max is { } max) { w.WritePropertyName("max"); ExprJson.Write(w, max); }
         if (d.Kind == DirectiveSpecKind.Limit && d.Exceed != Exceed.Deny)
             w.WriteString("exceed", d.Exceed == Exceed.Warn ? "warn" : "approval");
         if (!d.Options.IsDefaultOrEmpty)
         {
             w.WriteStartArray("options");
-            foreach (var v in d.Options) WriteLiteral(w, v);
+            foreach (var v in d.Options) ExprJson.WriteLiteral(w, v);
             w.WriteEndArray();
         }
         w.WriteEndObject();
         w.WriteEndObject();
-    }
-
-    private static void WriteLiteral(Utf8JsonWriter w, in RawValue v)
-    {
-        switch (v.Kind)
-        {
-            case ValueKind.None: w.WriteNullValue(); break;
-            case ValueKind.Bool: v.TryGet(out bool b); w.WriteBooleanValue(b); break;
-            case ValueKind.Int32 or ValueKind.Int64: v.TryGet(out long l); w.WriteNumberValue(l); break;
-            case ValueKind.Double: v.TryGet(out double dd); w.WriteNumberValue(dd); break;
-            case ValueKind.Decimal: v.TryGet(out decimal m); w.WriteNumberValue(m); break;
-            case ValueKind.Date: v.TryGet(out DateOnly date); w.WriteStringValue(date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)); break;
-            default: v.TryGet(out string? s); w.WriteStringValue(s ?? v.ToString()); break;
-        }
     }
 
     private static List<string> Sorted(IEnumerable<string> keys)

@@ -56,7 +56,7 @@ public readonly struct MaxDeclared : IRule<Shipment>
 {
     public static bool Applies(in Shipment s) => true;
     public static void Evaluate(in Shipment s, ref DirectiveWriter d)
-        => d.Limit(Shipment.Fields.Declared, max: Mass.FromGrams(70_000), onExceed: Exceed.RequireApproval, permission: "freight.heavy");
+        => d.Limit(Shipment.Fields.Declared, max: Mass.FromGrams(70_000), onExceed: Exceed.RequireApproval, permission: RulesTestPermissions.FreightHeavy);
 }
 
 // ── HR: plain int amount (days), Company → Department tiers ─────────────────────────────────────────────────
@@ -185,7 +185,7 @@ public class DomainNeutralTests
         var d = FreightRules.Evaluate(heavy);
 
         d.Verdict.Kind.Should().Be(VerdictKind.NeedsApproval);
-        d.Approvals[0].Permission.Should().Be("freight.heavy");
+        d.Approvals[0].Permission.Should().Be(RulesTestPermissions.FreightHeavy);
         d.TryGetMax(Shipment.Fields.Declared, out Mass max).Should().BeTrue();
         max.Should().Be(Mass.FromGrams(70_000));
     }

@@ -12,7 +12,7 @@ namespace YFex.Cqrs.Configuration;
 
 /// <summary>
 /// Fluent builder for one query type.  Accumulates typed <see cref="ContextRuleFactory"/>,
-/// <see cref="AuthorizerDescriptor"/>, and <see cref="InvalidationRuleDescriptor"/> entries
+/// authorization <see cref="YFex.Authorization.Public.Requirement"/>s, and <see cref="InvalidationRuleDescriptor"/> entries
 /// during the registration phase, then produces an immutable
 /// <see cref="QueryRegistrationMetadata"/> record via <see cref="BuildMetadata"/>.
 /// </summary>
@@ -23,7 +23,7 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
     // Mutable accumulation lists — used only during registration, never on the hot path.
     private List<ContextRuleFactory>?          _validators;
     private RulesConfig?                       _rules;
-    private List<AuthorizerDescriptor>?        _authorizers;
+    private List<Requirement>?        _authorization;
     private List<InvalidationRuleDescriptor>?  _invalidatedBy;
     private CachePolicy?                       _cache;
     private CacheScope                         _scope      = CacheScope.Global;
@@ -112,46 +112,41 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
 
     // ── Authorization ─────────────────────────────────────────────────────────
 
-    public QueryConfigurationBuilder<TQuery, TResult> RequireAuthenticated()
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustBeAuthenticated());
-        return this;
-    }
+    // ── Authorization: the verbs record Requirements; CqrsAuthorizationConfiguration exports them to the ONE message policy
+    //    every dispatcher enforces through IMessageAuthorization (authorization-consolidation 04 §2) ──
 
-    public QueryConfigurationBuilder<TQuery, TResult> RequireRoles(params string[] roles)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHaveRoles(roles));
-        return this;
-    }
+    /// <summary>The caller must be authenticated.</summary>
+    public QueryConfigurationBuilder<TQuery, TResult> RequireAuthenticated() => AddRequirement(Requirement.RequireAuthenticated());
 
-    public QueryConfigurationBuilder<TQuery, TResult> RequireRoles(params Role[] roles)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHaveRoles(Array.ConvertAll(roles, static r => r.Value)));
-        return this;
-    }
+    /// <summary>The caller must be in at least one of <paramref name="roles"/> (case-insensitive).</summary>
+    public QueryConfigurationBuilder<TQuery, TResult> RequireRoles(params Role[] roles) => AddRequirement(Requirement.RequireRoles(roles));
 
-    public QueryConfigurationBuilder<TQuery, TResult> RequirePermission(Permission permission)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustHavePermission(permission));
-        return this;
-    }
+    /// <summary>The caller must hold <paramref name="permission"/> (a catalog property, e.g. <c>SalesPermissions.SaleVoid</c>).</summary>
+    public QueryConfigurationBuilder<TQuery, TResult> RequirePermission(Permission permission) => AddRequirement(Requirement.Require(permission));
 
-    public QueryConfigurationBuilder<TQuery, TResult> RequireAuthorization(string policyName)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.MustSatisfyPolicy(policyName));
-        return this;
-    }
+    /// <summary>The caller must hold at least one of <paramref name="permissions"/>.</summary>
+    public QueryConfigurationBuilder<TQuery, TResult> RequireAnyPermission(params Permission[] permissions) => AddRequirement(Requirement.RequireAny(permissions));
 
-    public QueryConfigurationBuilder<TQuery, TResult> Authorize(Func<ClaimsPrincipal, TQuery, bool> predicate)
-    {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.Inline((user, q) => predicate(user, (TQuery)q)));
-        return this;
-    }
+    /// <summary>
+    /// A named policy decided on the server by an <c>INamedPolicyHandler</c>. Hidden on the quick (client/UI) check, so declare it
+    /// in the server overrides when clients must still send the message.
+    /// </summary>
+    public QueryConfigurationBuilder<TQuery, TResult> RequirePolicy(PolicyName policy) => AddRequirement(Requirement.RequirePolicy(policy));
 
-    public QueryConfigurationBuilder<TQuery, TResult> Authorize<TAuthorizer>()
-        where TAuthorizer : IQueryAuthorizer<TQuery>
+    /// <summary>An inline predicate over (caller, message). Does not affect visibility (menus, search, AI).</summary>
+    public QueryConfigurationBuilder<TQuery, TResult> Authorize(Func<IAuthorizationContext, TQuery, bool> predicate)
+        => AddRequirement(Requirement.RequireResource(ResourceRequirement.FromDelegate(predicate)));
+
+    /// <summary>
+    /// A requirement class — <see cref="IAuthorizationRequirement{TResource}"/> or <see cref="IAsyncAuthorizationRequirement{TResource}"/>
+    /// of <typeparamref name="TQuery"/> — registered as a DI singleton (its <c>VisibleWith</c> refines visibility).
+    /// </summary>
+    public QueryConfigurationBuilder<TQuery, TResult> Authorize<TRequirement>() where TRequirement : class
+        => AddRequirement(Requirement.RequireResource(ResourceRequirement.FromService<TRequirement, TQuery>()));
+
+    private QueryConfigurationBuilder<TQuery, TResult> AddRequirement(in Requirement requirement)
     {
-        (_authorizers ??= []).Add(AuthorizerDescriptor.FromType(typeof(TAuthorizer)));
+        (_authorization ??= []).Add(requirement);
         return this;
     }
 
@@ -286,7 +281,7 @@ public sealed class QueryConfigurationBuilder<TQuery, TResult>
         ResultType   = typeof(TResult),
         Validators   = _validators?.ToArray(),
         Rules        = _rules?.Build(typeof(TQuery), isQuery: true),
-        Authorizers  = _authorizers?.ToArray(),
+        Authorization  = _authorization?.ToArray(),
         Cache        = _cache,
         Scope        = _scope,
         ScopeKey     = _scopeKey,

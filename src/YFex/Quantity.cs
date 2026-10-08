@@ -28,8 +28,13 @@ public readonly record struct Quantity :
     IComparisonOperators<Quantity, Quantity, bool>,
     IMinMaxValue<Quantity>,
     IAdditiveIdentity<Quantity, Quantity>,
-    IAmount<Quantity>
+    IAmount<Quantity>,
+    global::YFex.Diagnostics.ILogValue<Quantity>
 {
+    /// <summary>Logs as its raw value: no boxing and no formatting on the caller (YFex.Diagnostics).</summary>
+    static void global::YFex.Diagnostics.ILogValue<Quantity>.Write(in Quantity value, ref global::YFex.Diagnostics.LogWriter writer, ushort field)
+        => writer.WriteRawValue(field, in value);
+
     public const int Scale = 4;
     private readonly decimal _value;
     private Quantity(decimal v, bool _) => _value = v;

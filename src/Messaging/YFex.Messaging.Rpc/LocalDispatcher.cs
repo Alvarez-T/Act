@@ -22,19 +22,20 @@ public sealed class LocalDispatcher : IDispatcher
 {
     private readonly IHandlerInvoker _invoker;
     private readonly CompiledMessagingRegistry _registry;
-    private readonly INetworkStatus _networkStatus;
+    private readonly IServerConnection _server;
     private readonly ICache _cache;
     private readonly IOutbox _outbox;
     private readonly IEventBus _eventBus;
     private readonly IServiceProvider _sp;
     private readonly YFex.Resilience.IResiliencePipelineFactory? _pipelineFactory;
-    // Stage 2 principal (D29): the remote caller's CallContext, else the host's IPrincipalAccessor.
+    // Stage 2 (D29 + authorization-consolidation 04 §2): the caller (CallContext, else the host's IPrincipalAccessor) and the
+    // ONE message gate (IMessageAuthorization) — full check; fails at construction when requirements exist without a gate.
     private readonly CallPrincipalSource _principal;
 
     public LocalDispatcher(
         IHandlerInvoker invoker,
         CompiledMessagingRegistry registry,
-        INetworkStatus networkStatus,
+        IServerConnection server,
         ICache cache,
         IOutbox outbox,
         IEventBus eventBus,
@@ -46,13 +47,13 @@ public sealed class LocalDispatcher : IDispatcher
         // A ValidatingHandlerInvoker (server) would repeat stages 1/5 that this dispatcher already runs.
         _invoker = invoker is ValidatingHandlerInvoker validating ? validating.Inner : invoker;
         _registry = registry;
-        _networkStatus = networkStatus;
+        _server = server;
         _cache = cache;
         _outbox = outbox;
         _eventBus = eventBus;
         _sp = sp;
         _pipelineFactory = pipelineFactory;
-        _principal = new CallPrincipalSource(sp);
+        _principal = new CallPrincipalSource(sp, registry);
     }
 
     // â”€â”€ Query â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -67,14 +68,15 @@ public sealed class LocalDispatcher : IDispatcher
         if (!MessagePipeline.CheckShape(in query, out var shape))
             return CacheableQueryResult<TResult>.ValidationProblem(shape);
 
-        if (!_networkStatus.IsConnected)
+        if (!_server.IsConnected)
             return await OfflineQueryAsync<TQuery, TResult>(query, ct).ConfigureAwait(false);
 
         _registry.Queries.TryGetValue(typeof(TQuery), out var policy);
 
         // Stages (1 above) → 2 → 3–4 → 5 (09 §1): authorize, situation + rules (queries never reject on the verdict), context rules.
-        if (!_principal.Authorize(policy?.Authorize, query!))
-            return CacheableQueryResult<TResult>.Unauthorized();
+        var verdict = await _principal.AuthorizeAsync(query!, ct).ConfigureAwait(false);
+        if (!verdict.IsAllowed)
+            return Error.From(verdict);
 
         RulesOutcome rules = default;
         if (policy?.Rules is { } ruleStage) rules = await ruleStage.RunAsync(query!, _sp, ct).ConfigureAwait(false);
@@ -147,7 +149,7 @@ public sealed class LocalDispatcher : IDispatcher
         TCommand cmd, CancellationToken ct = default)
         where TCommand : ICommand<TResult>
     {
-        if (!_networkStatus.IsConnected)
+        if (!_server.IsConnected)
             return await OfflineCommandAsync<TCommand, TResult>(cmd, ct).ConfigureAwait(false);
 
         _registry.Commands.TryGetValue(typeof(TCommand), out var policy);
@@ -156,15 +158,16 @@ public sealed class LocalDispatcher : IDispatcher
         if (!MessagePipeline.CheckShape(in cmd, out var shape))
             return QueueableResult<TResult>.Invalid(shape);
 
-        if (!_principal.Authorize(policy?.Authorize, cmd!))
-            return QueueableResult<TResult>.Unauthorized("Unauthorized.");
+        var verdict = await _principal.AuthorizeAsync(cmd!, ct).ConfigureAwait(false);
+        if (!verdict.IsAllowed)
+            return Error.From(verdict);
 
         // Stages 3–4 (09 §6): situation + rules; Denied / approval required / mismatch policy reject here.
         RulesOutcome rules = default;
         if (policy?.Rules is { } ruleStage)
         {
             rules = await ruleStage.RunAsync(cmd!, _sp, ct).ConfigureAwait(false);
-            if (rules.Error is { } rejected) return rejected;
+            if (rules.Error.HasValue) return rules.Error.Value;
         }
 
         if (policy?.Validation is { } contextRules)
@@ -243,7 +246,7 @@ public sealed class LocalDispatcher : IDispatcher
         TCommand cmd, CancellationToken ct = default)
         where TCommand : ICommand
     {
-        if (!_networkStatus.IsConnected)
+        if (!_server.IsConnected)
             return await OfflineCommandVoidAsync(cmd, ct).ConfigureAwait(false);
 
         _registry.Commands.TryGetValue(typeof(TCommand), out var policy);
@@ -252,15 +255,16 @@ public sealed class LocalDispatcher : IDispatcher
         if (!MessagePipeline.CheckShape(in cmd, out var shape))
             return QueueableResult.Invalid(shape);
 
-        if (!_principal.Authorize(policy?.Authorize, cmd!))
-            return QueueableResult.Unauthorized("Unauthorized.");
+        var verdict = await _principal.AuthorizeAsync(cmd!, ct).ConfigureAwait(false);
+        if (!verdict.IsAllowed)
+            return Error.From(verdict);
 
         // Stages 3–4 (09 §6).
         RulesOutcome rules = default;
         if (policy?.Rules is { } ruleStage)
         {
             rules = await ruleStage.RunAsync(cmd!, _sp, ct).ConfigureAwait(false);
-            if (rules.Error is { } rejected) return rejected;
+            if (rules.Error.HasValue) return rules.Error.Value;
         }
 
         if (policy?.Validation is { } contextRules)

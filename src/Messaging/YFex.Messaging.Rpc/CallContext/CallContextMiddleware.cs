@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Security.Claims;
 using ActualLab.Rpc;
 using ActualLab.Rpc.Infrastructure;
@@ -16,14 +15,17 @@ namespace YFex.Messaging.Rpc;
 
 /// <summary>
 /// Resolves the <see cref="CallContext"/> of an inbound call from the configured sources and caches the caller's
-/// <see cref="IAuthContext"/> on its <see cref="CallIdentity"/> until <see cref="IPermissionsVersions"/> changes.
+/// <see cref="IAuthorizationContext"/> on its <see cref="CallIdentity"/> until <see cref="IPermissionVersions"/> changes. A miss
+/// goes through the cross-request <see cref="AuthorizationContextCache"/> (when YFex.Authorization is registered), so another
+/// connection of the same user at the same version reuses the resolved caller.
 /// </summary>
 internal sealed class CallContextResolver
 {
     private readonly ICallIdentitySource[] _sources;
     private readonly bool _tenant;
-    private readonly IAuthContextFactory? _factory;
-    private readonly IPermissionsVersions _versions;
+    private readonly IAuthorizationContextFactory? _factory;
+    private readonly AuthorizationContextCache? _cache;
+    private readonly IPermissionVersions _versions;
     private readonly TimeProvider _time;
 
     public CallContextResolver(CallContextServerBuilder options, IServiceProvider services)
@@ -31,8 +33,9 @@ internal sealed class CallContextResolver
         _sources = new ICallIdentitySource[options.Sources.Count];
         for (int i = 0; i < _sources.Length; i++) _sources[i] = options.Sources[i](services);
         _tenant = options.Tenant;
-        _factory = services.GetService<IAuthContextFactory>();
-        _versions = services.GetRequiredService<IPermissionsVersions>();
+        _factory = services.GetService<IAuthorizationContextFactory>();
+        _cache = services.GetService<AuthorizationContextCache>();
+        _versions = services.GetRequiredService<IPermissionVersions>();
         _time = services.GetService<TimeProvider>() ?? TimeProvider.System;
     }
 
@@ -51,20 +54,30 @@ internal sealed class CallContextResolver
         }
 
         var caller = chosen ?? fallback;
-        var auth = chosen is null ? CallContext.Anonymous : AuthFor(chosen);
+        var auth = chosen is null ? CallContext.Anonymous : await AuthForAsync(chosen, ct).ConfigureAwait(false);
         return new CallContext(auth, caller?.Scope ?? default, _tenant, caller?.Culture);
     }
 
-    private IAuthContext AuthFor(CallIdentity identity)
+    private ValueTask<IAuthorizationContext> AuthForAsync(CallIdentity identity, CancellationToken ct)
     {
         long version = identity.Subject is { } subject ? _versions.Get(subject) : 0;
-        if (identity.Resolved is { } resolved && resolved.Version == version) return resolved.Auth;
+        if (identity.Resolved is { } resolved && resolved.Version == version) return new(resolved.Caller);
+        return ResolveAuthAsync(identity, version, ct);
+    }
 
-        IAuthContext auth;
-        // Tenant-scoped grants (IScopedPermissionProvider) are resolved inside the caller's tenant.
+    private async ValueTask<IAuthorizationContext> ResolveAuthAsync(CallIdentity identity, long version, CancellationToken ct)
+    {
+        IAuthorizationContext auth;
+        // Tenant-scoped grants (ScopedClaimSource, store-backed sources) are resolved inside the caller's tenant.
         using (_tenant ? ScopeOverride.Enter(identity.Scope) : default)
-            auth = _factory?.Create(identity.Principal, identity.Token)
-                ?? new AuthContext(identity.Principal, FrozenSet<PermissionKey>.Empty, identity.Token);
+        {
+            if (_cache is not null)
+                auth = await _cache.GetAsync(identity.Principal, identity.Token, version, ct).ConfigureAwait(false);
+            else if (_factory is not null)
+                auth = await _factory.CreateAsync(identity.Principal, identity.Token, version, ct).ConfigureAwait(false);
+            else
+                auth = new AuthorizationContext(identity.Principal, PermissionSet.Empty, identity.Token, version: version);
+        }
         identity.Resolved = new CallIdentity.ResolvedAuth(auth, version);
         return auth;
     }
@@ -95,6 +108,7 @@ public sealed class CallContextMiddleware : IRpcMiddleware
     private readonly IServiceProvider _services;
     private CallContextResolver? _resolver;
     private CompiledMessagingRegistry? _registry;
+    private CallPrincipalSource? _gate;
 
     public CallContextMiddleware(IServiceProvider services) => _services = services;
 
@@ -108,24 +122,24 @@ public sealed class CallContextMiddleware : IRpcMiddleware
     private CompiledMessagingRegistry Registry => LazyInitializer.EnsureInitialized(ref _registry,
         () => _services.GetRequiredService<CompiledMessagingRegistry>());
 
+    // The one message gate (fails when the registry declares requirements the gate does not know).
+    private CallPrincipalSource Gate => LazyInitializer.EnsureInitialized(ref _gate,
+        () => new CallPrincipalSource(_services, Registry));
+
     public Func<RpcInboundCall, Task<T>> Create<T>(RpcMiddlewareContext<T> context, Func<RpcInboundCall, Task<T>> next)
     {
         var method = context.MethodDef;
         if (method.IsSystem) return next;
 
         var parameters = method.Parameters;
-        Func<ClaimsPrincipal, object, bool>? authorize = null;
+        bool authorize = false;
         int variantIndex = -1;
         CacheScope scope = CacheScope.Global;
         if (parameters.Length > 0)
         {
             var messageType = parameters[0].ParameterType;
-            if (Registry.Commands.TryGetValue(messageType, out var command)) authorize = command.Authorize;
-            else if (Registry.Queries.TryGetValue(messageType, out var query))
-            {
-                authorize = query.Authorize;
-                scope = query.Scope;
-            }
+            authorize = Gate.Authorization?.HasPolicy(messageType) == true;
+            if (Registry.Queries.TryGetValue(messageType, out var query)) scope = query.Scope;
             // Generated compute queries: Task<Result<T>> Name(TQuery q, string? variant, CancellationToken ct).
             if (parameters.Length == 3 && parameters[1].ParameterType == typeof(string) && parameters[1].Name == "variant")
                 variantIndex = 1;
@@ -136,7 +150,7 @@ public sealed class CallContextMiddleware : IRpcMiddleware
     }
 
     private async Task<T> InvokeAsync<T>(RpcInboundCall call, Func<RpcInboundCall, Task<T>> next,
-        Func<ClaimsPrincipal, object, bool>? authorize, int variantIndex, CacheScope scope, bool isPermissions)
+        bool authorize, int variantIndex, CacheScope scope, bool isPermissions)
     {
         var context = await Resolver.ResolveAsync(call, call.CallCancelToken).ConfigureAwait(false);
         using var active = context.Enter();
@@ -144,15 +158,16 @@ public sealed class CallContextMiddleware : IRpcMiddleware
         var arguments = call.Arguments;
         if (arguments is not null)
         {
-            if (authorize is not null && arguments.Get0Untyped() is { } message)
+            if (authorize && arguments.Get0Untyped() is { } message)
             {
                 // Stage 1 → 2 (09 §1). Coercion replaces the argument so the compute-cache key is the clamped query too.
                 var coerced = ObjectValidation.Coerce(message);
                 if (!ReferenceEquals(coerced, message)) arguments.SetUntyped(0, message = coerced);
                 if (MessagePipeline.CheckShape(message, out _))
                 {
-                    if (!CallAuthorization.Authorize(authorize, message, context.Auth))
-                        return RpcErrorResults<T>.From(new Error(ErrorType.Unauthorized, "Unauthorized."));
+                    var verdict = await Gate.Authorization!.AuthorizeAsync(message.GetType(), message, context.Caller, call.CallCancelToken)
+                        .ConfigureAwait(false);
+                    if (!verdict.IsAllowed) return RpcErrorResults<T>.From(Error.From(verdict));
                     context.AuthorizedMessage = message;
                 }
             }

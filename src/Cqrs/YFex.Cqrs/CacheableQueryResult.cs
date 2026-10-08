@@ -78,9 +78,10 @@ public readonly struct CacheableQueryResult<T> : IUnion, IResult
 
     // ── Helpers (mirror Result<T>) ────────────────────────────────────────────
     public static CacheableQueryResult<T> Ok(T value) => new(new Fresh<T>(value));
-    public static Error Fail(string message = "") => new(ErrorType.Fail, message);
-    public static Error NotFound(string message = "") => new(ErrorType.NotFound, message);
-    public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
-    public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error Fail(string message = "") => new Failed(message);
+    public static Error NotFound(string message = "") => new NotFound(message);
+    public static Error Unauthenticated(string message = "Authentication required.") => new Unauthenticated(message);
+    public static Error Forbidden(in global::YFex.Authorization.Public.Denial denial) => new Forbidden(denial);
+    public static Error ValidationProblem(string message) => new Error(new ValidationProblem(default)).WithMessage(message);
     public static Error ValidationProblem(in ValidationResult result) => Error.Validation(result);
 }

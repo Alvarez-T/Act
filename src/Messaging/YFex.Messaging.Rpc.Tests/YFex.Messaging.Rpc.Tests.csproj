@@ -44,6 +44,8 @@
     <ProjectReference Include="..\YFex.Messaging.Rpc.Generator\YFex.Messaging.Rpc.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\Validation\YFex.Validation.Generator\YFex.Validation.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\State\YFex.State.Generator\YFex.State.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <!-- ShopPermissions is a [PermissionCatalog] (authorization-consolidation 03 §1). -->
+    <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization.Generator\YFex.Authorization.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

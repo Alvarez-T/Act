@@ -30,7 +30,7 @@ public class RulesStageTests
         var result = await f.Dispatcher.CommandAsync<CloseCheckout, Money>(Card() with { Pay = PayKind.Cash });
 
         result.TryGetError(out var error).Should().BeTrue();
-        error.Type.Should().Be(ErrorType.ValidationProblem);
+        error.Kind.Should().Be(ErrorKind.ValidationProblem);
         error.Violations[0].Code.Value.Should().Be("rules.limit.max");
         error.Violations[0].Path.ToString().Should().Be("Installments");
         f.Log.Entries.Should().Equal("gather");                               // context rules and handler never ran
@@ -53,15 +53,16 @@ public class RulesStageTests
         var first = await f.Dispatcher.CommandAsync<CloseCheckout, Money>(Card(discount: 8));
 
         first.TryGetError(out var error).Should().BeTrue();
-        error.Type.Should().Be(ErrorType.ApprovalRequired);
-        error.Approvals.Requires("sales.discount.override").Should().BeTrue();
-        error.DecisionFingerprint.Should().NotBe(0UL);
+        error.Kind.Should().Be(ErrorKind.ApprovalRequired);
+        error.TryGetValue(out ApprovalRequired approval).Should().BeTrue();
+        approval.Approvals.Requires(CheckoutPermissions.DiscountOverride).Should().BeTrue();
+        approval.DecisionFingerprint.Should().NotBe(0UL);
 
         // Manager approves THIS outcome (server-issued HMAC token), the client resends with the token.
-        var token = f.Tokens.Issue("mgr42", "sales.discount.override", error.DecisionFingerprint, DateTimeOffset.UtcNow);
+        var token = f.Tokens.Issue("mgr42", "sales.discount.override", approval.DecisionFingerprint, DateTimeOffset.UtcNow);
         var approved = await f.Dispatcher.CommandAsync<CloseCheckout, Money>(Card(discount: 8) with
         {
-            DecisionFingerprint = error.DecisionFingerprint, Approvals = [token],
+            DecisionFingerprint = approval.DecisionFingerprint, Approvals = [token],
         });
         approved.TryGetValue(out Money final).Should().BeTrue();
         final.Should().Be(new Money(920));
@@ -69,7 +70,7 @@ public class RulesStageTests
         // Same token for a bigger discount (another outcome) is rejected.
         var abused = await f.Dispatcher.CommandAsync<CloseCheckout, Money>(Card(discount: 12) with { Approvals = [token] });
         abused.TryGetError(out var again).Should().BeTrue();
-        again.Type.Should().Be(ErrorType.ApprovalRequired);
+        again.Kind.Should().Be(ErrorKind.ApprovalRequired);
     }
 
     [Fact]
@@ -108,7 +109,7 @@ public class RulesStageTests
 
         var act = () => f.Invoker.InvokeAsync<Money>(Card(discount: 8), CancellationToken.None);
         var thrown = await act.Should().ThrowAsync<ErrorResultException>();
-        thrown.Which.TypedError.Type.Should().Be(ErrorType.ApprovalRequired);
+        thrown.Which.TypedError.Kind.Should().Be(ErrorKind.ApprovalRequired);
 
         (await f.Invoker.InvokeAsync<Money>(Card(discount: 1), CancellationToken.None)).Should().Be(new Money(990));
         f.Log.Entries.Should().EndWith("ruled-handler");

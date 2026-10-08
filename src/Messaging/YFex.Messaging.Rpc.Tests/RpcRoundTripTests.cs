@@ -35,7 +35,7 @@ public class RpcRoundTripTests(RpcFixture fx) : IClassFixture<RpcFixture>
         var r = await fx.Contract.CreateCustomerAsync(new CreateCustomer("", "not-an-email", "1"));
 
         r.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.ValidationProblem);
+        e.Kind.Should().Be(ErrorKind.ValidationProblem);
         e.Violations.AsSpan().ToArray().Select(v => $"{v.Path}:{v.Code}").Should().Equal("Name:required", "Email:email", "Document:len");
         fx.Handler.Calls.Should().Be(calls);
     }

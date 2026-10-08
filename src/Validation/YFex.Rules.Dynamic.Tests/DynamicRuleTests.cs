@@ -146,7 +146,7 @@ public class DynamicRuleTests
     public void App_functions_and_contracts()
     {
         // A domain contract declared by a library: isWeekend(date) → bool. Rules may reference it…
-        var contract = RuleFunction.Contract("isWeekend", DynType.Bool, [new("date", DynType.Date)], "True on Saturday and Sunday.");
+        var contract = ExprFunction.Contract("isWeekend", ExprType.Bool, [new("date", ExprType.Date)], "True on Saturday and Sunday.");
         var (declared, _) = Host(FunctionCatalog.BuiltIn.With(contract));
         const string Weekend = """
             { "code": "tenant.weekend", "group": "Promo", "when": { "isWeekend": [ { "var": "$effectiveDate" } ] },

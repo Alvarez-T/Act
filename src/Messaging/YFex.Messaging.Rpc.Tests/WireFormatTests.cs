@@ -30,7 +30,7 @@ public class WireFormatTests
     {
         var back = RoundTrip(Rich);
 
-        back.Type.Should().Be(ErrorType.ValidationProblem);
+        back.Kind.Should().Be(ErrorKind.ValidationProblem);
         back.Message.Should().Be(Rich.Message);
         back.Violations.Count.Should().Be(3);
         for (int i = 0; i < 3; i++)
@@ -56,25 +56,55 @@ public class WireFormatTests
             new ViolationOrigin(ViolationSource.Rule, 3));
         var rowId = Guid.NewGuid();
         var error = Error.ApprovalRequired(
-            YFex.Rules.ApprovalRequestList.From([new YFex.Rules.ApprovalRequest("sales.discount.override", reason,
+            YFex.Rules.ApprovalRequestList.From([new YFex.Rules.ApprovalRequest(YFex.Authorization.Public.Permission.Parse("sales.discount.override"), reason,
                 new YFex.Rules.RuleRef("sale.manual-discount", 2, 1, 42, rowId))]),
             0xDEADBEEFCAFEUL, ViolationList.From([reason]));
 
         var back = RoundTrip<QueueableResult<int>>(error);
 
         back.TryGetError(out var e).Should().BeTrue();
-        e.Type.Should().Be(ErrorType.ApprovalRequired);
-        e.DecisionFingerprint.Should().Be(0xDEADBEEFCAFEUL);
+        e.Kind.Should().Be(ErrorKind.ApprovalRequired);
+        e.TryGetValue(out ApprovalRequired a).Should().BeTrue();
+        a.DecisionFingerprint.Should().Be(0xDEADBEEFCAFEUL);
         e.Violations.Count.Should().Be(1);
-        e.Approvals.Count.Should().Be(1);
-        e.Approvals[0].Permission.Should().Be("sales.discount.override");
-        e.Approvals[0].Rule.Should().Be(new YFex.Rules.RuleRef("sale.manual-discount", 2, 1, 42, rowId));
-        e.Approvals[0].Reason.Args[1].Should().Be(RawValue.From(Percentual.FromPercentage(8)));
+        a.Approvals.Count.Should().Be(1);
+        a.Approvals[0].Permission.Value.Should().Be("sales.discount.override");   // the id travels unchanged
+        a.Approvals[0].Rule.Should().Be(new YFex.Rules.RuleRef("sale.manual-discount", 2, 1, 42, rowId));
+        a.Approvals[0].Reason.Args[1].Should().Be(RawValue.From(Percentual.FromPercentage(8)));
     }
 
     [Fact]
+    public void Forbidden_error_round_trips_the_denial()
+    {
+        var denial = new YFex.Authorization.Public.Denial(YFex.Authorization.Public.DenialKind.MissingPermission,
+            ShopPermissions.CreateCustomer, YFex.Authorization.Public.PolicyName.Parse("cashier-open"), "code-1");
+        var back = RoundTrip<Error>(new Forbidden(denial));
+
+        back.Kind.Should().Be(ErrorKind.Forbidden);
+        back.TryGetValue(out Forbidden f).Should().BeTrue();
+        f.Denial.Should().Be(denial);
+        back.Message.Should().Be("Requires permission 'shop.customers.create'.");
+    }
+
+    [Fact]
+    public void Unauthenticated_not_found_failed_and_conflict_round_trip()
+    {
+        RoundTrip<Error>(new Unauthenticated("login again")).Should().Match<Error>(e => e.Kind == ErrorKind.Unauthenticated && e.Message == "login again");
+        RoundTrip<Error>(new NotFound("gone")).Kind.Should().Be(ErrorKind.NotFound);
+        RoundTrip<Error>(new Failed("boom")).Message.Should().Be("boom");
+        var conflict = RoundTrip<Error>(new Conflict("stale", ViolationList.From([new Violation(FieldPath.Empty, "rules.decision.mismatch")])));
+        conflict.TryGetValue(out Conflict c).Should().BeTrue();
+        c.Message.Should().Be("stale");
+        c.Violations.Count.Should().Be(1);
+    }
+
+    [Fact]
+    public void Custom_message_survives_the_round_trip()
+        => RoundTrip<Error>(new Error(new ValidationProblem(default)).WithMessage("custom")).Message.Should().Be("custom");
+
+    [Fact]
     public void Default_error_round_trips()
-        => RoundTrip(default(Error)).Type.Should().Be(ErrorType.None);
+        => RoundTrip(default(Error)).Kind.Should().Be(ErrorKind.None);
 
     [Fact]
     public void Result_unions_round_trip_every_case()

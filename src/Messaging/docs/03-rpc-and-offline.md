@@ -49,10 +49,10 @@ services.AddYFexMessagingRpcClient(o =>
 - **`IOutbox`** + **`ISyncFailureLog`** — offline command queue and its dead-letter log.
 - **`SyncStatus`** — bindable connectivity/sync singleton.
 - **`RpcEventBus`** — composite `IEventBus` that forwards events over the wire *and* delivers them locally.
-- **`INetworkStatus`** — projected from the Fusion connection state.
+- **`IServerConnection`** (was `INetworkStatus`) — projected from the Fusion connection state.
 - **`OutboxReplayer`** — hosted service that drains the outbox when the connection returns.
 
-By default storage is in-memory. Add a durable backend (`AddYFexSqliteStorage`, `AddYFexIndexedDBStorage`) so the outbox and cache survive restarts — see [`04-storage-and-backends.md`](04-storage-and-backends.md).
+By default storage is in-memory. Register a durable `IKeyValueStore` (SQLite, `AddYFexIndexedDbStore()`) before the client so the outbox and failure log survive restarts — see [`04-storage-and-backends.md`](04-storage-and-backends.md).
 
 > `EnableServerPushedEvents()` opts into the server→client event stream (`FusionEventStream` → `IEventBus` bridge) so the server can push events to connected clients.
 
@@ -75,7 +75,11 @@ app.MapYFexMessagingRpc();          // maps the /rpc/ws WebSocket endpoint
 
 ### `IOutbox` — offline command queue
 
-Commands implementing `IQueueable` are enqueued as an `OutboxEntry` (idempotency key, serialized MemoryPack payload, attempt count, last failure). `OutboxReplayer` drains them on reconnect. Overflow past `MaxEntries` (or TTL/size caps) is moved to the failure log rather than silently dropped.
+Commands implementing `IQueueable` are enqueued as an `OutboxEntry`: idempotency key, serialized payload, attempt count, last failure, and (offline Phase 0) **who queued it and in which scope** (`Subject`, `Scope` via `IOutboxCallerCapture`) plus a persisted, monotonic **`Sequence`**. `OutboxReplayer` drains them on reconnect **in sequence order** (never by wall clock). Overflow past `MaxEntries` is moved to the failure log rather than silently dropped. Entries older than `OutboxEntryTtl` are **kept and replayed** with a warning (`OutboxOptions.KeepExpiredEntries = true`, default) — a queued sale must not silently become a dead letter; set it to `false` for the old "expired → failure log" behaviour.
+
+**At most once on the server.** Every command dispatch sends an idempotency key (`yfex-idempotency` RPC header); a replay re-sends the key its entry was queued with, and the scope captured at enqueue time. The server (`IdempotentExecution`, run by `ValidatingHandlerInvoker` before validation) executes a key once and answers duplicates with the stored result — so a replay after a lost reply does not sell twice. A configured business key (`.IdempotencyKey(c => …)`) takes precedence over the header. `InMemoryIdempotencyStore` is the default (one process, 24 h); farms and restarts need a shared `IIdempotencyStore`.
+
+**Durable by default with a durable store.** With a durable `IKeyValueStore` registered (SQLite, IndexedDB…) the client uses `StorageBackedOutbox` + `StorageBackedSyncFailureLog`; with `MemoryKeyValueStore` or `Storage = ClientStorageBackend.InMemory` it uses the in-memory pair ([04](04-storage-and-backends.md)).
 
 ```csharp
 public interface IOutbox
@@ -98,11 +102,14 @@ Cacheable queries store their result under a dispatcher-generated key (`query:{T
 
 Singleton implementing `INotifyPropertyChanged`. Bind these directly in the UI:
 
-`IsOffline`, `IsSyncing`, `PendingCommandCount`, `LastSyncAt`, `LastSyncError`. Updated by the replayer and the network-status projection.
+`IsOffline`, `IsSyncing`, `PendingCommandCount`, `LastSyncAt`, `LastSyncError`, `ReplaysUnderAnotherSubject` (a command queued by one user replayed while another is signed in — the identity of the connection is still the current user's until the offline envelope of `docs/internal/offline` Phase 3). Updated by the replayer and the network-status projection.
 
-### `INetworkStatus`
+### `IServerConnection` (was `INetworkStatus`, networking ⚑N4)
 
-`IsConnected` + a `State` enum (`Connected`, `Disconnected`, `Reconnecting`, `Syncing`) + a `Changed` event. Client uses a Fusion-backed projection; server uses `AlwaysConnectedNetworkStatus`.
+"Is our RPC connection to the server up?" — `State` (`ServerConnectionState`: `Connected`, `Reconnecting`, `Disconnected`), `IsConnected`
+and `Changed` with `(Previous, Current)`. Client: `FusionServerConnection` (one per Fusion client peer); server: `AlwaysConnectedServer`.
+The old `INetworkStatus`/`SyncState`/`AlwaysConnectedNetworkStatus`/`NetworkStatusProvider`/`NetworkStatusChangedEvent` are removed (2026-10-07).
+Machine-level network state is a different question: `YFex.Networking.INetworkConditions` (YFex core; `docs/internal/networking`).
 
 ### Conflict resolution
 

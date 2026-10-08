@@ -91,9 +91,7 @@ builder.Services.AddYFexMessaging();
 builder.Services.AddYFexMessagingRpcClient(opts =>
 {
     opts.WebSocketEndpoint = new Uri("wss://api.example.com");
-    opts.Storage = ClientStorageBackend.Sqlite;   // or IndexedDb, Auto, InMemory
-    opts.Encryption = EncryptionMode.AesGcm;
-    opts.EncryptionKeySource = EncryptionKeySource.OsKeyStore;
+    opts.Storage = ClientStorageBackend.Auto;     // durable outbox when a durable IKeyValueStore is registered; InMemory forces memory
     opts.OutboxEntryTtl = TimeSpan.FromDays(7);
 });
 ```
@@ -104,7 +102,7 @@ builder.Services.AddYFexMessagingRpcClient(opts =>
 - `IClientCache`, `IOutbox`, `ISyncFailureLog`
 - `SyncStatus` (bindable singleton)
 - `IDispatcher` (`FusionMessageBus`)
-- `INetworkStatus` (Fusion `RpcPeer.ConnectionState` projection)
+- `IServerConnection` (Fusion `RpcPeer.ConnectionState` projection: is our RPC link to the server up?). Machine-level network state (no cable / LAN only / captive portal / internet, metered) is `YFex.Networking.INetworkConditions` from YFex core (repo YFex.Networking)
 - `OutboxReplayer` (hosted service that drains the queue on reconnect)
 
 ### Server Setup
@@ -490,8 +488,8 @@ public sealed record CommandReplayedEvent(
 public sealed record SyncFailureEvent(
     Guid IdempotencyKey, string CommandTypeName, string Reason) : IEvent;
 
-// Network connectivity changed
-public sealed record NetworkStatusChangedEvent(SyncState Previous, SyncState Current) : IEvent;
+// The RPC connection to the server changed state (replaced NetworkStatusChangedEvent)
+public sealed record ServerConnectionChangedEvent(ServerConnectionState Previous, ServerConnectionState Current) : IEvent;
 ```
 
 ### Storage Backends
@@ -533,13 +531,10 @@ services.AddYFexMessagingRpcClient(opts =>
 AES-256-GCM encryption decorator wraps any storage backend:
 
 ```csharp
-services.AddYFexEncryptedStorage(opts =>
-{
-    opts.KeySource = EncryptionKeySource.OsKeyStore; // DPAPI/Keychain/libsecret
-});
+services.AddYFexStorageEncryption();   // YFex.Persistence.Encryption — call after registering the IKeyValueStore
 ```
 
-Blob format: `[version:1][nonce:12][ciphertext:N][tag:16]`
+The storage key is random, generated once and kept wrapped by the OS (TPM-backed CNG key on Windows, DataProtection elsewhere), so it is the same after every restart. Blob format `0x02`: `[version:1][nonce:12][ciphertext:N][tag:16]`, authenticated together with `"yfex.store|" + store name + "|" + key`, so a value moved to another key or store does not decrypt. Details: `src/Messaging/docs/04-storage-and-backends.md`.
 
 Keys remain plaintext for indexability. Only values are encrypted. The AEAD authentication tag detects tampering.
 
@@ -899,14 +894,15 @@ If queued commands are never replayed after reconnection, ensure `AddYFexMessagi
 | `AlwaysRefetchOnResume` | Stop receiving updates | Force fresh fetch regardless of staleness |
 | `FreezeOnSuspend` | Freeze cached value | No auto-refresh |
 
-### SyncState Values
+### ServerConnectionState Values
 
 | Value | Meaning |
 |---|---|
-| `Connected` | Online, all systems operational |
-| `Disconnected` | No network connectivity |
-| `Reconnecting` | Attempting to re-establish connection |
-| `Syncing` | Connected, outbox replay in progress |
+| `Connected` | The RPC connection to the server is up |
+| `Reconnecting` | Not connected yet, or connecting again after a drop |
+| `Disconnected` | Not connected; the last attempt failed |
+
+`SyncState` (with the never-produced `Syncing`) is obsolete; outbox replay progress is `SyncStatus.IsSyncing`.
 
 ### ClientStorageBackend Values
 
@@ -931,16 +927,19 @@ If queued commands are never replayed after reconnection, ensure `AddYFexMessagi
 | `OsKeyStore` | DPAPI (Windows), Keychain (macOS), libsecret (Linux) |
 | `Provided` | Key supplied by application code |
 
-### INetworkStatus Interface
+### IServerConnection Interface
 
 ```csharp
-public interface INetworkStatus
+public interface IServerConnection          // replaced INetworkStatus (networking ⚑N4; the old name is removed)
 {
-    bool IsConnected { get; }
-    SyncState State { get; }
-    event Action<SyncState>? Changed;
+    ServerConnectionState State { get; }
+    bool IsConnected => State == ServerConnectionState.Connected;
+    event Action<ServerConnectionChange>? Changed;   // (Previous, Current)
 }
 ```
+
+Server and in-process hosts use `AlwaysConnectedServer.Instance`. A second server peer (e.g. the offline site broker) gets its own
+`new FusionServerConnection(hub, peerRef)`.
 
 ### All Sync Lifecycle Events
 
@@ -949,7 +948,7 @@ public interface INetworkStatus
 | `CommandQueuedEvent` | Command enqueued to outbox (offline) |
 | `CommandReplayedEvent` | Queued command replayed (success or failure) |
 | `SyncFailureEvent` | Command moved to failure log permanently |
-| `NetworkStatusChangedEvent` | Connectivity state transition |
+| `ServerConnectionChangedEvent` | The RPC connection to the server changed state (real previous state) |
 
 ### Handler Interfaces
 

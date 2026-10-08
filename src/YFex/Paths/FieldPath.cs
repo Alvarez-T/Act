@@ -15,8 +15,21 @@ namespace YFex;
 /// <c>default</c> = object level (form-level summary). Used by violations, Composer bindings,
 /// Xml/fiscal element paths and UI binding paths.
 /// </summary>
-public readonly struct FieldPath : IEquatable<FieldPath>
+public readonly struct FieldPath : IEquatable<FieldPath>, global::YFex.Diagnostics.ILogValue<FieldPath>
 {
+    /// <summary>Logs the concrete path (<c>Lines[3].Quantity</c>) formatted on the stack; the template alone if it does not fit.</summary>
+    static void global::YFex.Diagnostics.ILogValue<FieldPath>.Write(in FieldPath value, ref global::YFex.Diagnostics.LogWriter writer, ushort field)
+    {
+        if (value.Template is null)
+        {
+            writer.WriteNull(field);
+            return;
+        }
+        Span<char> buffer = stackalloc char[256];
+        if (value.TryFormat(buffer, out int written)) writer.Write(field, buffer[..written]);
+        else writer.Write(field, value.Template);
+    }
+
     private FieldPath(string? template, in IndexPath indices)
     {
         Template = template;

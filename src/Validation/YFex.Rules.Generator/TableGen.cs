@@ -32,6 +32,8 @@ internal static class TableGen
                     if (v.Value is string s) editableAt.Add(s);
         string editableExpr = editableAt.Count == 0 ? "null" : "[" + string.Join(", ", editableAt.Select(Names.Literal)) + "]";
         string? guard = Names.Named<INamedTypeSymbol>(a, "Guardrail") is { } g ? Names.Of(g) : null;
+        string? publishPermission = PermissionArguments.Expression(a, "PublishPermission", ctx.SemanticModel, ct, out bool unresolvedPublish);
+        if (unresolvedPublish) diags.Add(DiagnosticInfo.Create("YFR0108", loc, type.Name, "PublishPermission"));
 
         var row = type.GetTypeMembers("Row").FirstOrDefault();
         if (row is null || situation is null)
@@ -89,7 +91,8 @@ internal static class TableGen
                 int k = Names.EnumValue(then.ConstructorArguments.FirstOrDefault());
                 directive = k >= 0 && k < DirectiveNames.Length ? DirectiveNames[k] : "None";
                 if (Names.HasNamed(then, "OnExceed")) onExceed = ExceedNames[Names.NamedEnum(then, "OnExceed")];
-                permission = Names.Named<string>(then, "ApprovalPermission");
+                permission = PermissionArguments.Expression(then, "ApprovalPermission", ctx.SemanticModel, ct, out bool unresolvedApproval);
+                if (unresolvedApproval) diags.Add(DiagnosticInfo.Create("YFR0108", m.Locations.FirstOrDefault(), type.Name, m.Name + ".ApprovalPermission"));
                 if (field.Length == 0) bound = null;
             }
 
@@ -160,7 +163,7 @@ internal static class TableGen
 
         return new TableModel(Names.Namespace(type), type.Name, Names.Of(type), Names.Containing(type), code,
             HitPolicies[hit < HitPolicies.Length && hit >= 0 ? hit : 0], Names.Named<string>(a, "Group"), Names.Named<string>(a, "RuleSet"),
-            Names.Named<int>(a, "Priority"), editableExpr, Names.Named<string>(a, "PublishPermission"), guard, Names.Named<bool>(a, "Complete"),
+            Names.Named<int>(a, "Priority"), editableExpr, publishPermission, guard, Names.Named<bool>(a, "Complete"),
             Names.Of(situation), schemaName, row.Name, Names.Of(row), Names.Find(row, Names.Validatable) is not null,
             hasDefault, isSpan, linesMember, lineType is null ? null : Names.Of(lineType),
             new EquatableArray<ColumnModel>(columns.ToArray()), LocationInfo.From(loc), new EquatableArray<DiagnosticInfo>(diags.ToArray()),
@@ -217,7 +220,7 @@ internal static class TableGen
         // Schema
         sb.Append("    public static global::YFex.Rules.TableSchema Schema { get; } = new(").Append(Names.Literal(t.Code)).Append(", ").Append(Names.Literal(t.SchemaName))
           .Append(", global::YFex.Rules.HitPolicy.").Append(t.HitPolicy).Append(", ").Append(t.Editable).Append(", ")
-          .Append(t.PublishPermission is null ? "null" : Names.Literal(t.PublishPermission)).Append(", isLineTable: ").Append(lineTable ? "true" : "false")
+          .Append(t.PublishPermission ?? "null").Append(", isLineTable: ").Append(lineTable ? "true" : "false")
           .Append(", complete: ").Append(t.Complete ? "true" : "false").AppendLine(",");
         sb.AppendLine("    [");
         foreach (var c in t.Columns)
@@ -277,7 +280,7 @@ internal static class TableGen
         {
             string raw = RawOf(c);
             string exceed = "global::YFex.Rules.Exceed." + (c.OnExceed ?? "Deny");
-            string perm = c.Permission is null ? "null" : Names.Literal(c.Permission);
+            string perm = c.Permission ?? "null";
             string path = c.Field.Length == 0 ? "global::YFex.FieldPath.Empty" : $"global::YFex.FieldPath.Of({Names.Literal(c.Field)})";
             switch (c.Directive)
             {
@@ -289,8 +292,14 @@ internal static class TableGen
                 case "Deny": sb.Append("        if (!string.IsNullOrEmpty(row.").Append(c.Member).Append(")) d.Deny(").Append(path).Append(", row.").Append(c.Member).AppendLine("!);"); break;
                 case "Warn": sb.Append("        if (!string.IsNullOrEmpty(row.").Append(c.Member).Append(")) d.Warn(").Append(path).Append(", row.").Append(c.Member).AppendLine("!);"); break;
                 case "RequireApproval":
-                    sb.Append("        if (!string.IsNullOrEmpty(row.").Append(c.Member).Append(")) d.RequireApproval(row.").Append(c.Member).Append("!, ").Append(path)
-                      .Append(", ").Append(Names.Literal(t.Code + ".approval")).AppendLine(");");
+                    // Row data names the permission (runtime-published). Publish rejects unknown ids (CheckRow); a malformed id that
+                    // reaches evaluation anyway denies instead of skipping the approval (fail closed).
+                    sb.Append("        if (!string.IsNullOrEmpty(row.").Append(c.Member).Append("))").AppendLine();
+                    sb.Append("        {").AppendLine();
+                    sb.Append("            if (global::YFex.Authorization.Public.Permission.TryParse(row.").Append(c.Member).Append(", null, out var __permission").Append(c.Member)
+                      .Append(")) d.RequireApproval(__permission").Append(c.Member).Append(", ").Append(path).Append(", ").Append(Names.Literal(t.Code + ".approval")).AppendLine(");");
+                    sb.Append("            else d.Deny(").Append(path).AppendLine(", \"authorization.permission.unknown\");");
+                    sb.Append("        }").AppendLine();
                     break;
             }
         }
@@ -302,6 +311,11 @@ internal static class TableGen
         sb.AppendLine("    {");
         if (t.RowValidatable) sb.Append("        ").Append(row).AppendLine(".Validate(in row, ref w);");
         if (t.GuardrailFqn is not null) sb.Append("        ").Append(t.GuardrailFqn).AppendLine(".Check(in row, ref w);");
+        // Approval permissions named by row data must be declared (authorization-consolidation ⚑Z2: ids resolved at publish).
+        foreach (var c in then)
+            if (c.Directive == "RequireApproval")
+                sb.Append("        if (!string.IsNullOrEmpty(row.").Append(c.Member).Append(") && !global::YFex.Authorization.Public.PermissionKey.TryGetDeclared(row.")
+                  .Append(c.Member).Append(", out _)) w.Add(global::YFex.FieldPath.Of(").Append(Names.Literal(c.Member)).AppendLine("), \"authorization.permission.unknown\");");
         sb.AppendLine("    }");
         sb.AppendLine();
 

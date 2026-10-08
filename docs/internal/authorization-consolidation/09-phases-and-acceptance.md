@@ -1,0 +1,501 @@
+# 09 — Migration phases and acceptance
+
+## 0. Working rules (every phase)
+
+1. **The ⚑Z decisions in the README must be confirmed first.** A phase that depends on an open decision does not start.
+2. `C:\Dev\YFex` is **not** a git repository: edits are live. Before a phase, copy every file the phase will touch to
+   `C:\Temp\authz-backup\<phase>\<relative path>`. Write multi-line edit scripts to `C:\Temp\yfex-edits\*.py` (heredocs mangle
+   backslashes and quotes).
+3. **Other sessions:** YFex.Logging Phase 2 will touch `YFex.Cqrs` (logging stage), `YFex.Messaging.Rpc` (`TracingHandlerInvoker`,
+   `CallContextMiddleware` propagation). Privacy Tier 1 is editing YFex core (`src/YFex/Privacy`) and `YFex/CLAUDE.md`. Before
+   editing a shared file, check its modification time (`find … -newermt`). If it changed in the last hours, re-read it and coordinate.
+   List every touched file in the implementation log below.
+4. Build/test with `--artifacts-path C:\Temp\authz-art -p:NuGetAudit=false` (RoselYn locks generator DLLs in `bin/`).
+5. After each phase, record test counts (before → after) in the log. A phase is done only when every listed suite is green, except
+   the 5 known NavigatR failures (01 §4).
+6. AOT: `YFex.Capabilities.AotSmoke` and `YFex.Validation.Smoke` publish with 0 trim/AOT warnings at the end of phases 1, 2, 5.
+
+## Phase 0 — Leaf contracts and `ValidityPeriod` (⚑Z1, ⚑Z2, ⚑Z3, ⚑Z13)
+
+- YFex core: `ValidityPeriod` (`src/YFex/ValidityPeriod.cs`, converters, `ILogValue`) + tests in `YFex.Tests`.
+- `YFex.Authorization.Public`: `ActorIdentity`, `ActorKind`, `ActorRelation`, `ActorScope`, `ActorContext` (AsyncLocal, `Enter`
+  returns a restoring activation) + tests (flow across `await`, nesting, restore).
+- **Leaf guard:** a test in Authorization.Tests asserts `.Public` references only `YFex` + BCL assemblies (no Tenancy, no DI).
+- `YFex.Rules.csproj` gains a reference to `.Public` (nothing uses it yet); `YFex/CLAUDE.md` layer rule: "Rules may reference
+  `YFex.Authorization.Public` only" (coordinate: the Privacy session also edits CLAUDE.md — edit only that line).
+
+**Acceptance:** every suite of 01 §4 has the same counts; `YFex.Tests` and Authorization.Tests = previous + new; no behaviour change.
+
+## Phase 1 — Authorization core upgrade (repo + mechanical renames in consumers)
+
+- Catalog syntax (⚑Z2): `[Permission("id", Name, Description)]` on `static partial Permission` properties; generator emits the
+  property bodies, `Ids` consts, `All`, `Manifest`, module-initializer registration. Migrate every existing catalog (test catalogs,
+  `ShopPermissions`, Capabilities/Search tests) and `Values.X` → `X`, attribute arguments → `Ids.X`.
+- `PermissionKey.Declare`/`Ordinal` + process interner; `PermissionSet` (+ builder); unknown token ids dropped and counted.
+- `[Union]` `Requirement`, `CompiledPolicy`, `AuthorizationVerdict`, `Denial`; evaluator `IsVisible/Authorize/AuthorizeAsync`.
+- `IPermissionSource` + built-in sources; roles resolved once into a case-insensitive role set (D4).
+- `IAuthorizationContext` rename (⚑Z4) everywhere (incl. `CallContext.Caller`); `Scope` as canonical text.
+- `IAuthorizationConfiguration`/`AuthorizationBuilder` moved to `.Public`; `PolicyKey → CompiledPolicy` registry built lazily from DI.
+- AspNetCore: `YFexAuthorizationMiddleware` + `AuthorizationContextCache`; accessor reads only (D6); problem details with reason.
+- Generator: merge all `[RequirePermission]`, view-model command rows, metadata-name VM detection, catalog properties,
+  AUTH006–007 (AUTH005 reserved, ⚑Z6).
+- New `YFex.Authorization.Testing` and `YFex.Authorization.Benchmarks` (⚑Z18; budgets of 03 §8).
+
+**Acceptance:** Authorization.Tests ≥ 41 + new (catalog syntax, sets, sources, verdicts, generator snapshots, analyzers);
+AspNetCore.Tests ≥ 3 + (401/403 reason, one context per request); budgets met; all consumer suites unchanged.
+
+## Phase 2a — One message gate (⚑Z5–⚑Z8, ⚑Z17)
+
+- Cqrs builder verbs record `Requirement`s; `.Authorize(Func<IAuthorizationContext,T,bool>)`, `.Authorize<TRequirement>()`,
+  `.RequirePolicy`, `.RequireAnyPermission`; delete `AuthorizerKind/AuthorizerDescriptor/ICommandAuthorizer/IQueryAuthorizer`,
+  `CommandPolicy.Authorize/QueryPolicy.Authorize`, `Build` evaluator parameters, `RequireRoles(string[])`.
+- `CqrsAuthorizationConfiguration` exported automatically (message attributes merged, ⚑Z6); `IMessageAuthorization` called by
+  LocalDispatcher, ValidatingHandlerInvoker, CallContextMiddleware, WolverineLocalDispatcher (full check) and FusionMessageBus (quick).
+- Delete `CallAuthorization` + `[ThreadStatic]`, `AddYFexCqrsAuthorization`. Fail-closed startup check.
+- Denials map to the **existing** `Error` for now (`ErrorType.Unauthorized` + message naming the missing permission) — the typed
+  cases arrive in 2b.
+- Authorization event descriptors (07 §5) + `Denied` emission through `Operations.MarkWith` (rate-limited per subject).
+
+**Acceptance (new tests):**
+- D1: requirements declared through `b.ForMessage<T>()`, through Cqrs configuration and through `[RequirePermission]` on a record
+  are denied on LocalDispatcher, on a real RPC round-trip (Messaging.Rpc.Tests fixture) and on Wolverine.
+- D3: `.RequirePolicy` with a registered handler allows and denies on dispatch; `.Authorize<TRequirement>()` sync + async.
+- D4: role case-insensitivity identical on every path. D5: an uncatalogued Cqrs permission fails startup, listing it.
+- `Denied` event captured with `LogCapture` (YFex.Logging.Testing) or a fake engine.
+- Counts: Messaging.Tests ≥ 150 (+2 skipped), Messaging.Rpc.Tests ≥ 41, Rules.Admin.Tests 22 (adapted to the new verbs).
+
+## Phase 2b — `[Union]` Cqrs `Error` (⚑Z11)
+
+- `Error` → `[Union]` tagged struct with `ErrorKind` and the cases of 03 §5.1; `Error.From(verdict)`; factories kept
+  (`Validation`, `ApprovalRequired`); `ErrorResultException` unchanged in shape.
+- Mechanical migration of the 114 `ErrorType` references (24 files: Cqrs, Messaging, Messaging.Rpc, Rules.Admin, Capabilities.Cqrs,
+  tests); `RpcResultFormatters` write tag + case payload (wire v3); `WireFormatTests` updated.
+- Client/VM helpers (`ApplyServer`, result extensions) switch on `Kind`.
+
+**Acceptance:** `Forbidden(Denial)` with the missing permission and `Unauthenticated` round-trip over RPC; `ApprovalRequired` and
+`ValidationProblem` round-trip unchanged in content; all suites of 2a still green with the same counts.
+
+## Phase 3 — Snapshots, versions, signals, actor writers (⚑Z9, ⚑Z3; split by decisions P1–P7, README)
+
+### 3a — ✅ DONE 2026-10-04
+
+- Move versions/signals/snapshot/context cache to Authorization; Rpc subscribes (invalidate `ICallPermissions`, disconnect on revoke).
+- `ICallPermissions` returns `PermissionSnapshot` (payload only, P2); regenerate and re-check the proxy golden test.
+- Client `UseServerPermissions()` → `SnapshotPrincipalAccessor`, **online only** (P1, P3).
+- `ActorContext` written by the adapters (HTTP, RPC, desktop session P4, client feed); Cqrs per-user cache scope reads it (P5).
+
+**Acceptance:** existing D29 tests (versioned reload, client refresh, revoke disconnect, anti-spoofing) pass unchanged in meaning;
+new: client sees server grants and follows a signalled change; desktop host signals without RPC; HTTP applies a signalled change
+on the next request; handlers run inside the caller's actor scope; a per-user query is never cached without a subject.
+
+### 3b — after YFex.Cryptography Phase 2 (signatures) and the offline bundle format
+
+- The server signs each snapshot it hands out as a `SignedBundle` (kind `authorization.snapshot`, offline 05 §2) through
+  YFex.Cryptography (`SignedPayload`, key rings, rotation); the client verifies before use and persists the signed bytes.
+- Validity in the envelope (default 72 h, configurable); checked against trusted time when `YFex.Time` exists (P7, `../time`).
+- Offline start uses a persisted snapshot only after an offline sign-in established the subject (P3, offline Phase 3).
+
+**Acceptance (moved from 3):** offline start within/after validity; **a tampered snapshot (permission added, validity extended,
+other subject) is rejected**.
+
+## Phase 4 — Rules, Rules.Admin, approvals (⚑Z2, ⚑Z12 as amended by crypto ⚑K12; decisions A1–A5, README)
+
+### 4a — ✅ DONE 2026-10-05 — no cryptography
+
+- Typed `Permission` in Rules directives/tables/`ApprovalRequest`; Rules.Dynamic resolves ids at publish (unknown id → violation).
+- `RuleAdminPermissions` catalog, typed options, gate requirements (`TablePublishRequirement` and friends); delete
+  `Demand/PermissionFor`; actor and approver ids are subjects, not display names.
+
+**Acceptance:** Rules.Tests 65, Rules.Admin.Tests ≥ 22, Messaging `RulesStageTests` green; new: unknown permission in a dynamic rule
+rejected at publish; RuleAdmin publish actions visible only to holders of a publish permission (`IMessageAuthorization.IsVisible`);
+option remap honoured; undeclared table permission fails startup.
+
+### 4b — approvals on YFex.Cryptography
+
+- Token family → Authorization as `ApprovalToken*` v2 (A3, A4) on YFex.Cryptography (`MessageAuthentication`, ring
+  `approvals/server`, `SignedPayload` for device tokens); v1 verified through `ApprovalTokenVersion1Codec` (golden) until the cut-off;
+  split offline caps; `IDecisionBound` → Cqrs; `IApprovalBound` + `.RequireApproval`; `YFex.Cqrs.Approvals` (A2) with
+  `Approve(permission, digest)` (A5); `IPermissionDirectory` replaces `IApproverDirectory`; `ApprovalIssued`/`ApprovalAccepted` events.
+
+**Acceptance:** **golden test: tokens signed with the pre-move code (`approval-token-v1.tsv`) verify after the move**; new:
+`.RequireApproval` round-trip incl. offline device token flagged; refusals of 06 scenarios (other decision, other bound value, other
+scope, expired, tampered).
+
+## Phase 5 — Capabilities, Search, NavigatR, view-model commands (⚑Z19)
+
+- Capabilities on `CompiledPolicy` per `PolicyKey`; `ActionGate` `[Union]` + `NeedsApproval`; remove reflection; search filters.
+- NavigatR: verdict-based denial text; optional re-check on signals.
+- State generator hook `__OnCanExecute_<Command>` + Authorization generator implementation (⚑Z19) + re-check on signals.
+
+**Acceptance:** Capabilities 28 / 7 / 5 ≥, NavigatR 129 passed (+ new), State tests unchanged + hook tests; D12 regression test (a
+capability whose message needs two permissions is hidden from a caller holding one); AotSmoke clean.
+
+## Phase 6 — Impersonation (⚑Z14)
+
+- `PolicyTenantImpersonationGate`, `ImpersonationRestrictions`, `ActorContext` relation on HTTP; RPC `AllowImpersonation()`;
+  `ImpersonationStarted` event.
+
+**Acceptance:** Tenancy.Tests 27 ≥, Web.Data.Tests 30 ≥; new: role-granted `tenant.impersonate` works; restricted permission
+denied with `RestrictedWhileImpersonating`; real actor visible in `ActorContext` for the whole request; RPC parity.
+
+## Phase 7 — With the features that need them (Tier 2)
+
+Temporary grants service + store (⚑Z13), justification requirement, Audit core-contract emission of the authorization events (⚑Z17),
+`YFex.Authorization.Data` (⚑Z18), user impersonation, Privacy reveal integration (07). Each lands with its feature and its own
+acceptance tests.
+
+## Documentation updates (end of each phase)
+
+`YFex.Authorization/README.md`; `YFex/CLAUDE.md` (solution map + Common Tasks rows "Caller identity", "Require permissions");
+`docs/internal/authorization-design.md` and `authorization-capabilities-overview.md` status → "Superseded by
+authorization-consolidation/"; audit 02 (ActorContext lives in `YFex.Authorization.Public` per ⚑Z3, `audit.reveal*` dropped per ⚑Z15, events via core probes per ⚑Z17); privacy
+08 §10 (catalog registration via module initializer); validation 13 (D34 tokens moved/renamed).
+
+## Implementation log
+
+_(append per phase: date, files touched, deviations, test counts before → after)_
+
+### Baseline re-run (2026-10-02, before Phase 0)
+
+Same counts as 01 §4, plus two suites now tracked because they consume authorization: YFex.Tests (core) 140, YFex.Search.Tests 57.
+Runner: `C:\Temp\yfex-edits\run-tests.sh <label> [suite…]` (logs in `C:\Temp\authz-testlogs\<label>`).
+
+### Phase 0 — DONE 2026-10-02
+
+Backups: `C:\Temp\authz-backup\phase0\`. No other session had touched the shared files since 2026-10-02 10:50 (Privacy) / 2026-10-01
+(Logging).
+
+| File | Change |
+|---|---|
+| `YFex/src/YFex/ValidityPeriod.cs` (new) | `ValidityPeriod` (From inclusive, Until exclusive/null), `For`/`Starting`, `Contains`/`IsExpired`/`IsPending`/`Remaining`/`Overlaps`/`CapEnd`, ISO 8601 interval text (`from/until`, `from/..`), 16-byte binary form (UTC ticks), type + JSON converters, `ILogValue` |
+| `YFex/src/YFex/Diagnostics/NodeIdentity.cs` | `LogValueWriters.RegisterCoreTypes` also registers `ValidityPeriod` (one line) |
+| `YFex/src/YFex.Tests/Values/ValidityPeriodTests.cs` (new) | 10 tests |
+| `YFex.Authorization/src/YFex.Authorization.Public/Actor.cs` (new) | `ActorKind`, `ActorRelation`, `ActorIdentity` (+ `ILogValue`), `ActorScope`, `ActorContext` (AsyncLocal, `Enter` → restoring `Activation`) |
+| `YFex.Authorization/tests/YFex.Authorization.Tests/ActorContextTests.cs`, `LeafGuardTests.cs` (new) | flow across await, nesting/restore, out-of-order dispose, no leak to caller; leaf guard (assembly references + csproj) |
+| `YFex/src/Validation/YFex.Rules/YFex.Rules.csproj` | references `YFex.Authorization.Public` (unused yet) |
+| `YFex/CLAUDE.md` | only the Rules layer-rule line |
+
+Deviations: `ActorIdentity` gets default values for `Kind`/`HomeScope` and an `Anonymous`/`IsAnonymous` helper; `ActorScope` gets
+`EffectiveRealActor`/`IsOnBehalf`. `ValidityPeriod` is a plain struct (not a positional record) so `with` cannot bypass the
+"Until > From" check; `default(ValidityPeriod)` is "from MinValue, forever" — callers that sign it always construct it explicitly.
+
+| Suite | Before | After |
+|---|---|---|
+| YFex.Tests | 140 | **150** |
+| YFex.Authorization.Tests | 41 | **48** |
+| everything else of 01 §4 + Search | unchanged | unchanged (NavigatR 129 + the 5 known failures) |
+
+### Phase 1 — DONE 2026-10-02
+
+Backups: `C:\Temp\authz-backup\phase1\` (whole YFex.Authorization repo + every consumer file below). No other session touched
+the consumer files (checked mtimes before editing).
+
+**YFex.Authorization repo**
+
+| File | Change |
+|---|---|
+| `.Public/PermissionKey.cs` | `Declare` (process interner, lock-free reads, copy-on-write ordinal array), `Ordinal` (−1 = undeclared), `IsDeclared`, `TryGetDeclared`, `Resolve`; `Parse/TryParse` never intern; equality stays by id |
+| `.Public/PermissionSet.cs` (new) | bitset: `Contains`, `ContainsAll`, `ContainsAny`, `FirstMissing`, `Union/Except/Intersect`, `Of`, `ToIds`, allocation-free enumerator, `Builder` (drops + records undeclared ids) |
+| `.Public/Attributes.cs` | `[PermissionMeta]` → `[Permission("id", Name, Description)]` on properties; `[RequirePermission]` also on structs |
+| `.Public/AuthorizationManifest.cs` | `PermissionMetaEntry` → `PermissionEntry` (`Name`); a manifest declares its ids; `PermissionCatalogs` (module-initializer registry, `Merged`, `DisplayText`) |
+| `.Public/Requirement.cs` | `[Union]` tagged struct (tag + one `PermissionKey` + one reference); cases Authenticated/Permission/AnyPermission/Roles/Claim/Resource/Policy; `Bind(IServiceProvider)` |
+| `.Public/ResourceRequirement.cs` (new) | `IAuthorizationRequirement<T>` / `IAsyncAuthorizationRequirement<T>` (+ `VisibleWith`), `ResourceRequirement` (delegate, instance, DI-resolved class) |
+| `.Public/CompiledPolicy.cs` (new) | `PolicyTarget`, `PolicyKey`, `CompiledPolicy` (mask + auth flag + remaining, `IsSyncOnly`, `FirstRequiredPermission`) |
+| `.Public/AuthorizationVerdict.cs` (new) | `[Union]` `AuthorizationVerdict` (`AccessAllowed` / `AccessUnauthenticated` / `Denial`), `Denial`, `DenialKind` |
+| `.Public/IAuthorizationContext.cs` (new), `IPolicyEvaluator.cs` | `IAuthorizationContext` + `IPrincipalAccessor`; `IPolicyEvaluator` (`IsVisible/Authorize/AuthorizeAsync`), `IMessageAuthorization`, `IViewModelPolicyProvider` (CompiledPolicy) |
+| `.Public/AuthorizationBuilder.cs` (moved from runtime) | `IAuthorizationConfiguration`, `AuthorizationBuilder` (`ForMessage<T>/ForMessage(Type)/ForEndpoint/ForRoute/ForCommand`), `RequirementBuilder<T>` (+ `RequireAnyPermission`, `Authorize(lambda)`, `Authorize<TRequirement>()`) |
+| `.Public/Actor.cs` | (Phase 0) |
+| deleted from `.Public` | `AuthorizationResult.cs`, `IAuthContext.cs`, `IPermissionProvider.cs`, `IViewModelPolicyProvider.cs` |
+| runtime `AuthorizationContext.cs`, `AuthorizationContextFactory.cs`, `PermissionSources.cs`, `PolicyEvaluator.cs`, `CompiledAuthorizationRegistry.cs`, `MessageAuthorization.cs`, `AuthorizationContextCache.cs`, `AmbientPrincipalAccessor.cs`, `ServiceCollectionExtensions.cs` | context (role set, actor, scope text, version), factory over `IPermissionSource`s (`RolePermissionMapSource`, `PermissionClaimSource`, `ScopedClaimSource`), `UndeclaredPermissions` counter, evaluator (fast path + named policies + resource requirements), one `PolicyKey → CompiledPolicy` table built lazily from DI (all unknown ids listed at once, requirement classes bound), cross-request context cache; `IsAotCompatible` |
+| deleted from runtime | `AuthContext.cs`, `AuthContextFactory.cs`, `AuthorizationBuilder.cs`, `PermissionProviders.cs` |
+| `Generator/*` | catalog properties (+ `Ids`, `All`, `Manifest`, module initializer, containing types), all `[RequirePermission]` merged, `[StateCommand]` rows (`ForCommand<VM>("Void")`), `YFex.State.StateObject` metadata-name detection, catalog accessors in rows; analyzer AUTH001–004 on the new syntax, AUTH006, AUTH007 (AUTH005 reserved) |
+| `AspNetCore/*` | `YFexAuthorizationMiddleware` + `IAuthorizationContextFeature`, `UseYFexAuthorization()`, read-only `HttpContextPrincipalAccessor`, endpoint filter on `IMessageAuthorization` with problem+json (`reason`, `missing`, `missingName`) |
+| `src/YFex.Authorization.Testing` (new) | `TestCaller`, `TestPrincipalAccessor`, `TestCatalog.Declare`, verdict assertions |
+| `benchmarks/YFex.Authorization.Benchmarks` (new) | budgets of 03 §8 |
+| `tests/*` | Authorization.Tests rewritten for the new API + new suites; AspNetCore.Tests +3; new `YFex.Authorization.Generator.Tests` |
+| `authorization.slnx` | + Testing, Generator.Tests, Benchmarks |
+
+**Consumers (mechanical renames, no behaviour change)**: `YFex.Cqrs/CompiledMessagingRegistry.cs`; Messaging.Rpc `CallContext.cs`
+(`Auth` → `Caller`), `CallContextMiddleware.cs`, `CallPermissions.cs` (ids from `Caller.Permissions.ToIds()`, no downcast),
+`CallAuthorization.cs`, `RpcMessagingExtensions.cs`; `YFex.NavigatR/Navigator.cs` (`IsVisible`, denial text from
+`FirstRequiredPermission`); `YFex.Rules.Admin/RuleAdminHandlers.cs`; Capabilities `Agent.cs`, `CapabilitySearchService.cs`,
+`CqrsCapabilitySource.cs`, AotSmoke `Program.cs`; Search `CapabilityCatalogProvider.cs`, `IFrecencyStore.cs`, `ISearchOrchestrator.cs`,
+`ISearchProvider.cs`, `Frecency.cs`, `KeyValueFrecencyStore.cs`. Tests: Messaging `AuthorizationGateTests.cs`,
+`CqrsAuthorizationWiringTests.cs`; Messaging.Rpc `CallContextSupport.cs` (`ShopPermissions` is now a `[PermissionCatalog]`,
+`TestPermissionProvider` → `TestPermissionSource`), `CallContextTests.cs`, `RpcFixture.cs`, csproj (+ Authorization generator);
+NavigatR `AuthorizationGateTests.cs`; Rules.Admin `AdminFixture.cs`; Capabilities `Fakes.cs`; Search `TestFakes.cs`,
+`CapabilityCatalogProviderTests.cs` (the allow-list moved from the fake evaluator to the fake caller).
+
+**Deviations (logged, no public API beyond the design's intent)**
+
+1. `IPermissionSource`/`PermissionResolution` live in the runtime project, not `.Public`: they carry Tenancy's `ScopeIdentity` and
+   `.Public` must stay a leaf (⚑Z3 wins over the 03 §3.1 sketch).
+2. `PermissionSet.Builder` is a class (sources contribute asynchronously; a `ref struct` cannot cross `await`).
+3. Verdict case types are `AccessAllowed` / `AccessUnauthenticated` / `Denial` (not `Allowed`/`Unauthenticated`/`Forbidden`): the
+   bare names collide with `YFex.Rules.Allowed` and with the 2b Cqrs `Error` cases in files that import both namespaces. Kinds
+   and factories keep the design names (`AuthorizationVerdictKind.Forbidden`, `AuthorizationVerdict.Forbidden(denial)`).
+   `ApprovalRequired`/`JustificationRequired` verdict cases join with their phases (4/7).
+4. Any identity-based requirement (authenticated, permission, any-permission, role, claim) makes an anonymous caller
+   `Unauthenticated` (401) rather than `Forbidden` — same rule the old endpoint filter used.
+5. Requirement classes (`.Authorize<TRequirement>()`) must be registered in DI; the registry build fails listing the missing ones
+   (they belong in server overrides when they need server I/O, like `.Validate<TContextRule>()`).
+6. The generated configuration class list is `GeneratedAuthorizationConfigurations.All` (was `GeneratedAuthConfig.All`: no
+   abbreviations). View-model command keys use the command name without `Async` (`"Void"`).
+7. `IPolicyEvaluator.IsAllowed(Permission, caller)` is gone: Capabilities/Search call `caller.HasPermission(p)` until Phase 5 moves
+   them to `IsVisible(policy, caller)`.
+8. Undeclared-id reporting is the `UndeclaredPermissions` counter + `FirstSeen` event; the core-probe event joins the 2a events.
+9. `ActorContext` is not written yet by the adapters (Phase 3 per 09).
+10. Benchmarks use BenchmarkDotNet 0.15.8 — the package/version already in the ecosystem (YFex.Logging.Benchmarks, ⚑L21); ⚑Z18
+    approved the project.
+
+**Budgets (03 §8, BenchmarkDotNet ShortRun, Release):** `HasPermission` 0.68–0.76 ns / 0 B (≤ 2 ns); message gate,
+permissions-only, cached context 7.3 ns / 0 B (≤ 25 ns); `IsVisible` × 1 000 = 3.1 µs / 0 B (≤ 15 µs); context resolution (20
+roles → 200 permissions, claims-only) 1.5 µs / 4.1 KB (≤ 20 µs).
+
+**AOT:** YFex.Validation.Smoke publishes native, 0 trim/AOT warnings. YFex.Capabilities.AotSmoke: build with
+`IsAotCompatible` 0 IL warnings, and a real NativeAOT publish (`PublishAot` set temporarily in the sample only — a global
+`-p:PublishAot=true` breaks the netstandard2.0 generator projects, NETSDK1207, pre-existing) 0 IL warnings; both run.
+
+| Suite | Before | After |
+|---|---|---|
+| YFex.Authorization.Tests | 48 | **70** |
+| YFex.Authorization.Generator.Tests (new) | — | **10** |
+| YFex.Authorization.AspNetCore.Tests | 3 | **6** |
+| YFex.Tests | 150 | 150 |
+| Messaging 150 (+2 skipped), Messaging.Rpc 41, NavigatR 129 (+5 known), Rules 64, Rules.Admin 22, Capabilities 28/7/5, Tenancy 27, Web.Data 30, Search 57 | = | = |
+
+### Phase 2a — DONE 2026-10-03
+
+Backups: `C:\Temp\authz-backup\phase2a\`. Coordination: the offline-design session ("Design offline + local-network store server
+mode") started Phase 0 meanwhile and announced edits to the Messaging.Rpc outbox files, `FusionMessageBus.cs` (HeadersAsync) and
+`RpcMessagingExtensions.cs` (one decorator); it was told which files 2a changed and which 2b will touch. Its temporary
+`AesGcmValueProtector` change broke `Messaging.Tests` compilation for a few minutes (fixed by that session; not ours).
+
+| File | Change |
+|---|---|
+| Cqrs `Configuration/CommandConfigurationBuilder.cs` (both builders), `QueryConfigurationBuilder.cs` | verbs record `Requirement`s: `RequireAuthenticated`, `RequireRoles(Role[])`, `RequirePermission`, `RequireAnyPermission`, `RequirePolicy(PolicyName)`, `Authorize(Func<IAuthorizationContext,T,bool>)`, `Authorize<TRequirement>()`; removed `RequireRoles(string[])`, `RequireAuthorization(string)`, the `ClaimsPrincipal` lambda and `ICommandAuthorizer`/`IQueryAuthorizer` forms |
+| Cqrs `Registration/Descriptors.cs`, `Configuration/Interfaces.cs` | deleted `AuthorizerKind`, `AuthorizerDescriptor`, `ICommandAuthorizer<T>`, `IQueryAuthorizer<T>` |
+| Cqrs `Registration/*RegistrationMetadata.cs`, `Runtime/CommandPolicy.cs`, `Runtime/QueryPolicy.cs` | `Requirement[]? Authorization`; `Authorize` delegate removed from the policies |
+| Cqrs `CompiledMessagingRegistry.cs` | `Build` without evaluator/principal factory; `AuthorizationRequirements` + `HasAuthorizationRequirements`; `BuildCompositeAuthorizer` deleted; capability permission from the first permission requirement |
+| Cqrs `CqrsAuthorizationConfiguration.cs` (new) | `CqrsAuthorizationConfiguration` export + `AddYFexCqrsAuthorizationConfiguration()` (idempotent) |
+| Cqrs `Error.cs` | `Error.From(in AuthorizationVerdict)` (2a: `ErrorType.Unauthorized` + the verdict text, e.g. "Requires permission 'x'.") |
+| Messaging.Rpc `CallContext/CallAuthorization.cs` | `CallAuthorization` static + `[ThreadStatic]` deleted; `CallPrincipalSource` = caller + `IMessageAuthorization` (`AuthorizeAsync` full, `IsVisible` quick, `EnsureConfigured` fail-closed) |
+| Messaging.Rpc `LocalDispatcher.cs`, `ValidatingHandlerInvoker.cs` (now authorizes every message, CQRS-registered or not), `CallContext/CallContextMiddleware.cs`, Wolverine `WolverineLocalDispatcher.cs` | full check through the one gate |
+| Messaging.Rpc `FusionMessageBus.cs` | quick check (`IsVisible`) |
+| Messaging.Rpc `RpcMessagingExtensions.cs`, Wolverine `WolverineRpcExtensions.cs` | `AddYFexCqrsAuthorization()` (second registry build) deleted; client/server/Wolverine registrations call `AddYFexCqrsAuthorizationConfiguration()` |
+| Authorization `.Public/AuthorizationConfigurations.cs` (new), generator | generated `[RequirePermission]` configurations register themselves (module initializer); the registry merges them |
+| Authorization `AuthorizationEvents.cs` (new), `MessageAuthorization.cs` | `AuthorizationEvent` (+ capture), `AuthorizationEvents.Denied` through `Operations.MarkWith`, `SubjectRateLimiter` (20/subject/minute); emitted on every authoritative denial of the gate |
+| Tests | Messaging: `Cqrs/AuthorizationGateTests.cs` rewritten (18 tests), `CqrsAuthorizationWiringTests.cs` deleted, fixtures `ShopAggregate.cs`/`CheckoutAggregate.cs`/`TestDispatcherFixture.cs` wire the gate, csproj (+ Testing, generator, Wolverine); Messaging.Rpc: `RpcFixture.cs` (no evaluator parameters, client registry + export, server hook), `ShopAggregate.cs` (+ `ArchiveCustomer` with `[RequirePermission]`, `ExportCustomers`), `CallContextSupport.cs` (+2 catalog permissions), `CallContextTests.cs`, new `MessageGateTests.cs`; Rules.Admin `AdminFixture.cs` wires the gate |
+
+**Behaviour changes (release note):** (1) `ForMessage<T>()` rows and `[RequirePermission]` on message records are now enforced on
+every CQRS dispatcher (D1). (2) Dispatchers fail at construction when the registry declares any requirement (even
+`RequireAuthenticated`) and no `IMessageAuthorization` is registered or it misses the Cqrs export — previously `RequirePermission`
+silently denied at run time and `RequireAuthenticated` worked without YFex.Authorization. (3) The client bus blocks a message the
+quick check hides (named policies/async requirements in the shared baseline are therefore client-blocked: declare them in server
+overrides).
+
+**Deviations**
+
+1. Generated configurations self-register (`AuthorizationConfigurations`), so an attribute on a record is enforced without
+   `cfg.AddConfigurations(...)` — the design only specified module-initializer registration for catalogs.
+2. The export is registered by `AddYFexCqrsAuthorizationConfiguration()`, called by the Messaging.Rpc/Wolverine registrations;
+   hosts that build dispatchers by hand call it themselves (the startup check names it).
+3. `ValidatingHandlerInvoker` also authorizes messages without a Cqrs policy (a `ForMessage<T>()` row is enough).
+4. The `Denied` event is emitted inside `MessageAuthorization` (single authoritative choke point, also used by the HTTP filter).
+
+**Acceptance (new tests):** D1 — Cqrs configuration, `ForMessage<T>()` and `[RequirePermission]` on a record denied on
+LocalDispatcher (`AuthorizationGateTests`), on a real RPC round-trip (`MessageGateTests`) and on Wolverine (two tests); server
+invoker path; D3 — `.RequirePolicy` with a registered `INamedPolicyHandler` allows/denies, `.Authorize<TRequirement>()` sync and
+async, inline predicate; D4 — role case-insensitivity on dispatch (+ evaluator tests of Phase 1); D5 — an uncatalogued Cqrs
+permission fails startup naming the id and the message; fail-closed without gate / without export; `Denied` captured by a fake
+`IOperationEngine` (the YFex.Logging `LogCapture` would add a cross-repo test dependency).
+
+| Suite | Before | After |
+|---|---|---|
+| YFex.Messaging.Tests | 150 (+2 skipped) | **158** (+2 skipped) — 10 old gate tests replaced by 18 |
+| YFex.Messaging.Rpc.Tests | 41 | **44** |
+| YFex.Rules.Admin.Tests | 22 | 22 |
+| everything else (Authorization 70, Generator 10, AspNetCore 6, Core 150, NavigatR 129 + 5 known, Rules 64, Capabilities 28/7/5, Tenancy 27, Web.Data 30, Search 57) | = | = |
+
+### Phase 2b — DONE 2026-10-03
+
+Backups: `C:\Temp\authz-backup\phase2b\`. The offline-design session finished its Messaging.Rpc edits (outbox, idempotency
+headers/decorator) during 2b; FusionMessageBus/RpcMessagingExtensions/ValidatingHandlerInvoker were re-read before 2b touched them
+and only the stage-2 lines were changed. Its counts are included below (Messaging.Tests and Messaging.Rpc.Tests gained tests of
+theirs).
+
+| File | Change |
+|---|---|
+| Cqrs `Error.cs` | `[Union]` tagged struct: `ErrorKind` tag; cases `NotFound`, `Failed`, `Unauthenticated`, `Forbidden(Denial)`, `ValidationProblem(ViolationList)`, `Conflict(Message, Violations)`, `ApprovalRequired(Approvals, DecisionFingerprint, Violations)`; storage = tag + message + violations + one reference (boxed `Denial` / approval payload); `TryGetValue` per case, implicit conversions, `WithMessage`, `Validation`, `ApprovalRequired`, `From(verdict)`; `string` → `Failed` |
+| Cqrs `ErrorType.cs` | deleted |
+| Cqrs `Result.cs`, `QueueableResult.cs`, `CacheableQueryResult.cs` | factories build cases; `Unauthorized(msg)` → `Unauthenticated(msg)` + `Forbidden(denial)` |
+| Cqrs `Runtime/RulesStage.cs` | `Conflict` case with the mismatch violation; union-safe `HasValue/Value` instead of `is { } x` |
+| Messaging.Rpc `Serialization/RpcResultFormatters.cs` | wire **v4**: kind tag + message + case payload (`Forbidden` = denial kind, missing id, policy, code); v1–v3 still readable |
+| Messaging.Rpc `LocalDispatcher.cs`, `ValidatingHandlerInvoker.cs`, Wolverine `WolverineLocalDispatcher.cs`, `WolverineExceptionMiddleware.cs` | union-safe patterns; `Failed` |
+| Messaging.Rpc `FusionMessageBus.cs`, `CallContext/CallAuthorization.cs`; Authorization `IPolicyEvaluator.cs` (`IMessageAuthorization.QuickCheck`), `MessageAuthorization.cs` | client quick check returns the reason → `Error.From(verdict)` |
+| Rules.Admin `RuleAdminHandlers.cs` | `NotFound`/`Conflict`/`Unauthenticated`/`Forbidden(Denial)` (missing permission → `Denial.MissingPermissionOf`, tier → `ResourceDenied` with the original text) |
+| Validation.Generator `Emitter.Vm.cs` | generated `ApplyServer` switches on `ErrorKind` (codes `server.unauthenticated`, `server.forbidden`, `server.approval` added; `server.unauthorized` gone) |
+| Tests | Messaging `StructuredErrorTests.cs` (+3 union tests, renamed the 401 test), `PipelineStageTests.cs`, `QueryCoercionTests.cs`, `RulesStageTests.cs`, `AuthorizationGateTests.cs`; Messaging.Rpc `WireFormatTests.cs` (+3), `MessageGateTests.cs` (+2: Forbidden with the missing permission and Unauthenticated over a real RPC round-trip), `CallContextTests.cs`, `RpcRoundTripTests.cs`; Rules.Admin `PublishTests.cs`, `DynamicRuleAdminTests.cs`, `RuntimeEditingTests.cs` |
+
+**Deviations**
+
+1. Wire version is **4**, not 3: v3 was already taken by the RawValue change (validation D35–D38).
+2. `Conflict` carries optional `Violations` (the rules stage reports the fingerprint mismatch as a conflict with a violation).
+3. `Error.Violations`/`HasViolations` stay as accessors (meaningful for ValidationProblem, Conflict, ApprovalRequired) — the
+   generated `ApplyServer` and many clients read them; approvals/fingerprint are only reachable through `TryGetValue(out ApprovalRequired)`.
+4. `IMessageAuthorization.QuickCheck(type, caller)` added (IsVisible + the reason) so the client bus answers "Requer: …" without a
+   round trip; never authoritative, never an event.
+5. **Language gotcha:** on a `[Union]` type, `x is { } e` / property patterns match the union's case `Value` (typed `object`), not
+   the struct — use `x.HasValue` / `x.Value` (fixed in RulesStage and the dispatchers; told the offline session).
+
+**Acceptance:** `Forbidden(Denial)` with the missing permission (+ its catalog display name) and `Unauthenticated` round-trip over
+RPC; `ApprovalRequired` and `ValidationProblem` round-trip unchanged in content (existing wire tests, adapted to the cases); every
+2a suite green. AOT (end of Phase 2): YFex.Validation.Smoke and YFex.Capabilities.AotSmoke (PublishAot set temporarily in the
+sample, restored byte-identical) publish native with 0 IL/AOT warnings and run.
+
+| Suite | Before (end of 2a) | After |
+|---|---|---|
+| YFex.Messaging.Tests | 158 (+2 skipped) | **167** (+2 skipped) — +3 ours, +6 of the offline session |
+| YFex.Messaging.Rpc.Tests | 44 | **55** — +5 ours, +6 of the offline session |
+| YFex.Rules.Admin.Tests | 22 | 22 |
+| YFex.Validation.Tests / Validation.Generator.Tests (generated `ApplyServer` changed) | 62 / 50 | 62 / 50 |
+| Core 150, Authorization 70, Authorization.Generator 10, AspNetCore 6, NavigatR 129 (+5 known), Rules 64, Capabilities 28/7/5, Tenancy 27, Web.Data 30, Search 57 | = | = |
+
+### Totals Phase 0 → 2b (against the 01 §4 baseline)
+
+Authorization 41 → 70, Authorization.Generator — → 10, AspNetCore 3 → 6, YFex.Tests 140 → 150, Messaging 150 → 167 (+2 skipped;
+9 of these are ours net of the 10 replaced gate tests, 6 are the offline session's), Messaging.Rpc 41 → 55 (8 ours, 6 offline),
+everything else unchanged (NavigatR 129 + the same 5 pre-existing failures).
+
+### Open items / handoff to Phase 3
+
+- Documentation of 09 "Documentation updates" not done yet (other sessions are editing those files): YFex/CLAUDE.md solution map
+  (Authorization repo is outside it), `authorization-design.md`/`authorization-capabilities-overview.md` already point here;
+  audit 02 (ActorContext in `.Public`), privacy 08 §10 (catalog module initializer — implemented), validation 13 (D34 tokens:
+  Phase 4). One row was added to YFex/CLAUDE.md Common Tasks ("Require permissions").
+- `ActorContext` is defined but not written by the adapters yet (Phase 3).
+- Capabilities/Search still use `caller.HasPermission(firstPermission)` (Phase 5 → `IsVisible(policy)`); `CqrsCapabilityInfo.RequiredPermission` is a display hint.
+- Rules `ApprovalRequest.Permission` and Rules.Admin option permissions are still strings (Phase 4).
+- `AuthorizationEvents` has only `Denied`; `UndeclaredPermissions` reports through a counter/event, not yet through the probe.
+
+### Phase 3a — DONE 2026-10-04
+
+Decisions P1–P7 confirmed by the user the same day (README). Backups: `C:\Temp\authz-backup\phase3a\`. No other session had
+touched the code files since Phase 2b (checked mtimes; the cryptography session had only changed core `Cryptography/*`,
+`Canonical/*` and `Messaging.Tests/Encryption`). `YFex/CLAUDE.md` and `docs/index.md` (edited by the cryptography session at 10:1x):
+one line/row each.
+
+| File | Change |
+|---|---|
+| Authorization `.Public/Actor.cs` | `ActorContext.Session` + `SetSession` (process-wide, under the `AsyncLocal` scope, P4); `ActorScope.From(caller)`, `ActorScope.Anonymous` |
+| Authorization `.Public/PermissionSnapshot.cs` (new) | payload-only record (P2): sorted ids/roles, `From`, `Has`, `IsInRole`, sequence equality |
+| Authorization `.Public/AuthorizationSignals.cs` (new) | `IPermissionVersions`, `IAuthorizationSignals`, `AuthorizationChange(Kind)`, `IAuthorizationChangeObserver` |
+| Authorization `AuthorizationSignals.cs` (new) | `InMemoryPermissionVersions`, `AuthorizationSignals` (bump → observers → `Changed`; failures aggregated) |
+| Authorization `SnapshotPrincipalAccessor.cs` (new) | client accessor: `Apply(snapshot)`, `Clear()`, `Changed`, session actor, local signals |
+| Authorization `AmbientPrincipalAccessor.cs` | process-wide session: `SignIn(principal)`, `SetCurrent`, `SignOut`, re-resolved when the subject's version moved; writes the session actor |
+| Authorization `AuthorizationContext.cs` | `FromSnapshot(snapshot)` (ids → declared permissions, unknown dropped and reported) |
+| Authorization `AuthorizationContextCache.cs` | version read from `IPermissionVersions` when not passed (`long? version`); is an `IAuthorizationChangeObserver` |
+| Authorization `ServiceCollectionExtensions.cs` | `AddYFexAuthorizationSignals()`; cache observer; accessor with factory + versions |
+| AspNetCore `YFexAuthorizationMiddleware.cs`, `HttpContextPrincipalAccessor.cs` | current version (was 0 → stale up to the cache TTL); request runs inside `ActorContext.Enter` |
+| Messaging.Rpc `CallContext/CallContextSignals.cs` → `CallContextConnections.cs` | `IPermissionsVersions`, `PermissionsVersions`, `CallContextSignals` deleted; `RpcAuthorizationChangeObserver` (invalidate the pushed snapshot, disconnect on revoke) |
+| Messaging.Rpc `CallContext/CallPermissions.cs` + `ActualLabProxies/*` | `ICallPermissions` returns `PermissionSnapshot`; `CallPermissions` record deleted; proxies regenerated by `ProxyGoldenTests` |
+| Messaging.Rpc `CallContext/CallContext.cs` | `Activation` also enters the caller's actor scope (anonymous → `ActorScope.Anonymous`) |
+| Messaging.Rpc `CallContext/CallContextMiddleware.cs` | resolver on `IPermissionVersions`; per-identity fast path, a miss goes through `AuthorizationContextCache` (async) |
+| Messaging.Rpc `CallContext/ServerPermissionsFeed.cs` (new), `RpcMessagingExtensions.cs` | hosted feed (live computed → `Apply`); `UseServerPermissions()`; server registers the signals + observer |
+| Messaging.Rpc `CallContext/CallAuthorization.cs` | `CallContextPrincipalAccessor.Decorate` without `ActivatorUtilities` (a type registration stays a container registration) |
+| Messaging.Rpc `CallContext/CallContextOptions.cs` | doc reference |
+| Messaging.Rpc `Serialization/RpcResultFormatters.cs` | `PermissionSnapshotFormatter` (layout v1, registered with the result formatters) |
+| Messaging.Rpc `QueryCacheKey.cs`, `FusionMessageBus.cs` | per-user key = `ICacheScopeContext.Subject` ?? actor subject; no subject → not cached (P5); the client bus skips the write when there is no key |
+| Cqrs `ICacheScopeContext.cs`, Cqrs.Tenancy `TenancyCacheScopeContext.cs` | `User : ClaimsPrincipal` → `Subject : string?` |
+| Tests | Authorization `SignalsAndSnapshotTests.cs` (+6, collection `ActorContext` shared with `ActorContextTests`); AspNetCore `InboundAuthorizationTests.cs` (+2); Messaging.Rpc `ServerPermissionsTests.cs` (+5), `RpcFixture.cs`, `CallContextTests.cs`, `ShopAggregate.cs` (`WhoAmIHandler.LastActor`); Messaging `Cqrs/UserScopedCacheTests.cs` (+2); Cqrs.Tenancy `TenancyCacheScopeContextTests.cs` (adapted) |
+| Docs | README (P1–P7), 05 (notes), 08 (rows), this file; repo `YFex.Authorization/README.md`; `YFex/CLAUDE.md` (Caller identity row); `docs/index.md`; offline 11 §2 (phase numbers, time pointer); new `docs/internal/time/README.md` (plan, ⚑T1–T7) |
+
+**Behaviour changes (release note):** (1) `CallContextSignals` is gone: inject `IAuthorizationSignals` (`RevokeAsync` →
+`RevokedAsync`). (2) `ICallPermissions.GetMyPermissionsAsync` returns `PermissionSnapshot` (old clients must be updated together
+with the server). (3) A `ScopedByUser()` query is no longer cached when there is no subject (it used to share one entry across
+users); `ICacheScopeContext.User` → `Subject`. (4) `AmbientPrincipalAccessor.Current`'s setter is process-wide (was `AsyncLocal`).
+(5) HTTP picks up signalled permission changes on the next request (was: after the 5-minute cache TTL).
+
+**Deviations**
+
+1. `IAuthorizationChangeObserver` (DI subscribers resolved on the first signal) added next to the `Changed` event of the 05 §4
+   sketch: transports must subscribe without being constructed by app code, and `RevokedAsync` must await the disconnects.
+2. `PermissionSnapshot.Roles` carries the principal's role names (the 05 sketch had them); `FromSnapshot` turns them into role claims.
+3. Anonymous requests/calls enter `ActorScope.Anonymous` instead of no scope, so a session actor never leaks into a server unit of work.
+4. The per-connection RPC cache stays (fast path); `AuthorizationContextCache` is the second level, shared across connections.
+5. `CallContextPrincipalAccessor` decoration without reflection (08 listed it under Phase 3).
+
+**Deferred until YFex.Cryptography is done (user rule 2026-10-04: signing/crypto/hashing questions wait)**
+
+- Snapshot signing, verification, persistence and offline start (Phase 3b).
+- `AuthorizationContextCache` keys on an FNV-1a hash of the claims (existing code). Crypto ⚑K3 says values that feed an
+  authorization decision use canonical bytes or `Hash256`, never a non-adversarial hash. Here the subject, scope and version are
+  part of the key and the claims come from a validated token, so a collision would have to be crafted inside one user's own
+  claims. Check with the cryptography session whether it is in scope of their architecture test.
+- Trusted time for validity checks (P7): `../time/README.md` (⚑T1–T12 approved; T0+T1 in progress 2026-10-05). Use
+  `time.GetTrustedNow().IsUsableForSecurity(maximumUncertainty)` (⚑T8, T11). Its authenticated sources and the
+  high-water protection also wait for crypto.
+
+**Open items (not crypto)**
+
+- `ScopedBySession()` has the same shape as the per-user defect: without an `ICacheScopeContext`, `SessionId` is null and the
+  key is shared. Not changed (outside P5); propose the same fail-closed rule.
+- `IPermissionVersions` for farms is still in-memory only (README open question).
+
+| Suite | Before | After |
+|---|---|---|
+| YFex.Authorization.Tests | 70 | **76** |
+| YFex.Authorization.AspNetCore.Tests | 6 | **8** |
+| YFex.Messaging.Rpc.Tests | 55 | **60** |
+| YFex.Messaging.Tests | 167 (+2 skipped) | **169** (+2 skipped) |
+| YFex.Cqrs.Tenancy.Tests (now tracked) | 11 | 11 (2 adapted) |
+| Core 158 (crypto session: 150 → 158), Authorization.Generator 10, NavigatR 129 (+5 known), Rules 64, Rules.Admin 22, Capabilities 28/7/5, Tenancy 27, Web.Data 30, Search 57, Validation 62, Validation.Generator 50 | = | = |
+
+### Phase 4a — DONE 2026-10-05
+
+Decisions A1–A5 confirmed 2026-10-04 (README). Backups: `C:\Temp\authz-backup\phase4a\`. **Process slip:** the first Rules edits
+(Directive, DirectiveWriter, Verdict, Evaluator, Explanation, TableContracts, OverrideTokens) were made before the backup; their
+pre-edit copies were rebuilt by reversing the edit script (`C:\Temp\yfex-edits\phase4a_backup_reconstruct.py`) — exact, because
+the script only did literal replacements plus one inserted `using`. Coordination: the cryptography session was migrating
+`Messaging.Rpc/EventChannel.cs` (C4) at the same time; files were split by message (it: EventChannel, Messaging.Rpc csproj,
+EventChannelAudienceTests; this phase: RpcResultFormatters, RulesStage, CheckoutAggregate, RulesStageTests, WireFormatTests).
+
+| File | Change |
+|---|---|
+| Rules `Directives/Directive.cs`, `DirectiveWriter.cs` | `LimitDirective.ApprovalPermission : Permission?`, `ApprovalDirective(Permission, …)`; `Limit/LimitRaw(…, Permission? permission)`, `RequireApproval(Permission, …)` |
+| Rules `Decisions/Verdict.cs` | `ApprovalRequest.Permission : Permission`, `Requires(in Permission)` |
+| Rules `Engine/Evaluator.cs`, `Tracing/Explanation.cs`, `Definition/RuleSetDefinition.cs`, `Approvals/OverrideTokens.cs` | typed internally; the fingerprint hashes the same id bytes; catalog/explanation keep the id text; tokens compare `.Value` (moved in 4b) |
+| Rules `Tables/TableContracts.cs` | `TableSchema.PublishPermission : Permission?` |
+| Rules.Generator `TableGen.cs`, new `PermissionArguments.cs`, `Diagnostics.cs` (YFR0108), `AnalyzerReleases.Unshipped.md` | permission arguments become typed expressions: a constant id → `Permission.Parse("id")`; `Catalog.Ids.X` of a catalog **in the same compilation** (its `Ids` does not exist while generators run) → the catalog accessor `global::Ns.Catalog.X` read from syntax; unresolvable → **YFR0108 error** (it used to become null silently, turning "needs approval" into "denied"). Row data naming an approval permission: `CheckRow` rejects undeclared ids (`authorization.permission.unknown`), evaluation of a malformed id denies (fail closed) |
+| Rules.Dynamic `Compiler/RuleCompiler.cs`, `DynamicRuleCodes.cs`, `Runtime/CompiledRule.cs` | ids resolved against declared catalogs at compile (publish and load); unknown → `authorization.permission.unknown`; `CompiledRule.Permission : Permission?` |
+| Cqrs `Runtime/RulesStage.cs`; Messaging.Rpc `Serialization/RpcResultFormatters.cs` | adapt to the typed request; the wire still carries the id (unchanged bytes) |
+| Authorization `.Public/ResourceRequirement.cs`, runtime `PolicyEvaluator.cs` | new `IResourcePermissionRequirement<T>` (`Permission? PermissionFor(resource)`, null = none) and `ResourceRequirement.DenialFor`: a denial names the permission the resource requires (`MissingPermission`) instead of an opaque `ResourceDenied` |
+| Rules.Admin `RuleAdminAuthorization.cs` (new) | `RuleAdminPermissions` catalog (`rules.tables.publish`, `rules.parameters.publish`, `rules.dynamic.publish`, `rules.override`, `rules.view`); `RuleAdminRequirements` (publish table/parameters/rule/override + simulate), `RuleAdminViewRequirement` (5 queries), `ApproveDecisionRequirement`; `AddYFexRuleAdminRequirements()` (fails at startup on an undeclared table permission) |
+| Rules.Admin `RuleAdminSetup.cs`, `RuleAdminHandlers.cs`, csproj | baseline verbs `.RequireAuthenticated().Authorize<…>()`; requirements registered by `AddYFexRulesAdmin` and `AddYFexRuleSetSync`; typed `RuleAdminOptions`; `Demand`/`DemandView`/`PermissionFor` deleted; publish actor and approver = actor **subject** (was `Identity.Name`); `ApproveDecision` binds the canonical id; Authorization generator analyzer |
+| Tests | Rules.Tests `RulesTestPermissions` catalog (+ generator ref), Sale/HandSaleRules/DomainNeutral/EngineScenario/GeneratedScenario adapted; Rules.Generator.Tests +2 (YFR0108, typed/accessor emission); Rules.Admin.Tests `PricingPermissions` catalog, `TestPrincipal` with a real `PermissionSet`, +5 `RuleAdminAuthorizationTests`, the rejected-audit assertion moved to "gate denies, sink sees nothing"; Authorization.Tests +1 (resource permission requirement); Messaging `CheckoutPermissions` catalog, `RulesStageTests`; Messaging.Rpc `WireFormatTests` |
+
+**Behaviour changes (release note):** (1) Rules APIs take `Permission` (catalog properties in code, `Catalog.Ids.X` in attributes);
+string literals no longer compile. (2) Dynamic rules and table rows naming an undeclared permission are rejected at publish.
+(3) RuleAdmin permission checks moved from handlers to the message gate: search/AI/UI visibility follows them, a denial names the
+missing permission, and an unauthorized publish no longer reaches `IRuleAuditSink.OnRejectedAsync` (it is an
+`AuthorizationEvents.Denied` event). (4) `RuleAdminOptions` permissions are typed. (5) `PublishedBy` and the approver id are the
+actor subject (same value when the name claim was the subject).
+
+**Deviations**
+
+1. `IResourcePermissionRequirement<T>` + `ResourceRequirement.DenialFor` added to `.Public`/runtime (not in the design) so option- and
+   table-driven RuleAdmin permissions deny with the permission name, like static ones.
+2. All RuleAdmin permissions are DI requirements (also the fixed ones of 04 §2.5's sketch) because they stay remappable through
+   `RuleAdminOptions` (08 "typed option overrides"); clients register them too (`AddYFexRuleSetSync`).
+3. Rules.Generator resolves same-compilation catalog constants from syntax (same gotcha the Authorization generator solved in Phase 1).
+
+| Suite | Before | After |
+|---|---|---|
+| YFex.Authorization.Tests | 76 | **77** |
+| YFex.Rules.Tests | 65 | 65 |
+| YFex.Rules.Generator.Tests (now tracked) | 21 | **23** |
+| YFex.Rules.Dynamic.Tests / Rules.Data.Tests (now tracked) | 20 / 15 | 20 / 15 |
+| YFex.Rules.Admin.Tests | 22 | **27** |
+| YFex.Messaging.Tests | 169 (+2 skipped) | 173 (+2 skipped) — the +4 are the cryptography session's EventChannel tests |
+| YFex.Web.Data.Tests | 30 | 51 — the cryptography session's C2 work |
+| Core 158, Authorization.Generator 10, AspNetCore 8, Messaging.Rpc 60, NavigatR 129 (+5 known), Capabilities 28/7/5, Tenancy 27, Search 57, Cqrs.Tenancy 11, Validation 62, Validation.Generator 50 | = | = |

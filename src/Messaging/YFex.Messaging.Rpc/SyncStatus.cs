@@ -38,6 +38,18 @@ public sealed class SyncStatus : INotifyPropertyChanged
         internal set { if (_lastSyncAt != value) { _lastSyncAt = value; Raise(nameof(LastSyncAt)); } }
     }
 
+    private int _replaysUnderAnotherSubject;
+
+    /// <summary>
+    /// Replays sent while a different user was signed in than the one who queued the command (offline design F4, interim:
+    /// the RPC connection still carries the current user's identity; the scope is the queued one). Bind it to warn the operator.
+    /// </summary>
+    public int ReplaysUnderAnotherSubject
+    {
+        get => _replaysUnderAnotherSubject;
+        internal set { if (_replaysUnderAnotherSubject != value) { _replaysUnderAnotherSubject = value; Raise(nameof(ReplaysUnderAnotherSubject)); } }
+    }
+
     public Exception? LastSyncError
     {
         get => _lastSyncError;

@@ -92,16 +92,17 @@ public class ProxyGoldenTests
     }
 
     /// <summary>
-    /// YFex.Messaging.Rpc's own compute service (<c>ICallPermissions</c>, D29) ships ActualLab's proxy output checked in
-    /// verbatim (the library doesn't reference ActualLab.Generators): regenerate from the source file and compare.
+    /// YFex.Messaging.Rpc's own services (<c>ICallPermissions</c>, D29; <c>ICentralTime</c>, time T2) ship ActualLab's proxy output
+    /// checked in verbatim (the library doesn't reference ActualLab.Generators): regenerate from the source file and compare.
     /// </summary>
     [Theory]
-    [InlineData("YFex.Messaging.Rpc.ICallPermissionsProxy.g.cs", "ICallPermissionsProxy.cs")]
-    [InlineData("YFex.Messaging.Rpc.CallPermissionsServiceProxy.g.cs", "CallPermissionsServiceProxy.cs")]
-    public void Library_proxies_are_identical_to_ActualLab_output(string hint, string checkedInFile)
+    [InlineData("YFex.Messaging.Rpc.ICallPermissionsProxy.g.cs", "ICallPermissionsProxy.cs", "CallContext", "CallPermissions.cs")]
+    [InlineData("YFex.Messaging.Rpc.CallPermissionsServiceProxy.g.cs", "CallPermissionsServiceProxy.cs", "CallContext", "CallPermissions.cs")]
+    [InlineData("YFex.Messaging.Rpc.ICentralTimeProxy.g.cs", "ICentralTimeProxy.cs", "Time", "CentralTime.cs")]
+    public void Library_proxies_are_identical_to_ActualLab_output(string hint, string checkedInFile, string folder, string sourceFile)
     {
-        var dir = Path.Combine(RepoMessagingDir(), "YFex.Messaging.Rpc", "CallContext");
-        var source = Parse(File.ReadAllText(Path.Combine(dir, "CallPermissions.cs")), "CallPermissions.cs");
+        var dir = Path.Combine(RepoMessagingDir(), "YFex.Messaging.Rpc", folder);
+        var source = Parse(File.ReadAllText(Path.Combine(dir, sourceFile)), sourceFile);
         // The library builds with <ImplicitUsings>: mirror them or `Task` wouldn't bind (ActualLab then skips the methods).
         var implicitUsings = Parse("""
             global using System;
@@ -174,6 +175,7 @@ public class ProxyGoldenTests
             typeof(YFex.Cqrs.Result).Assembly, typeof(IHandlerInvoker).Assembly,
             typeof(ActualLab.Fusion.IComputeService).Assembly, typeof(ActualLab.Rpc.RpcHub).Assembly,
             typeof(ActualLab.Interception.IProxy).Assembly, typeof(ActualLab.CommandR.ICommander).Assembly,
+            typeof(YFex.Time.TimeReply).Assembly,
         };
         var paths = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!).Split(Path.PathSeparator)
             .Concat(AppDomain.CurrentDomain.GetAssemblies().Where(a => !a.IsDynamic && a.Location.Length > 0).Select(a => a.Location))

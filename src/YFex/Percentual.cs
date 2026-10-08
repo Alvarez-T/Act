@@ -22,8 +22,13 @@ public readonly record struct Percentual
       IDivisionOperators<Percentual, decimal, Percentual>,
       IUnaryNegationOperators<Percentual, Percentual>,
       IComparisonOperators<Percentual, Percentual, bool>,
-      IRawValue<Percentual>
+      IRawValue<Percentual>,
+      global::YFex.Diagnostics.ILogValue<Percentual>
 {
+    /// <summary>Logs as its raw value: no boxing and no formatting on the caller (YFex.Diagnostics).</summary>
+    static void global::YFex.Diagnostics.ILogValue<Percentual>.Write(in Percentual value, ref global::YFex.Diagnostics.LogWriter writer, ushort field)
+        => writer.WriteRawValue(field, in value);
+
     // ── Internal storage ─────────────────────────────────────────────────────
     // Stored as the percentage value (e.g. 47.5 for "47.5 %"), never as a
     // fraction.  All arithmetic stays in percentage-value space; the /100

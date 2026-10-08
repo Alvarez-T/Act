@@ -33,9 +33,10 @@ public readonly struct QueueableResult : IUnion, IResult
 
     public static QueueableResult Ok()    => new Success();
     public static QueueableResult Queue(Guid key) => new Queued(key);
-    public static Error Fail(string message = "") => new(ErrorType.Fail, message);
-    public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
-    /// <summary>A <see cref="ErrorType.ValidationProblem"/> carrying the structured violations.</summary>
+    public static Error Fail(string message = "") => new Failed(message);
+    public static Error Unauthenticated(string message = "Authentication required.") => new Unauthenticated(message);
+    public static Error Forbidden(in global::YFex.Authorization.Public.Denial denial) => new Forbidden(denial);
+    /// <summary>A <see cref="ErrorKind.ValidationProblem"/> carrying the structured violations.</summary>
     public static Error Invalid(in ValidationResult result) => Error.Validation(result);
 }
 
@@ -71,9 +72,10 @@ public readonly struct QueueableResult<T> : IUnion, IResult
 
     public static QueueableResult<T> Ok(T value) => new(value);
     public static QueueableResult<T> Queue(Guid key) => new(new Queued(key));
-    public static Error Fail(string message = "") => new(ErrorType.Fail, message);
-    public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
-    /// <summary>A <see cref="ErrorType.ValidationProblem"/> carrying the structured violations.</summary>
+    public static Error Fail(string message = "") => new Failed(message);
+    public static Error Unauthenticated(string message = "Authentication required.") => new Unauthenticated(message);
+    public static Error Forbidden(in global::YFex.Authorization.Public.Denial denial) => new Forbidden(denial);
+    /// <summary>A <see cref="ErrorKind.ValidationProblem"/> carrying the structured violations.</summary>
     public static Error Invalid(in ValidationResult result) => Error.Validation(result);
 
     /// <summary>Unwraps to <see cref="Result{T}"/>, collapsing the queued path (never occurs for non-queueable commands).</summary>

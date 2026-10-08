@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using YFex.Authorization.Public;
 using YFex.Cqrs;
 using YFex.Cqrs.Configuration;
 using YFex.Cqrs.Runtime;
@@ -48,8 +49,16 @@ public readonly struct ManualDiscount : IRule<CheckoutSituation>
     {
         d.Decrease(AdjustTarget.Total, s.Discount);
         d.Limit(CheckoutSituation.Fields.Discount, max: Percentual.FromPercentage(s.IsManager ? 15 : 5),
-            onExceed: Exceed.RequireApproval, permission: "sales.discount.override");
+            onExceed: Exceed.RequireApproval, permission: CheckoutPermissions.DiscountOverride);
     }
+}
+
+/// <summary>The checkout's approval permission (typed in rules, authorization-consolidation ⚑Z2).</summary>
+[PermissionCatalog]
+public static partial class CheckoutPermissions
+{
+    [Permission("sales.discount.override", Name = "Aprovar desconto acima do limite")]
+    public static partial Permission DiscountOverride { get; }
 }
 
 public partial class CheckoutAggregate
@@ -141,6 +150,10 @@ public sealed class CheckoutFixture
         Registry = CompiledMessagingRegistry.Build(baseline: [new CheckoutBaseline(mismatch, paths)]);
         var services = new ServiceCollection();
         services.AddSingleton(Log);
+        // The one message gate (authorization-consolidation 04 §2): requirements are exported and enforced through it.
+        services.AddSingleton(Registry);
+        YFex.Authorization.ServiceCollectionExtensions.AddYFexAuthorization(services);
+        services.AddYFexCqrsAuthorizationConfiguration();
         services.AddSingleton(Actor);
         services.AddSingleton<ISituationSanitizer<CheckoutSituation>, CheckoutSanitizer>();
         services.AddSingleton<IDecisionAccessor<CheckoutSituation>, DecisionAccessor<CheckoutSituation>>();
@@ -156,7 +169,7 @@ public sealed class CheckoutFixture
             .AddQuery<CheckoutAggregate.Queries.GetCheckoutOptions, int>()
             .Build());
         Invoker = decorateInvoker ? new ValidatingHandlerInvoker(invoker, Registry, Services) : invoker;
-        Dispatcher = new LocalDispatcher(Invoker, Registry, new ManualNetworkStatus(true), new InMemoryCache(),
+        Dispatcher = new LocalDispatcher(Invoker, Registry, new ManualServerConnection(true), new InMemoryCache(),
             new InMemoryOutbox(new OutboxOptions()), new DefaultEventBus(), Services);
     }
 

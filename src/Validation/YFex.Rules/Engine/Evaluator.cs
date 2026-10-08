@@ -1,6 +1,7 @@
 ﻿using YFex.Helpers;
 using YFex.Validation;
 using static YFex.Rules.EvalState;
+using YFex.Authorization.Public;
 
 namespace YFex.Rules;
 
@@ -394,7 +395,7 @@ internal static class Evaluator<TSituation> where TSituation : ISituation<TSitua
                                 _violations.Add(d.Violation);
                                 break;
                             case DirectiveCase.Approval:
-                                _approvals.Add(new ApprovalRequest(d.Permission!, d.Violation, RefOf(ci)));
+                                _approvals.Add(new ApprovalRequest(d.Permission.GetValueOrDefault(), d.Violation, RefOf(ci)));
                                 break;
                         }
                     }
@@ -623,7 +624,7 @@ internal static class Evaluator<TSituation> where TSituation : ISituation<TSitua
                 Exceeded(path, "rules.limit.options", RawValue.From(l.Options.Count), value, Exceed.Deny, null, l.OptionsCandidate);
         }
 
-        private void Exceeded(in FieldPath path, string code, RawValue limit, RawValue value, Exceed exceed, string? permission, int ci)
+        private void Exceeded(in FieldPath path, string code, RawValue limit, RawValue value, Exceed exceed, Permission? permission, int ci)
         {
             var origin = new ViolationOrigin(ViolationSource.Rule, ci >= 0 ? OwnerOf(ci) : (ushort)0);
             var args = new RuleArgs(limit, value);
@@ -631,7 +632,7 @@ internal static class Evaluator<TSituation> where TSituation : ISituation<TSitua
             {
                 var v = new Violation(in path, code, Severity.Warning, in args, origin);
                 _violations.Add(v);
-                _approvals.Add(new ApprovalRequest(permission, in v, ci >= 0 ? RefOf(ci) : default));
+                _approvals.Add(new ApprovalRequest(permission.GetValueOrDefault(), in v, ci >= 0 ? RefOf(ci) : default));
                 return;
             }
             _violations.Add(new Violation(in path, code, exceed == Exceed.Warn ? Severity.Warning : Severity.Error, in args, origin));
@@ -761,7 +762,7 @@ internal static class Evaluator<TSituation> where TSituation : ISituation<TSitua
                 a.Amount.AppendTo(ref h);
             }
             h.Append(approvals.Count);
-            foreach (ref readonly var a in approvals.AsSpan()) h.Append(a.Permission);
+            foreach (ref readonly var a in approvals.AsSpan()) h.Append(a.Permission.Value);   // same bytes as the old string id
             h.Append(violations.Count);
             foreach (ref readonly var v in violations.AsSpan())
             {
@@ -829,11 +830,11 @@ internal static class EvalState
         public SituationFieldRef Field;
         public RawValue Min;
         public Exceed MinExceed;
-        public string? MinPermission;
+        public Permission? MinPermission;
         public int MinCandidate;
         public RawValue Max;
         public Exceed MaxExceed;
-        public string? MaxPermission;
+        public Permission? MaxPermission;
         public int MaxCandidate;
         public OptionSet Options;
         public int OptionsCandidate;

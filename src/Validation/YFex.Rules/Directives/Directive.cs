@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using YFex.Validation;
+using YFex.Authorization.Public;
 
 namespace YFex.Rules;
 
@@ -53,7 +54,7 @@ public readonly record struct WarnDirective(Violation Violation);
 /// <see cref="RawValue.None"/> = unbounded side.
 /// </summary>
 public readonly record struct LimitDirective(SituationFieldRef Field, RawValue Min, RawValue Max,
-    Exceed OnExceed = Exceed.Deny, string? ApprovalPermission = null);
+    Exceed OnExceed = Exceed.Deny, Permission? ApprovalPermission = null);
 
 /// <summary>Allowed discrete values for a field (UI picker items).</summary>
 public readonly record struct GrantDirective(SituationFieldRef Field, OptionSet Options);
@@ -72,7 +73,7 @@ public readonly record struct AdjustDirective(AdjustTarget Target, AdjustDirecti
 }
 
 /// <summary>The decision is allowed only if someone with <see cref="Permission"/> approves (manager override).</summary>
-public readonly record struct ApprovalDirective(string Permission, Violation Reason);
+public readonly record struct ApprovalDirective(Permission Permission, Violation Reason);
 
 /// <summary>
 /// Closed set of rule outputs (D9) — non-boxing <c>[Union]</c> (README constraint 2). Library code switches on
@@ -87,7 +88,7 @@ public readonly struct Directive : IUnion
     private readonly RawValue _max;
     private readonly OptionSet _options;
     private readonly Percentual _percent;
-    private readonly string? _permission;
+    private readonly Permission? _permission;
     private readonly AdjustTarget _target;
     private readonly Exceed _exceed;
     private readonly AdjustDirection _direction;
@@ -135,7 +136,7 @@ public readonly struct Directive : IUnion
         DirectiveCase.Limit => new LimitDirective(_field, _min, _max, _exceed, _permission),
         DirectiveCase.Grant => new GrantDirective(_field, _options),
         DirectiveCase.Adjust => AdjustValue,
-        DirectiveCase.Approval => new ApprovalDirective(_permission!, _violation),
+        DirectiveCase.Approval => new ApprovalDirective(_permission.GetValueOrDefault(), _violation),
         _ => null,
     };
 
@@ -146,7 +147,7 @@ public readonly struct Directive : IUnion
     public bool TryGetValue(out AdjustDirective value) { value = _tag == DirectiveCase.Adjust ? AdjustValue : default; return _tag == DirectiveCase.Adjust; }
 
     private AdjustDirective AdjustValue => new(_target, _direction, _isPercent ? _percent : null, _min, _max);
-    public bool TryGetValue(out ApprovalDirective value) { value = _tag == DirectiveCase.Approval ? new(_permission!, _violation) : default; return _tag == DirectiveCase.Approval; }
+    public bool TryGetValue(out ApprovalDirective value) { value = _tag == DirectiveCase.Approval ? new(_permission.GetValueOrDefault(), _violation) : default; return _tag == DirectiveCase.Approval; }
 
     public static implicit operator Directive(DenyDirective v) => new(v);
     public static implicit operator Directive(WarnDirective v) => new(v);
@@ -168,7 +169,7 @@ public readonly struct Directive : IUnion
     /// <summary>Adjust: cap of a percentage change (None = no cap).</summary>
     internal RawValue MaxAmount => _max;
     internal AdjustDirection Direction => _direction;
-    internal string? Permission => _permission;
+    internal Permission? Permission => _permission;
     internal AdjustTarget Target => _target;
     internal Exceed OnExceed => _exceed;
 

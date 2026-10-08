@@ -1,8 +1,20 @@
 namespace YFex.Messaging.Rpc;
 
-public enum ClientStorageBackend { Auto, InMemory, Sqlite, IndexedDb }
-public enum EncryptionMode { None, AesGcm }
-public enum EncryptionKeySource { OsKeyStore, Provided }
+/// <summary>
+/// Which outbox the client uses. The storage itself is whatever <c>IKeyValueStore</c> the app registers (SQLite, IndexedDB…);
+/// encrypt it with <c>AddYFexStorageEncryption</c> (YFex.Persistence.Encryption).
+/// </summary>
+public enum ClientStorageBackend
+{
+    /// <summary>Durable outbox when the registered store is durable (not <c>MemoryKeyValueStore</c>), else in-memory.</summary>
+    Auto,
+    /// <summary>Always the in-memory outbox (queued commands are lost on restart).</summary>
+    InMemory,
+    /// <summary>Same as <see cref="Auto"/>; documents intent.</summary>
+    Sqlite,
+    /// <summary>Same as <see cref="Auto"/>; documents intent.</summary>
+    IndexedDb,
+}
 
 /// <summary>Options for <c>AddYFexMessagingRpcClient</c>.</summary>
 public sealed class YFexMessagingRpcClientOptions
@@ -10,17 +22,23 @@ public sealed class YFexMessagingRpcClientOptions
     /// <summary>WebSocket endpoint of the Fusion RPC server (e.g. <c>wss://api.myapp.com</c>).</summary>
     public Uri WebSocketEndpoint { get; set; } = new("ws://localhost:5000");
 
+    /// <summary>
+    /// Outbox selection (offline design F14): <see cref="ClientStorageBackend.Auto"/> uses the durable outbox over the registered
+    /// store unless it is in-memory. Encryption at rest is configured on the store (<c>AddYFexStorageEncryption</c>); the
+    /// former <c>Encryption</c>/<c>EncryptionKeySource</c> options here were never read and were removed (offline design F12).
+    /// </summary>
     public ClientStorageBackend Storage { get; set; } = ClientStorageBackend.Auto;
 
-    /// <summary>Root directory for file-based backends (SQLite). Ignored for IndexedDB/InMemory.</summary>
+    /// <summary>Never read: configure the storage backend's own location instead.</summary>
+    [Obsolete("Not used by the RPC client; configure the storage backend (e.g. the SQLite connection) instead.")]
     public string? StorageDirectory { get; set; }
-
-    public EncryptionMode Encryption { get; set; } = EncryptionMode.None;
-    public EncryptionKeySource EncryptionKeySource { get; set; } = EncryptionKeySource.OsKeyStore;
 
     public OutboxOptions OutboxOptions { get; set; } = new();
 
-    /// <summary>Entries older than this TTL are moved to <see cref="ISyncFailureLog"/> with reason "expired".</summary>
+    /// <summary>
+    /// Age after which an outbox entry is considered expired: by default it is kept and a warning is logged
+    /// (<see cref="OutboxOptions.KeepExpiredEntries"/>); otherwise it moves to <see cref="ISyncFailureLog"/> with reason "expired".
+    /// </summary>
     public TimeSpan OutboxEntryTtl { get; set; } = TimeSpan.FromDays(7);
 
     /// <summary>Called after the client is fully configured — register AOT event types here.</summary>

@@ -1,5 +1,7 @@
 # Authorization + Capabilities — Design Overview
 
+> **2026-10-02:** most of this design is implemented. Current state, defects and the consolidation proposal are in [`authorization-consolidation/`](authorization-consolidation/README.md); read that first.
+
 **Status:** Proposed (design/plan, not yet implemented). **Date:** 2026-09-01.
 
 This overview frames the proposed framework concerns and the seams between them. It is the entry point for the detailed system-design documents:

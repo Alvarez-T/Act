@@ -17,18 +17,6 @@ public interface ICommandValidator<TCommand>
     ValueTask<ValidationResult> ValidateAsync(TCommand command, CancellationToken ct);
 }
 
-// ── Authorizers ──────────────────────────────────────────────────────────────
-
-public interface IQueryAuthorizer<TQuery>
-{
-    bool Authorize(ClaimsPrincipal user, TQuery query);
-}
-
-public interface ICommandAuthorizer<TCommand>
-{
-    bool Authorize(ClaimsPrincipal user, TCommand command);
-}
-
 // ── Reverse (compensation) handlers ──────────────────────────────────────────
 
 /// <summary>

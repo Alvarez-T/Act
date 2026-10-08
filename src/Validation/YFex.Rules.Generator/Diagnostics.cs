@@ -60,18 +60,6 @@ internal static class Diagnostics
     public static readonly DiagnosticDescriptor SourceMemberMismatch = D("YFR0031", "Situation source member does not fit",
         "'{0}.{1}': {2}");
 
-    // Rule functions (YFex.Rules.Dynamic, Phase 6)
-    public static readonly DiagnosticDescriptor FunctionContainer = D("YFR0040", "[RuleFunctions] container shape",
-        "'{0}' must be a static partial class or a partial interface (also its containing types) to receive its rule function descriptors");
-    public static readonly DiagnosticDescriptor FunctionType = D("YFR0041", "Unsupported rule function type",
-        "Rule function '{0}': '{1}' has unsupported type '{2}' (bool, numbers, string, dates, Guid, enums, IRawValue types)");
-    public static readonly DiagnosticDescriptor FunctionShape = D("YFR0042", "Rule function method shape",
-        "'{0}.{1}' must be {2} (no ref/out parameters, not generic)");
-    public static readonly DiagnosticDescriptor FunctionDuplicate = D("YFR0043", "Duplicate rule function name",
-        "Rule function '{0}' is declared twice in '{1}'");
-    public static readonly DiagnosticDescriptor FunctionDescription = D("YFR0044", "Rule function without description",
-        "Rule function '{0}' has no Description — rule authors and AI only see what the description says", DiagnosticSeverity.Warning);
-
     // Tables
     public static readonly DiagnosticDescriptor UnknownColumnField = D("YFR0101", "Unknown table column field",
         "Column '{0}' of table '{1}' binds '{2}', which is neither a field of '{3}', a line field, nor a derived field of its rule set");
@@ -87,6 +75,8 @@ internal static class Diagnostics
         "Member '{0}' of '{1}' has neither [When] nor [Then]; it is data only (ignored by evaluation)", DiagnosticSeverity.Info);
     public static readonly DiagnosticDescriptor UnknownTier = D("YFR0107", "Unknown rule tier",
         "Decision table '{0}': EditableAt names '{1}', which is not a [RuleTier] field of '{2}'");
+    public static readonly DiagnosticDescriptor UnresolvedPermission = D("YFR0108", "Permission argument not resolvable",
+        "Decision table '{0}': {1} must be a string id or a permission catalog constant (Catalog.Ids.X) whose property carries [Permission]");
 
     public static DiagnosticDescriptor ById(string id) => id switch
     {
@@ -110,11 +100,6 @@ internal static class Diagnostics
         "YFR0022" => NotAnAmount,
         "YFR0023" => AmountMismatch,
         "YFR0030" => SourceNotPartial,
-        "YFR0040" => FunctionContainer,
-        "YFR0041" => FunctionType,
-        "YFR0042" => FunctionShape,
-        "YFR0043" => FunctionDuplicate,
-        "YFR0044" => FunctionDescription,
         "YFR0031" => SourceMemberMismatch,
         "YFR0101" => UnknownColumnField,
         "YFR0102" => ColumnTypeMismatch,
@@ -123,6 +108,7 @@ internal static class Diagnostics
         "YFR0105" => InvalidThen,
         "YFR0106" => ColumnWithoutRole,
         "YFR0107" => UnknownTier,
+        "YFR0108" => UnresolvedPermission,
         _ => throw new System.ArgumentOutOfRangeException(nameof(id), id, null),
     };
 }

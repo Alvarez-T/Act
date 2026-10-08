@@ -19,7 +19,7 @@ public sealed class OutboxTtlTests
     [Fact]
     public async Task OutboxReplayer_MovesToFailureLog_WhenEntryExceedsTtl()
     {
-        var network = new ManualNetworkStatus(connected: false);
+        var network = new ManualServerConnection(connected: false);
         var outbox = new InMemoryOutbox(new OutboxOptions());
         var failureLog = new InMemorySyncFailureLog();
         outbox.SetFailureLog(failureLog);
@@ -37,8 +37,13 @@ public sealed class OutboxTtlTests
             new LocalHandlerInvoker(sp, YFexLocalHandlerRegistrations.BuildLocalHandlerInvokerRegistry()),
             registry, network, cache, outbox, bus, sp);
 
-        // TTL near-zero: entries expire almost immediately
-        var options = new YFexMessagingRpcClientOptions { OutboxEntryTtl = TimeSpan.FromMilliseconds(1) };
+        // TTL near-zero: entries expire almost immediately. Since offline Phase 0 expired entries are KEPT by default
+        // (a queued sale must not silently become a dead letter); this test opts into the dead-letter behaviour.
+        var options = new YFexMessagingRpcClientOptions
+        {
+            OutboxEntryTtl = TimeSpan.FromMilliseconds(1),
+            OutboxOptions = new OutboxOptions { KeepExpiredEntries = false },
+        };
         var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<OutboxReplayer>();
         var replayer = new OutboxReplayer(
             outbox, failureLog, dispatcher, network, syncStatus, bus,
@@ -62,6 +67,45 @@ public sealed class OutboxTtlTests
         failureLog.Failures.Should().ContainSingle(f => f.Reason == "expired",
             "outbox entries older than OutboxEntryTtl must move to the failure log with reason 'expired'");
         outbox.PendingCount.Should().Be(0, "expired entry must be removed from outbox");
+    }
+
+    // ── Offline Phase 0 (F5): expired entries are kept by default ───────────────
+
+    [Fact]
+    public async Task OutboxReplayer_KeepsExpiredEntry_ByDefault()
+    {
+        var network = new ManualServerConnection(connected: false);
+        var outbox = new InMemoryOutbox(new OutboxOptions());
+        var failureLog = new InMemorySyncFailureLog();
+        outbox.SetFailureLog(failureLog);
+        var cache = new InMemoryCache();
+        var bus = new DefaultEventBus();
+        var registry = CompiledMessagingRegistry.Build(baseline: []);
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        var sp = services.BuildServiceProvider();
+        var dispatcher = new LocalDispatcher(
+            new LocalHandlerInvoker(sp, YFexLocalHandlerRegistrations.BuildLocalHandlerInvokerRegistry()),
+            registry, network, cache, outbox, bus, sp);
+        var options = new YFexMessagingRpcClientOptions { OutboxEntryTtl = TimeSpan.FromMilliseconds(1) };
+        var replayer = new OutboxReplayer(
+            outbox, failureLog, dispatcher, network, new SyncStatus(), bus,
+            OutboxCommandRegistry.Empty, cache, registry, sp, options,
+            sp.GetRequiredService<ILoggerFactory>().CreateLogger<OutboxReplayer>());
+
+        await outbox.EnqueueAsync(new TestAggregate.Commands.CreateCommand(1, "Venda offline"));
+        await Task.Delay(20);
+
+        using var serviceCts = new CancellationTokenSource();
+        await replayer.StartAsync(serviceCts.Token);
+        network.GoOnline();
+        await Task.Delay(200);
+        await serviceCts.CancelAsync();
+        replayer.Dispose();
+
+        failureLog.Failures.Should().BeEmpty("an expired entry is kept and retried, not dead-lettered");
+        outbox.PendingCount.Should().Be(1);
     }
 
     // ── Test #28: Outbox overflow ──────────────────────────────────────────────
@@ -199,7 +243,7 @@ public sealed class OutboxTtlTests
         TestDispatcherFixture.ClearStore();
         TestDispatcherFixture.Store[1] = new TestItem(1, "Seed");
 
-        var network = new ManualNetworkStatus(connected: true);
+        var network = new ManualServerConnection(connected: true);
         var cache = new InMemoryCache();
         var outbox = new InMemoryOutbox(new OutboxOptions());
         var failureLog = new InMemorySyncFailureLog();

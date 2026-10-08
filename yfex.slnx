@@ -33,6 +33,7 @@
   </Folder>
   <Folder Name="/Persistence/">
     <Project Path="src/Persistence/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj" />
+    <Project Path="src/Persistence/YFex.Persistence.Encryption.Tests/YFex.Persistence.Encryption.Tests.csproj" />
     <Project Path="src/Persistence/YFex.Persistence.FileSystem/YFex.Persistence.FileSystem.csproj" />
     <Project Path="src/Persistence/YFex.Persistence.Generator/YFex.Persistence.Generator.csproj" />
     <Project Path="src/Persistence/YFex.Persistence.IndexedDb/YFex.Persistence.IndexedDb.csproj" />
@@ -70,6 +71,8 @@
     <Project Path="../YFex.Authorization/src/YFex.Authorization.Http/YFex.Authorization.Http.csproj" />
     <Project Path="../YFex.Authorization/tests/YFex.Authorization.Tests/YFex.Authorization.Tests.csproj" />
     <Project Path="../YFex.Authorization/tests/YFex.Authorization.AspNetCore.Tests/YFex.Authorization.AspNetCore.Tests.csproj" />
+  </Folder>
+  <Folder Name="/src/">
   </Folder>
   <Folder Name="/State/">
     <Project Path="src/State/YFex.State.Blazor/YFex.State.Blazor.csproj" />
@@ -109,6 +112,13 @@
     <Project Path="src/Validation/YFex.Rules.Data.Tests/YFex.Rules.Data.Tests.csproj" />
     <Project Path="src/Validation/YFex.Rules.Dynamic/YFex.Rules.Dynamic.csproj" />
     <Project Path="src/Validation/YFex.Rules.Dynamic.Tests/YFex.Rules.Dynamic.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Expressions/">
+    <Project Path="src/Expressions/YFex.Expressions/YFex.Expressions.csproj" />
+    <Project Path="src/Expressions/YFex.Expressions.Tests/YFex.Expressions.Tests.csproj" />
+    <Project Path="src/Expressions/YFex.Expressions.Generator/YFex.Expressions.Generator.csproj" />
+    <Project Path="src/Expressions/YFex.Expressions.Generator.Tests/YFex.Expressions.Generator.Tests.csproj" />
+    <Project Path="src/Expressions/YFex.Expressions.Benchmarks/YFex.Expressions.Benchmarks.csproj" />
   </Folder>
   <Project Path="src/YFex/YFex.csproj" />
   <Project Path="src/YFex.Tests/YFex.Tests.csproj" />

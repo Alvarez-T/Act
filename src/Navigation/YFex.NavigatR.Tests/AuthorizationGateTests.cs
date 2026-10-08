@@ -6,9 +6,15 @@ namespace YFex.NavigatR.Tests;
 
 // ─── Fakes over the .Public authorization seam ───────────────────────────────
 
-internal sealed class FakeAuthContext : IAuthContext
+internal sealed class FakeAuthContext : IAuthorizationContext
 {
     public System.Security.Claims.ClaimsPrincipal Principal { get; } = new();
+    public ActorIdentity Actor => new("nav-test");
+    public ActorIdentity? RealActor => null;
+    public ActorRelation Relation => ActorRelation.None;
+    public string? Scope => null;
+    public PermissionSet Permissions => PermissionSet.Empty;
+    public long Version => 0;
     public AccessToken? Token => null;
     public bool IsAuthenticated => true;
     public bool IsInRole(in Role role) => false;
@@ -18,21 +24,21 @@ internal sealed class FakeAuthContext : IAuthContext
 
 internal sealed class FakePrincipalAccessor : IPrincipalAccessor
 {
-    public IAuthContext Current { get; } = new FakeAuthContext();
+    public IAuthorizationContext Current { get; } = new FakeAuthContext();
 }
 
 internal sealed class FakeEvaluator(bool allow) : IPolicyEvaluator
 {
-    public bool IsAllowed(in Permission permission, IAuthContext ctx) => allow;
-    public bool IsAllowed(Policy policy, IAuthContext ctx) => allow;
-    public ValueTask<AuthorizationResult> AuthorizeAsync<TResource>(
-        Policy policy, IAuthContext<TResource> ctx, CancellationToken ct = default)
-        => ValueTask.FromResult<AuthorizationResult>(AuthorizationResult.Allow());
+    public bool IsVisible(CompiledPolicy policy, IAuthorizationContext caller) => allow;
+    public AuthorizationVerdict Authorize(CompiledPolicy policy, IAuthorizationContext caller, object? resource = null)
+        => allow ? AuthorizationVerdict.Allowed : AuthorizationVerdict.Forbidden(new Denial(DenialKind.PolicyDenied));
+    public ValueTask<AuthorizationVerdict> AuthorizeAsync(CompiledPolicy policy, IAuthorizationContext caller, object? resource,
+        CancellationToken cancellationToken = default) => new(Authorize(policy, caller, resource));
 }
 
-internal sealed class FakePolicyProvider(Type vmType, Policy vmPolicy) : IViewModelPolicyProvider
+internal sealed class FakePolicyProvider(Type vmType, CompiledPolicy vmPolicy) : IViewModelPolicyProvider
 {
-    public bool TryGetPolicy(Type viewModelType, out Policy policy)
+    public bool TryGetPolicy(Type viewModelType, out CompiledPolicy policy)
     {
         if (viewModelType == vmType) { policy = vmPolicy; return true; }
         policy = null!;
@@ -44,8 +50,8 @@ internal sealed class FakePolicyProvider(Type vmType, Policy vmPolicy) : IViewMo
 
 public sealed class AuthorizationGateTests
 {
-    private static readonly Policy SettingsPolicy =
-        new(default, new[] { Requirement.Require(Permission.Parse("settings.view")) });
+    private static readonly CompiledPolicy SettingsPolicy = CompiledPolicy.Compile(
+        PolicyKey.Route(typeof(SettingsViewModel)), [Requirement.Require(new Permission(PermissionKey.Declare("settings.view")))]);
 
     private static (Navigator navigator, FakeNavigation navPane) CreateGated(bool allow)
     {

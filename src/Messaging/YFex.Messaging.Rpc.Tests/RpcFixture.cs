@@ -36,7 +36,9 @@ public class RpcFixture : IAsyncDisposable
 
     public RpcFixture() : this("alice", Users.Acme) { }
 
-    protected RpcFixture(string? connectionSubject, ScopeIdentity connectionTenant)
+    protected RpcFixture(string? connectionSubject, ScopeIdentity connectionTenant,
+        Action<YFex.Authorization.AuthorizationConfigurator>? serverAuthorization = null,
+        Action<IServiceCollection>? configureServer = null)
     {
         ConnectionUser = () => connectionSubject is null ? Users.Anonymous() : Users.Principal(connectionSubject);
         ConnectionTenant = connectionTenant;
@@ -47,18 +49,20 @@ public class RpcFixture : IAsyncDisposable
         // ── Server ──
         var server = new ServiceCollection();
         server.AddLogging(b => b.AddProvider(Logs).SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Debug));
-        server.AddYFexAuthorization(a => a.UsePermissionProvider(Permissions));
+        server.AddYFexAuthorization(a => { a.AddPermissionSource(Permissions); serverAuthorization?.Invoke(a); });
         server.AddSingleton<ICallTokenValidator>(Tokens);
         // Registered before UseYFexMessagingRpcServer, whose TryAdds keep these.
-        server.AddSingleton(sp => CompiledMessagingRegistry.Build(
-            baseline: [new ShopBaseline()], serverOverrides: [new ShopServer()],
-            policyEvaluator: sp.GetRequiredService<IPolicyEvaluator>(),
-            principalFactory: p => CallAuthorization.ContextFor(p, sp.GetRequiredService<IAuthContextFactory>())));
+        // Its requirements are exported to the one message policy by UseYFexMessagingRpcServer (authorization-consolidation 04 §2).
+        server.AddSingleton(_ => CompiledMessagingRegistry.Build(baseline: [new ShopBaseline()], serverOverrides: [new ShopServer()]));
         server.AddSingleton(new LocalHandlerInvokerRegistryBuilder()
             .AddCommand<ShopAggregate.Commands.CreateCustomer, int>()
             .AddQuery<ShopAggregate.Queries.SearchCustomers, List<string>>()
             .AddQuery<ShopAggregate.Queries.WhoAmI, string>()
+            .AddCommand<ShopAggregate.Commands.ArchiveCustomer, int>()
+            .AddQuery<ShopAggregate.Queries.ExportCustomers, int>()
             .Build());
+        server.AddSingleton<ICommandHandler<ShopAggregate.Commands.ArchiveCustomer, int>, ArchiveCustomerHandler>();
+        server.AddSingleton<IQueryHandler<ShopAggregate.Queries.ExportCustomers, int>, ExportCustomersHandler>();
         server.AddSingleton(Handler);
         server.AddSingleton<ICommandHandler<ShopAggregate.Commands.CreateCustomer, int>>(Handler);
         server.AddSingleton<IQueryHandler<ShopAggregate.Queries.SearchCustomers, List<string>>, SearchCustomersHandler>();
@@ -67,6 +71,7 @@ public class RpcFixture : IAsyncDisposable
         // D25 validation decorator + D29 call context (the approved syntax).
         server.UseYFexMessagingRpcServer(rpc => rpc.CallContext(ctx => ctx.FromConnection().OrFromHeader("Authorization").WithTenant()));
         server.AddFusion().AddShopAggregateRpcServer();
+        configureServer?.Invoke(server);
         _server = server.BuildServiceProvider();
 
         // ── Client ──
@@ -75,19 +80,22 @@ public class RpcFixture : IAsyncDisposable
         var fusion = client.AddFusion();
         fusion.Rpc.AddShopAggregateRpcRemoteClient();   // generated client view under the contract's wire name
         fusion.AddClient<ICallPermissions>();            // what AddYFexMessagingRpcClient registers (permission refresh)
-        client.AddYFexAuthorization(a => a.UsePermissionProvider(Permissions));
+        fusion.Rpc.AddClient<ICentralTime>();            // … and the central anchor of the trusted clock (time T2)
+        client.AddYFexAuthorization(a => a.AddPermissionSource(Permissions));
+        client.AddSingleton(CompiledMessagingRegistry.Build(baseline: [new ShopBaseline()]));
+        client.AddYFexCqrsAuthorizationConfiguration();   // the client bus quick-checks the same policy (UX)
         client.AddSingleton<IPrincipalAccessor>(ClientUser);
         var serverHub = _server.GetRequiredService<RpcHub>();
         client.AddSingleton<RpcClient>(c => new InMemoryBridgeClient(c, serverHub, this));
         _client = client.BuildServiceProvider();
 
-        ClientUser.Current = _client.GetRequiredService<IAuthContextFactory>().Create(Users.Principal("alice"));
+        ClientUser.Current = _client.GetRequiredService<IAuthorizationContextFactory>().Create(Users.Principal("alice"));
         Contract = _client.GetRequiredService<IShopAggregateRpcClient>();
     }
 
     public CreateCustomerHandler Handler { get; } = new();
     public CaptureLoggerProvider Logs { get; } = new();
-    public TestPermissionProvider Permissions { get; } = new();
+    public TestPermissionSource Permissions { get; } = new();
     public TestTokenValidator Tokens { get; } = new();
     public IServiceProvider ServerServices => _server;
     public IServiceProvider ClientServices => _client;
@@ -102,7 +110,7 @@ public class RpcFixture : IAsyncDisposable
     /// <summary>The client app's logged-in user (UX-only stage 2 in <see cref="FusionMessageBus"/>).</summary>
     public FixedPrincipalAccessor ClientUser { get; } = new(CallContext.Anonymous);
 
-    public CallContextSignals Signals => _server.GetRequiredService<CallContextSignals>();
+    public IAuthorizationSignals Signals => _server.GetRequiredService<IAuthorizationSignals>();
     public WhoAmIHandler WhoAmI => _server.GetRequiredService<WhoAmIHandler>();
 
     /// <summary>Client-side dispatcher over the GENERATED routes (what an app calls).</summary>
@@ -111,12 +119,9 @@ public class RpcFixture : IAsyncDisposable
         var builder = new FusionMessageBusBuilder();
         ShopAggregateRpcClientRegistration.RegisterRoutes(builder, Contract);   // generated routes (typed results, D26)
         var sp = services ?? _client;
-        var factory = sp.GetRequiredService<IAuthContextFactory>();
         return builder.Build(
-            CompiledMessagingRegistry.Build(baseline: [new ShopBaseline()],
-                policyEvaluator: sp.GetRequiredService<IPolicyEvaluator>(),
-                principalFactory: p => CallAuthorization.ContextFor(p, factory)),
-            new TestNetworkStatus(connected),
+            sp.GetRequiredService<CompiledMessagingRegistry>(),
+            new TestServerConnection(connected),
             new InMemoryCache(),
             outbox ?? new InMemoryOutbox(new OutboxOptions()),
             new DefaultEventBus(),
@@ -155,11 +160,10 @@ public class RpcFixture : IAsyncDisposable
         }
     }
 
-    private sealed class TestNetworkStatus(bool connected) : INetworkStatus
+    private sealed class TestServerConnection(bool connected) : IServerConnection
     {
-        public bool IsConnected => connected;
-        public SyncState State => connected ? SyncState.Connected : SyncState.Disconnected;
-        public event Action<SyncState>? Changed { add { } remove { } }
+        public ServerConnectionState State => connected ? ServerConnectionState.Connected : ServerConnectionState.Disconnected;
+        public event Action<ServerConnectionChange>? Changed { add { } remove { } }
     }
 }
 
@@ -171,6 +175,22 @@ public sealed class CarolFixture : RpcFixture
 {
     public CarolFixture() : base("carol", Users.Acme)
         => Permissions.Grant("carol", ShopPermissions.CreateCustomer, ShopPermissions.SearchCustomers);
+}
+
+/// <summary>
+/// Anonymous connection; callers come from per-call tokens. Dave holds the archive/export permissions; the server adds a
+/// <c>ForMessage&lt;ExportCustomers&gt;()</c> row (authorization-consolidation 04 §2, D1).
+/// </summary>
+public sealed class GateFixture : RpcFixture
+{
+    public GateFixture() : base(null, ScopeIdentity.None, a => a.AddConfiguration(new ExportRequiresPermission()))
+        => Permissions.Grant("dave", ShopPermissions.ArchiveCustomers, ShopPermissions.ExportCustomers, ShopPermissions.CreateCustomer);
+
+    private sealed class ExportRequiresPermission : YFex.Authorization.Public.IAuthorizationConfiguration
+    {
+        public void Configure(YFex.Authorization.Public.AuthorizationBuilder builder)
+            => builder.ForMessage<ShopAggregate.Queries.ExportCustomers>().RequirePermission(ShopPermissions.ExportCustomers);
+    }
 }
 
 /// <summary>Erin@acme — for revocation (own fixture: it closes the connection).</summary>

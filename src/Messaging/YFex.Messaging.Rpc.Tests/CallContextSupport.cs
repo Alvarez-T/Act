@@ -8,10 +8,20 @@ using YFex.Tenancy;
 namespace YFex.Messaging.Rpc.Tests;
 
 /// <summary>Permissions of the shop test domain (declared once in the baseline, enforced client- AND server-side).</summary>
-public static class ShopPermissions
+[PermissionCatalog]
+public static partial class ShopPermissions
 {
-    public static readonly Permission CreateCustomer = Permission.Parse("shop.customers.create");
-    public static readonly Permission SearchCustomers = Permission.Parse("shop.customers.search");
+    [Permission("shop.customers.create", Name = "Cadastrar cliente")]
+    public static partial Permission CreateCustomer { get; }
+
+    [Permission("shop.customers.search", Name = "Pesquisar clientes")]
+    public static partial Permission SearchCustomers { get; }
+
+    [Permission("shop.customers.archive", Name = "Arquivar clientes")]
+    public static partial Permission ArchiveCustomers { get; }
+
+    [Permission("shop.customers.export", Name = "Exportar clientes")]
+    public static partial Permission ExportCustomers { get; }
 }
 
 /// <summary>Test users and tenants.</summary>
@@ -33,12 +43,12 @@ public static class Users
 }
 
 /// <summary>Mutable permission store keyed by subject; counts loads to prove the server caches per permissions version.</summary>
-public sealed class TestPermissionProvider : IPermissionProvider
+public sealed class TestPermissionSource : IPermissionSource
 {
     private readonly ConcurrentDictionary<string, FrozenSet<PermissionKey>> _grants = new(StringComparer.Ordinal);
     private readonly ConcurrentDictionary<string, int> _loads = new(StringComparer.Ordinal);
 
-    public TestPermissionProvider Grant(string subject, params Permission[] permissions)
+    public TestPermissionSource Grant(string subject, params Permission[] permissions)
     {
         _grants.AddOrUpdate(subject,
             _ => permissions.Select(p => p.Key).ToFrozenSet(),
@@ -46,7 +56,7 @@ public sealed class TestPermissionProvider : IPermissionProvider
         return this;
     }
 
-    public TestPermissionProvider Revoke(string subject, params Permission[] permissions)
+    public TestPermissionSource Revoke(string subject, params Permission[] permissions)
     {
         _grants.AddOrUpdate(subject, _ => FrozenSet<PermissionKey>.Empty,
             (_, old) => old.Except(permissions.Select(p => p.Key)).ToFrozenSet());
@@ -55,12 +65,14 @@ public sealed class TestPermissionProvider : IPermissionProvider
 
     public int LoadsOf(string subject) => _loads.TryGetValue(subject, out var n) ? n : 0;
 
-    public IReadOnlySet<PermissionKey> PermissionsFor(ClaimsPrincipal principal)
+    public ValueTask ContributeAsync(PermissionResolution request, PermissionSet.Builder permissions, CancellationToken cancellationToken)
     {
-        var subject = CallContext.SubjectOf(principal);
-        if (subject is null) return FrozenSet<PermissionKey>.Empty;
+        if (request.Subject.IsAnonymous) return ValueTask.CompletedTask;
+        var subject = request.Subject.Subject;
         _loads.AddOrUpdate(subject, 1, static (_, n) => n + 1);
-        return _grants.TryGetValue(subject, out var set) ? set : FrozenSet<PermissionKey>.Empty;
+        if (_grants.TryGetValue(subject, out var set))
+            foreach (var key in set) permissions.Add(key);
+        return ValueTask.CompletedTask;
     }
 }
 
@@ -89,9 +101,9 @@ public sealed class TestTokenValidator : ICallTokenValidator
 }
 
 /// <summary>Client-side "logged-in user" for the UX-only stage 2 of <see cref="FusionMessageBus"/>.</summary>
-public sealed class FixedPrincipalAccessor(IAuthContext current) : IPrincipalAccessor
+public sealed class FixedPrincipalAccessor(IAuthorizationContext current) : IPrincipalAccessor
 {
-    public IAuthContext Current { get; set; } = current;
+    public IAuthorizationContext Current { get; set; } = current;
 }
 
 /// <summary>Minimal request services of a fake WebSocket upgrade request: only the host's resolved tenant.</summary>

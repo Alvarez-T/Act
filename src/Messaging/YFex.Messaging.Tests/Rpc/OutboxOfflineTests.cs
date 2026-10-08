@@ -135,7 +135,7 @@ public sealed class OutboxOfflineTests
             RecordingOfflineHandler>();
         var sp = services.BuildServiceProvider();
 
-        var network = new ManualNetworkStatus(connected: false);
+        var network = new ManualServerConnection(connected: false);
         var cache = new InMemoryCache();
         var outbox = new InMemoryOutbox(new OutboxOptions());
         var failLog = new InMemorySyncFailureLog();
@@ -170,7 +170,7 @@ public sealed class OutboxOfflineTests
             RecordingOfflineHandler>();
         var sp = services.BuildServiceProvider();
 
-        var network = new ManualNetworkStatus(connected: false);
+        var network = new ManualServerConnection(connected: false);
         var cache = new InMemoryCache();
         var outbox = new InMemoryOutbox(new OutboxOptions());
         outbox.SetFailureLog(new InMemorySyncFailureLog());

@@ -3,21 +3,21 @@ using static YFex.Rules.Dynamic.Tests.Shop;
 namespace YFex.Rules.Dynamic.Tests;
 
 /// <summary>App functions written in C# — the generator emits descriptors + adapters.</summary>
-[RuleFunctions(Category = "shop")]
+[ExprFunctions(Category = "shop")]
 public static partial class ShopFunctions
 {
-    [RuleFunction("bulkPrice", Description = "Unit price after the bulk tier: 5% off from 10 units, 10% from 50.")]
+    [ExprFunction("bulkPrice", Description = "Unit price after the bulk tier: 5% off from 10 units, 10% from 50.")]
     public static Money BulkPrice(Money unitPrice, int quantity) => unitPrice * (quantity >= 50 ? 0.9m : quantity >= 10 ? 0.95m : 1m);
 
-    [RuleFunction(Description = "True for payment methods settled instantly.")]
+    [ExprFunction(Description = "True for payment methods settled instantly.")]
     public static bool IsInstant(PayMethod method) => method is PayMethod.Pix or PayMethod.Card;
 }
 
 /// <summary>A contract a library declares; each domain app supplies the calendar.</summary>
-[RuleFunctions(Category = "calendar")]
+[ExprFunctions(Category = "calendar")]
 public partial interface ICalendarFunctions
 {
-    [RuleFunction("isHoliday", Description = "True when the date is a public holiday where the sale happens.")]
+    [ExprFunction("isHoliday", Description = "True when the date is a public holiday where the sale happens.")]
     static abstract bool IsHoliday(DateOnly date);
 }
 

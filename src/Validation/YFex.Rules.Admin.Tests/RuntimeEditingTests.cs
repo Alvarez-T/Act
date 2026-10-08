@@ -79,9 +79,13 @@ public class RuntimeEditingTests
         changed.Kind.Should().Be(RowChangeKind.Changed);                        // shifted by the insert, not "moved"
         changed.Values.Should().ContainSingle().Which.Should().Be(new ValueChange("MaxSeats", "60", "70"));
 
+        // A caller without the permission is stopped by the message gate (authorization-consolidation 04 §2.5): it never reaches the
+        // publish pipeline, so the rule audit sink sees no attempt; the denial is an AuthorizationEvents.Denied event instead.
         f.User.Permissions.Clear();
-        await f.Dispatcher.CommandAsync<Commands.PublishTable, long>(Table(2, new SeatTable.Row(Is(Plan.Pro), 1)));
-        sink.Rejected.Should().ContainSingle().Which.Error.Type.Should().Be(ErrorType.Unauthorized);
+        var denied = await f.Dispatcher.CommandAsync<Commands.PublishTable, long>(Table(2, new SeatTable.Row(Is(Plan.Pro), 1)));
+        denied.TryGetError(out var e).Should().BeTrue();
+        e.Kind.Should().Be(ErrorKind.Forbidden);
+        sink.Rejected.Should().BeEmpty();
     }
 
     [Fact]
@@ -152,7 +156,7 @@ public class RuntimeEditingTests
         var q = new Queries.Simulate("pricing", RuleDataKind.Table, "pricing.seats", AdminFixture.Tenant, draft, Today, Today);
 
         (await f.Dispatcher.QueryAsync<Queries.Simulate, SimulationResult>(q)).TryGetError(out var e1).Should().BeTrue();
-        e1.Type.Should().Be(ErrorType.Unauthorized);
+        e1.Kind.Should().Be(ErrorKind.Forbidden);
 
         f.User.Permissions.Add("pricing.rules.seats.publish");
         (await f.Dispatcher.QueryAsync<Queries.Simulate, SimulationResult>(q)).TryGetError(out var e2).Should().BeTrue();

@@ -127,7 +127,7 @@ public readonly struct InstallmentGuardrails : IRule<SaleSituation>, IRowGuard<I
 
 [DecisionTable<SaleSituation>("sale.installments", HitPolicy.First,
     Group = nameof(SaleRules.Installments), EditableAt = new[] { nameof(SaleSituation.Tenant), nameof(SaleSituation.Store) },
-    PublishPermission = "sales.rules.installments.publish", Guardrail = typeof(InstallmentGuardrails))]
+    PublishPermission = RulesTestPermissions.Ids.InstallmentsPublish, Guardrail = typeof(InstallmentGuardrails))]
 public partial class InstallmentTable
 {
     [Validatable]
@@ -149,12 +149,12 @@ public partial class InstallmentTable
 }
 
 [DecisionTable<SaleSituation>("sale.manual-discount", HitPolicy.First,
-    Group = nameof(SaleRules.Manual), EditableAt = new[] { nameof(SaleSituation.Tenant) }, PublishPermission = "sales.rules.manual-discount.publish")]
+    Group = nameof(SaleRules.Manual), EditableAt = new[] { nameof(SaleSituation.Tenant) }, PublishPermission = RulesTestPermissions.Ids.ManualDiscountPublish)]
 public partial class ManualDiscountTable
 {
     public readonly partial record struct Row(
         [property: When("Actor")] Match<ActorLevel> Actor,
-        [property: Then(DirectiveKind.LimitMax, "ManualDiscount", OnExceed = Exceed.RequireApproval, ApprovalPermission = "sales.discount.override")] Percentual Max);
+        [property: Then(DirectiveKind.LimitMax, "ManualDiscount", OnExceed = Exceed.RequireApproval, ApprovalPermission = RulesTestPermissions.Ids.DiscountOverride)] Percentual Max);
 
     public static readonly Row[] DefaultRows =
     [

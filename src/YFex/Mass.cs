@@ -56,8 +56,13 @@ public readonly record struct Mass :
     IComparisonOperators<Mass, Mass, bool>,
     IMinMaxValue<Mass>,
     IAdditiveIdentity<Mass, Mass>,
-    IAmount<Mass>
+    IAmount<Mass>,
+    global::YFex.Diagnostics.ILogValue<Mass>
 {
+    /// <summary>Logs as its raw value: no boxing and no formatting on the caller (YFex.Diagnostics).</summary>
+    static void global::YFex.Diagnostics.ILogValue<Mass>.Write(in Mass value, ref global::YFex.Diagnostics.LogWriter writer, ushort field)
+        => writer.WriteRawValue(field, in value);
+
     /// <summary>Canonical scale (grams, 4 decimal places → 0.1&#160;mg resolution).</summary>
     public const int Scale = 4;
 

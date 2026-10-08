@@ -138,7 +138,7 @@ public class GeneratedScenarioTests
         SaleRules.Catalog.TryGet("sale.installments", out var t).Should().BeTrue();
         t.IsTable.Should().BeTrue();
         t.EditableAt.Should().Equal("Tenant", "Store");
-        t.PublishPermission.Should().Be("sales.rules.installments.publish");
+        t.PublishPermission.Should().Be(RulesTestPermissions.Ids.InstallmentsPublish);   // catalog metadata keeps the id
         SaleRules.Catalog.TryGet("loyalty.gold", out var g).Should().BeTrue();
         g.EditableAt.Should().Equal("Tenant");                                              // from its parameter
         g.Version.Should().Be(3);

@@ -1,5 +1,27 @@
 # 07 — Audit, privacy & compliance
 
+> **Confirmed ✅ L20 (2026-10-01):** audit becomes a **sibling library `YFex.Audit`**, not part of YFex.Logging (reasons in §0). Its full design and plan is produced by a separate session in `docs/internal/audit/`, which supersedes §1–§5 of this file once written.
+> The content below stays valid; only its home changes. Privacy primitives (sensitivity, masking, crypto-shredding keys) move
+> to **YFex.Privacy** (being designed in a separate session, `docs/internal/privacy/`).
+
+## 0. Why audit is a sibling of logging, not part of it
+
+| Shared (stays in common contracts) | Different (why a separate library) |
+|---|---|
+| trace/operation context, so an audit entry links to the trace that produced it | **purpose and readers**: tenant admins, auditors, fiscal inspection read audit inside the *business app*; developers read logs in LoggY |
+| operation descriptors + generated capture (`[Audited]` reuses the same capture code) | **guarantees**: lossless, never sampled, tamper-evident, legal retention vs lossy, sampled, short-lived |
+| `[Sensitive]` / redaction (YFex.Privacy) | **must work with logging off**: an offline POS must keep fiscal/financial audit even with diagnostics disabled or sampled |
+| `.ylog` framing (YFex.Logging.Format) can carry audit frames when both are installed | **volume**: audit is ~1000× smaller, so it can use a per-entry durable outbox (YFex.Persistence `DataDurableQueue<T>`) instead of the log spool |
+| | **content**: business facts and entity before/after diffs (Data/Persistence/EventSourcing), not technical telemetry |
+| | **access control and lifecycle**: separate permissions, insert-only storage, erasure via crypto-shredding, WORM export |
+
+Proposed layout (sibling repo `C:\Dev\YFex\YFex.Audit`): `YFex.Audit` (entries, `[Audited]`/`[AuditChanges]`, actor/tenant
+resolution, hash chain, durable outbox, adapters for `IDecisionAuditSink`/`IRuleAuditSink`/`ITenantImpersonationAuditor`/
+Authorization/Payment), `YFex.Audit.Generator` (entity diffs), `YFex.Audit.Data` (Postgres/SQLite store via YFex.Data),
+`YFex.Audit.Server` (query, chain verification, anchors, export, subject erasure), optional `YFex.Audit.EventSourcing` (Marten stream).
+When YFex.Logging is installed, each audit entry also appears as a mark in its trace (`audited #18234`) and the log server can
+show both.
+
 ## 1. Audit is not "logs at a higher level"
 
 | | Diagnostic | Audit |

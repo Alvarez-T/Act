@@ -47,7 +47,7 @@ public sealed class CallContextServerBuilder
     /// DEFAULT — connection-bound: the identity (<see cref="HttpContext.User"/> + bearer token, and the tenant with
     /// <see cref="WithTenant"/>) is captured ONCE when the WebSocket connects (the upgrade request went through the host's
     /// authentication and tenant middleware) and applied to every call on that connection. A reconnect re-captures it;
-    /// <see cref="CallContextSignals.RevokeAsync"/> forces one. Expired identities (token / <c>exp</c>) run as anonymous.
+    /// <see cref="IAuthorizationSignals.RevokedAsync"/> forces one. Expired identities (token / <c>exp</c>) run as anonymous.
     /// </summary>
     /// <param name="capture">Custom capture (<c>(http, withTenant) => identity</c>); default: see remarks above.</param>
     public CallContextServerBuilder FromConnection(Func<HttpContext, bool, CallIdentity?>? capture = null)

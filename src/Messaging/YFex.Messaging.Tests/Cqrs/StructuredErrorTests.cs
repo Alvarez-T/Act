@@ -2,6 +2,9 @@ using YFex.Cqrs;
 using YFex.Cqrs.Configuration;
 using YFex.Messaging.Tests.Fixtures;
 using YFex.Validation;
+using Denial = YFex.Authorization.Public.Denial;
+using DenialKind = YFex.Authorization.Public.DenialKind;
+using AuthorizationVerdict = YFex.Authorization.Public.AuthorizationVerdict;
 
 namespace YFex.Messaging.Tests.Cqrs;
 
@@ -16,7 +19,7 @@ public sealed class StructuredErrorTests
     {
         Error e = default;
 
-        e.Type.Should().Be(ErrorType.None);
+        e.Kind.Should().Be(ErrorKind.None);
         e.Message.Should().BeEmpty();
         e.Violations.IsEmpty.Should().BeTrue();
         e.HasViolations.Should().BeFalse();
@@ -34,7 +37,7 @@ public sealed class StructuredErrorTests
 
         Error e = Error.Validation(result);
 
-        e.Type.Should().Be(ErrorType.ValidationProblem);
+        e.Kind.Should().Be(ErrorKind.ValidationProblem);
         e.Violations.Count.Should().Be(3);
         e.Message.Should().Be("Name: Name is required", "the first ERROR wins, detail preferred over code");
     }
@@ -56,7 +59,7 @@ public sealed class StructuredErrorTests
             new TestAggregate.Commands.CreateCommand(1, ""));
 
         r.TryGetError(out var error).Should().BeTrue();
-        error.Type.Should().Be(ErrorType.ValidationProblem);
+        error.Kind.Should().Be(ErrorKind.ValidationProblem);
         error.Violations.Count.Should().Be(1);
         error.Violations[0].Path.ToString().Should().Be("Name");
         error.Violations[0].Code.Value.Should().Be("required");
@@ -64,14 +67,14 @@ public sealed class StructuredErrorTests
     }
 
     [Fact]
-    public async Task Unauthorized_command_returns_ErrorType_Unauthorized()
+    public async Task Anonymous_caller_of_an_authenticated_command_gets_Unauthenticated()
     {
         var fx = new TestDispatcherFixture(configurations: [new AuthenticatedDeleteConfig()]);
 
         var r = await fx.Dispatcher.CommandAsync(new TestAggregate.Commands.DeleteCommand(1));
 
         r.TryGetError(out var error).Should().BeTrue();
-        error.Type.Should().Be(ErrorType.Unauthorized);
+        error.Kind.Should().Be(ErrorKind.Unauthenticated);
     }
 
     private sealed class RequiredNameConfig : IAggregateConfiguration<TestAggregate>
@@ -87,5 +90,52 @@ public sealed class StructuredErrorTests
     {
         public void Configure(AggregateConfigurationBuilder<TestAggregate> b)
             => b.Command<TestAggregate.Commands.DeleteCommand>().RequireAuthenticated();
+    }
+
+    // ── [Union] Error (authorization-consolidation ⚑Z11, Phase 2b) ──────────────────────────────────────────────────────
+
+    [Fact]
+    public void Verdicts_map_to_Unauthenticated_and_Forbidden_with_the_denial()
+    {
+        Error.From(AuthorizationVerdict.Unauthenticated).Kind.Should().Be(ErrorKind.Unauthenticated);
+
+        var denial = new Denial(DenialKind.MissingRole, Code: "Supervisor");
+        var forbidden = Error.From(AuthorizationVerdict.Forbidden(denial));
+        forbidden.Kind.Should().Be(ErrorKind.Forbidden);
+        forbidden.TryGetValue(out Forbidden f).Should().BeTrue();
+        f.Denial.Should().Be(denial);
+        forbidden.Message.Should().Be("Requires role Supervisor.");
+
+        var allowed = () => Error.From(AuthorizationVerdict.Allowed);
+        allowed.Should().Throw<ArgumentException>();
+    }
+
+    [Fact]
+    public void Each_case_answers_only_its_own_TryGetValue()
+    {
+        Error notFound = new NotFound("gone");
+        notFound.TryGetValue(out NotFound n).Should().BeTrue();
+        n.Message.Should().Be("gone");
+        notFound.TryGetValue(out Failed _).Should().BeFalse();
+        notFound.TryGetValue(out Forbidden _).Should().BeFalse();
+        notFound.TryGetValue(out ApprovalRequired _).Should().BeFalse();
+        notFound.HasViolations.Should().BeFalse();
+
+        Error conflict = new Conflict("stale", ViolationList.From([new Violation(FieldPath.Empty, "rules.decision.mismatch")]));
+        conflict.HasViolations.Should().BeTrue();
+        conflict.TryGetValue(out Conflict c).Should().BeTrue();
+        c.Violations.Count.Should().Be(1);
+    }
+
+    [Fact]
+    public void Message_override_keeps_the_case_and_a_string_is_a_failure()
+    {
+        var custom = new Error(new Forbidden(new Denial(DenialKind.ResourceDenied))).WithMessage("Not allowed to publish at t1.");
+        custom.Kind.Should().Be(ErrorKind.Forbidden);
+        custom.Message.Should().Be("Not allowed to publish at t1.");
+
+        Error plain = "boom";
+        plain.Kind.Should().Be(ErrorKind.Failed);
+        plain.Message.Should().Be("boom");
     }
 }

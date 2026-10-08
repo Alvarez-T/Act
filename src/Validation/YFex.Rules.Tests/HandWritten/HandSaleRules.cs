@@ -77,7 +77,7 @@ public sealed class InstallmentTable : IDecisionTable<HSale, InstallmentTable.Ro
     public static string Code => "sale.installments";
 
     public static TableSchema Schema { get; } = new("sale.installments", "sale", HitPolicy.First, ["Tenant", "Store"],
-        "sales.rules.installments.publish", isLineTable: false, complete: false,
+        RulesTestPermissions.InstallmentsPublish, isLineTable: false, complete: false,
     [
         new(0, "Payment", ColumnRole.When, CellShape.Match, "Payment", RawType.EnumCode),
         new(1, "Total", ColumnRole.When, CellShape.Band, "Total", Money.RawType),
@@ -168,7 +168,7 @@ public sealed class ManualDiscountTable : IDecisionTable<HSale, ManualDiscountTa
     public static string Code => "sale.manual-discount";
 
     public static TableSchema Schema { get; } = new("sale.manual-discount", "sale", HitPolicy.First, ["Tenant"],
-        "sales.rules.manual-discount.publish", isLineTable: false, complete: false,
+        RulesTestPermissions.ManualDiscountPublish, isLineTable: false, complete: false,
     [
         new(0, "Actor", ColumnRole.When, CellShape.Match, "Actor", RawType.EnumCode),
         new(1, "Max", ColumnRole.Then, CellShape.Value, "ManualDiscount", Percentual.RawType, DirectiveKind.LimitMax),
@@ -187,7 +187,7 @@ public sealed class ManualDiscountTable : IDecisionTable<HSale, ManualDiscountTa
     public static int Match(in Row row, in HSale s, int lineIndex) => row.Actor.Matches(s.Actor) ? -1 : 0;
 
     public static void Emit(in Row row, in HSale s, int lineIndex, ref DirectiveWriter d)
-        => d.LimitRaw(HSale.Fields.ManualDiscount, RawValue.None, RawValue.From(row.Max), Exceed.RequireApproval, "sales.discount.override");
+        => d.LimitRaw(HSale.Fields.ManualDiscount, RawValue.None, RawValue.From(row.Max), Exceed.RequireApproval, RulesTestPermissions.DiscountOverride);
 
     public static void CheckRow(in Row row, ref ViolationWriter w) { }
     public static bool Intersects(in Row a, in Row b, int column) => a.Actor.Intersects(b.Actor);

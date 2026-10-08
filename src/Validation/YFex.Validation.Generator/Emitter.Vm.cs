@@ -535,14 +535,16 @@ internal static partial class Emitter
 
         sb.Line($"private {newMod}{SO} __ApplyServerError<TContract>(in {Cqrs}.Error error)");
         sb.Open();
-        sb.Line($"if (error.Type == {Cqrs}.ErrorType.ValidationProblem && error.HasViolations)");
+        sb.Line($"if (error.Kind == {Cqrs}.ErrorKind.ValidationProblem && error.HasViolations)");
         sb.Line($"    return ApplyServer<TContract>({VR}.Of(error.Violations));");
-        sb.Line("global::YFex.Validation.RuleCode __code = error.Type switch");
+        sb.Line("global::YFex.Validation.RuleCode __code = error.Kind switch");
         sb.Open();
-        sb.Line($"{Cqrs}.ErrorType.NotFound => \"server.notfound\",");
-        sb.Line($"{Cqrs}.ErrorType.Unauthorized => \"server.unauthorized\",");
-        sb.Line($"{Cqrs}.ErrorType.Conflict => \"server.conflict\",");
-        sb.Line($"{Cqrs}.ErrorType.ValidationProblem => \"server.invalid\",");
+        sb.Line($"{Cqrs}.ErrorKind.NotFound => \"server.notfound\",");
+        sb.Line($"{Cqrs}.ErrorKind.Unauthenticated => \"server.unauthenticated\",");
+        sb.Line($"{Cqrs}.ErrorKind.Forbidden => \"server.forbidden\",");
+        sb.Line($"{Cqrs}.ErrorKind.Conflict => \"server.conflict\",");
+        sb.Line($"{Cqrs}.ErrorKind.ValidationProblem => \"server.invalid\",");
+        sb.Line($"{Cqrs}.ErrorKind.ApprovalRequired => \"server.approval\",");
         sb.Line("_ => \"server.fail\",");
         sb.Close();
         sb.Line(";");

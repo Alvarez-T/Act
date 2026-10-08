@@ -106,7 +106,7 @@ public class EngineScenarioTests
     {
         var seller = HandSaleRules.Evaluate(S with { ManualDiscount = Pct(8) });
         seller.Verdict.IsNeedsApproval.Should().BeTrue();
-        seller.Approvals.Requires("sales.discount.override").Should().BeTrue();
+        seller.Approvals.Requires(RulesTestPermissions.DiscountOverride).Should().BeTrue();
         seller.Violations[0].Severity.Should().Be(YFex.Validation.Severity.Warning);
         seller.Adjustments.AsSpan().ToArray().Should().Contain(a => a.Rule.Code == "sale.manual" && a.Amount.As<Money>() == new Money(95.20m));
 

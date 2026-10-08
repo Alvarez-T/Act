@@ -279,7 +279,7 @@ public sealed class RuleCatalog
         }
         foreach (var t in set.Tables)
             list.Add(new(set.Rules.Length + t.Index, t.Code, t.Group.Name, t.Group.Stage.Ref, true, !t.Schema.IsEditable,
-                t.Version, t.Schema.EditableAt.ToArray(), 0, t.Schema.PublishPermission, null));
+                t.Version, t.Schema.EditableAt.ToArray(), 0, t.Schema.PublishPermission?.Value, null));
         return new(set.Name, [.. list]);
     }
 }

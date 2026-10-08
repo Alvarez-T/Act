@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Expression language shared by YFex.Rules.Dynamic (runtime rules) and YFex.Composer (screen formulas):
+       JSON AST (JsonLogic-like), static types over RawType, function catalog, binder with JSON-path diagnostics,
+       postfix programs over IFieldReader. Extracted from YFex.Rules.Dynamic in Phase X
+       (docs/internal/expressions/phase-x-extraction.md). Layer 0.5: → YFex core + YFex.Validation only. -->
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <LangVersion>preview</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RootNamespace>YFex.Expressions</RootNamespace>
+    <AssemblyName>YFex.Expressions</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\YFex\YFex.csproj" />
+    <ProjectReference Include="..\..\Validation\YFex.Validation\YFex.Validation.csproj" />
+  </ItemGroup>
+
+  <!-- Bundle generator ([ExprFunctions] descriptors): consumers get runtime + codegen from one package reference.
+       (Project references don't flow analyzers — test projects reference the generator explicitly.) -->
+  <ItemGroup>
+    <ProjectReference Include="..\YFex.Expressions.Generator\YFex.Expressions.Generator.csproj"
+                      OutputItemType="Analyzer"
+                      ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="YFex.Expressions.Tests" />
+  </ItemGroup>
+
+</Project>

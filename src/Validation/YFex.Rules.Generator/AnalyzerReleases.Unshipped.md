@@ -27,14 +27,10 @@ YFR0103 | YFex.Rules | Error | Decision table must be partial
 YFR0104 | YFex.Rules | Error | Decision table without Row
 YFR0105 | YFex.Rules | Error | Invalid [Then] column
 YFR0106 | YFex.Rules | Info | Row member without [When]/[Then]
+YFR0108 | YFex.Rules | Error | Permission argument not resolvable
 YFR0030 | YFex.Rules | Error | [SituationSource] view model must be partial
 YFR0031 | YFex.Rules | Error | Situation source member does not fit
 YFR0007 | YFex.Rules | Error | Too many rule tiers
 YFR0022 | YFex.Rules | Error | Base/LineBase must return an amount
 YFR0023 | YFex.Rules | Error | Base and LineBase amounts differ
 YFR0107 | YFex.Rules | Error | Unknown rule tier
-YFR0040 | YFex.Rules | Error | [RuleFunctions] container shape
-YFR0041 | YFex.Rules | Error | Unsupported rule function type
-YFR0042 | YFex.Rules | Error | Rule function method shape
-YFR0043 | YFex.Rules | Error | Duplicate rule function name
-YFR0044 | YFex.Rules | Warning | Rule function without description

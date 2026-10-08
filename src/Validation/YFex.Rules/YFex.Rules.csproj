@@ -12,11 +12,12 @@
     <AssemblyName>YFex.Rules</AssemblyName>
   </PropertyGroup>
 
-  <!-- Layer 1: YFex core + YFex.Validation. Must NOT reference YFex.State / YFex.Cqrs / YFex.Authorization
-       (permissions travel as strings; Cqrs/UI map them). Design: docs/internal/validation/04-06. -->
+  <!-- Layer 1: YFex core + YFex.Validation + the leaf YFex.Authorization.Public (typed Permission, authorization-consolidation
+       ⚑Z2). Must NOT reference YFex.State / YFex.Cqrs / the YFex.Authorization runtime. Design: docs/internal/validation/04-06. -->
   <ItemGroup>
     <ProjectReference Include="..\..\YFex\YFex.csproj" />
     <ProjectReference Include="..\YFex.Validation\YFex.Validation.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Authorization\src\YFex.Authorization.Public\YFex.Authorization.Public.csproj" />
   </ItemGroup>
 
   <!-- Bundle generator: consumers get runtime + codegen from one package reference. -->

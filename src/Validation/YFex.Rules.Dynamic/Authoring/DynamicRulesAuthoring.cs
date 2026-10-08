@@ -1,5 +1,5 @@
-using System.Buffers;
 using System.Text.Json;
+using static YFex.Expressions.ExprAuthoring;
 
 namespace YFex.Rules.Dynamic;
 
@@ -9,34 +9,10 @@ namespace YFex.Rules.Dynamic;
 /// caps); <see cref="SpecJsonSchema{TS}"/> is the JSON Schema of a <see cref="RuleSpec"/> specialized to this rule set (only its
 /// fields, implemented functions and open groups) — usable as an LLM structured-output schema. The loop is: generate →
 /// <see cref="DynamicRules{TS}.Check"/> (violations with JSON paths back to the model) → what-if simulate → a person publishes.
+/// Expression parts (operators, functions, <c>$defs</c>) come from <see cref="ExprAuthoring"/> (YFex.Expressions).
 /// </summary>
 public static class DynamicRulesAuthoring
 {
-    private static readonly (string Op, string Arity, string Description)[] Operators =
-    [
-        ("+", "2+", "add numbers, or amounts of the same type"),
-        ("-", "2+", "subtract numbers, or amounts of the same type"),
-        ("*", "2+", "multiply numbers; an amount by a number"),
-        ("/", "2+", "divide numbers; an amount by a number (amount / amount = ratio); division by zero gives null"),
-        ("neg", "1", "negate"),
-        ("==", "2", "equal (enum fields compare with their codes, e.g. \"Pix\")"),
-        ("!=", "2", "not equal"),
-        ("<", "2", "less than"), ("<=", "2", "less or equal"), (">", "2", "greater than"), (">=", "2", "greater or equal"),
-        ("and", "1+", "all true"), ("or", "1+", "any true"), ("not", "1", "negation"),
-        ("in", "2", "[value, [literal, …]] — value is one of the literals"),
-        ("between", "3", "[value, low, high] — inclusive"),
-        ("isSet", "1", "the value is not null"),
-        ("if", "3", "[condition, then, else]"),
-        ("coalesce", "2+", "first non-null"),
-        ("sum", "1", "sum of a per-line expression over the lines (use {\"line\": …} inside)"),
-        ("count", "1", "number of lines where a per-line condition holds"),
-        ("any", "1", "some line satisfies the condition"), ("all", "1", "every line satisfies the condition"),
-        ("minOf", "1", "smallest per-line value"), ("maxOf", "1", "largest per-line value"),
-    ];
-
-    private static readonly string[] ArrayOps = ["+", "-", "*", "/", "==", "!=", "<", "<=", ">", ">=", "and", "or", "between", "if", "coalesce"];
-    private static readonly string[] SingleOps = ["neg", "not", "isSet", "sum", "count", "any", "all", "minOf", "maxOf"];
-
     // ── Catalog ─────────────────────────────────────────────────────────────
 
     public static string CatalogJson<TS>(this DynamicRules<TS> rules, RuleSetDefinition<TS> set) where TS : ISituation<TS>
@@ -56,31 +32,15 @@ public static class DynamicRulesAuthoring
                 w.WriteEndArray();
             }
             w.WriteStartArray("specials");
-            if (set.AmountType is { } a) Special(w, "$base", a.Key, "the running amount at the rule's stage");
-            Special(w, "$effectiveDate", "date", "the business date the situation is evaluated for (never the clock)");
-            if (TS.Schema.LineSchema is not null) Special(w, "$lineIndex", "int64", "index of the current line (per-line rules)");
+            if (set.AmountType is { } a) WriteSpecial(w, "$base", a.Key, "the running amount at the rule's stage");
+            WriteSpecial(w, "$effectiveDate", "date", "the business date the situation is evaluated for (never the clock)");
+            if (TS.Schema.LineSchema is not null) WriteSpecial(w, "$lineIndex", "int64", "index of the current line (per-line rules)");
             w.WriteEndArray();
             w.WriteStartArray("operators");
-            foreach (var (op, arity, description) in Operators)
-            {
-                w.WriteStartObject();
-                w.WriteString("op", op);
-                w.WriteString("arity", arity);
-                w.WriteString("description", description);
-                w.WriteEndObject();
-            }
+            WriteOperators(w);
             w.WriteEndArray();
             w.WriteStartArray("functions");
-            foreach (var f in Sorted(rules.Functions))
-            {
-                w.WriteStartObject();
-                w.WriteString("name", f.Name);
-                w.WriteString("signature", f.Signature);
-                w.WriteString("description", f.Description);
-                if (f.Category is { } c) w.WriteString("category", c);
-                if (f.IsContract) w.WriteBoolean("implemented", false);
-                w.WriteEndObject();
-            }
+            WriteFunctions(w, rules.Functions);
             w.WriteEndArray();
             w.WriteStartArray("groups");
             foreach (var g in set.Groups)
@@ -124,15 +84,6 @@ public static class DynamicRulesAuthoring
         }
     }
 
-    private static void Special(Utf8JsonWriter w, string name, string type, string description)
-    {
-        w.WriteStartObject();
-        w.WriteString("name", name);
-        w.WriteString("type", type);
-        w.WriteString("description", description);
-        w.WriteEndObject();
-    }
-
     // ── JSON Schema of a spec ───────────────────────────────────────────────
 
     public static string SpecJsonSchema<TS>(this DynamicRules<TS> rules, RuleSetDefinition<TS> set) where TS : ISituation<TS>
@@ -160,7 +111,7 @@ public static class DynamicRulesAuthoring
             w.WriteStartObject("then");
             w.WriteString("type", "array");
             w.WriteNumber("minItems", 1);
-            w.WriteNumber("maxItems", Binder<TS>.MaxDirectives);
+            w.WriteNumber("maxItems", RuleCompiler<TS>.MaxDirectives);
             w.WriteStartObject("items"); w.WriteString("$ref", "#/$defs/directive"); w.WriteEndObject();
             w.WriteEndObject();
             w.WriteStartObject("messages");
@@ -175,59 +126,18 @@ public static class DynamicRulesAuthoring
             w.WriteBoolean("additionalProperties", false);
 
             w.WriteStartObject("$defs");
-            // expr
-            w.WriteStartObject("expr");
-            w.WriteStartArray("anyOf");
-            w.WriteStartObject(); w.WriteStartArray("type"); foreach (var t in new[] { "number", "string", "boolean", "null" }) w.WriteStringValue(t); w.WriteEndArray(); w.WriteEndObject();
-            Ref(w, "var"); if (schema.LineSchema is not null) Ref(w, "line"); Ref(w, "op"); Ref(w, "call");
-            w.WriteEndArray();
-            w.WriteEndObject();
-            // var
             var vars = new List<string>();
             foreach (var f in schema.Fields) if (f.Exposed && f.Role != FieldRole.Lines) vars.Add(f.Name);
             if (set.AmountType is not null) vars.Add("$base");
             vars.Add("$effectiveDate");
             if (schema.LineSchema is not null) vars.Add("$lineIndex");
-            SingleKey(w, "var", vars);
+            List<string>? lineNames = null;
             if (schema.LineSchema is { } lines)
             {
-                var lineNames = new List<string>();
+                lineNames = [];
                 foreach (var f in lines.Fields) if (f.Exposed) lineNames.Add(f.Name);
-                SingleKey(w, "line", lineNames);
             }
-            // op
-            w.WriteStartObject("op");
-            w.WriteString("type", "object"); w.WriteNumber("minProperties", 1); w.WriteNumber("maxProperties", 1);
-            w.WriteStartObject("properties");
-            foreach (var op in ArrayOps) { w.WriteStartObject(op); ExprArray(w); w.WriteEndObject(); }
-            foreach (var op in SingleOps) { w.WriteStartObject(op); w.WriteString("$ref", "#/$defs/expr"); w.WriteEndObject(); }
-            w.WriteStartObject("in");
-            w.WriteString("type", "array");
-            w.WriteStartArray("prefixItems");
-            w.WriteStartObject(); w.WriteString("$ref", "#/$defs/expr"); w.WriteEndObject();
-            w.WriteStartObject(); w.WriteString("type", "array"); w.WriteEndObject();
-            w.WriteEndArray();
-            w.WriteNumber("minItems", 2); w.WriteNumber("maxItems", 2);
-            w.WriteEndObject();
-            w.WriteEndObject();
-            w.WriteBoolean("additionalProperties", false);
-            w.WriteEndObject();
-            // call (implemented functions only)
-            w.WriteStartObject("call");
-            w.WriteString("type", "object"); w.WriteNumber("minProperties", 1); w.WriteNumber("maxProperties", 1);
-            w.WriteStartObject("properties");
-            foreach (var f in Sorted(rules.Functions))
-            {
-                if (f.IsContract) continue;
-                w.WriteStartObject(f.Name);
-                w.WriteString("description", $"{f.Signature} — {f.Description}");
-                ExprArray(w, f.Parameters.Length);
-                w.WriteEndObject();
-            }
-            w.WriteEndObject();
-            w.WriteBoolean("additionalProperties", false);
-            w.WriteEndObject();
-            // directives
+            WriteExpressionDefs(w, vars, lineNames, rules.Functions, deterministicOnly: true);   // expr, var, line, op, call
             WriteDirectives(w, allow, schema, set.AmountType is not null);
             w.WriteEndObject();                                                      // $defs
             w.WriteEndObject();
@@ -300,40 +210,6 @@ public static class DynamicRulesAuthoring
         w.WriteEndObject();
     }
 
-    private static void SingleKey(Utf8JsonWriter w, string key, List<string> names)
-    {
-        w.WriteStartObject(key);
-        w.WriteString("type", "object");
-        w.WriteStartArray("required"); w.WriteStringValue(key); w.WriteEndArray();
-        w.WriteStartObject("properties");
-        Enum(w, key, names);
-        w.WriteEndObject();
-        w.WriteBoolean("additionalProperties", false);
-        w.WriteEndObject();
-    }
-
-    private static void ExprArray(Utf8JsonWriter w, int? exactly = null, int? maxItems = null, int? minItems = null)
-    {
-        w.WriteString("type", "array");
-        w.WriteStartObject("items"); w.WriteString("$ref", "#/$defs/expr"); w.WriteEndObject();
-        if (exactly is { } n) { w.WriteNumber("minItems", n); w.WriteNumber("maxItems", n); return; }
-        if (minItems is { } min) w.WriteNumber("minItems", min);
-        if (maxItems is { } max) w.WriteNumber("maxItems", max);
-    }
-
-    private static void ExprProp(Utf8JsonWriter w, string name) { w.WriteStartObject(name); w.WriteString("$ref", "#/$defs/expr"); w.WriteEndObject(); }
-    private static void Str(Utf8JsonWriter w, string name) { w.WriteStartObject(name); w.WriteString("type", "string"); w.WriteEndObject(); }
-    private static void Ref(Utf8JsonWriter w, string def) { w.WriteStartObject(); w.WriteString("$ref", "#/$defs/" + def); w.WriteEndObject(); }
-
-    private static void Enum(Utf8JsonWriter w, string name, IEnumerable<string> values)
-    {
-        w.WriteStartObject(name);
-        w.WriteStartArray("enum");
-        foreach (var v in values) w.WriteStringValue(v);
-        w.WriteEndArray();
-        w.WriteEndObject();
-    }
-
     private static List<string> Families(DynamicDirectives allow)
     {
         var list = new List<string>();
@@ -342,19 +218,5 @@ public static class DynamicRulesAuthoring
             ("approval", DynamicDirectives.RequireApproval) })
             if ((allow & flag) != 0) list.Add(name);
         return list;
-    }
-
-    private static List<RuleFunction> Sorted(FunctionCatalog catalog)
-    {
-        var list = new List<RuleFunction>(catalog.All);
-        list.Sort(static (a, b) => string.CompareOrdinal(a.Name, b.Name));
-        return list;
-    }
-
-    private static string Write(Action<Utf8JsonWriter> body)
-    {
-        var buffer = new ArrayBufferWriter<byte>();
-        using (var w = new Utf8JsonWriter(buffer)) body(w);
-        return System.Text.Encoding.UTF8.GetString(buffer.WrittenSpan);
     }
 }

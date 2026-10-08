@@ -1,4 +1,3 @@
-using System.Collections.Frozen;
 using System.Security.Claims;
 using YFex.Authorization;
 using YFex.Authorization.Public;
@@ -19,33 +18,33 @@ namespace YFex.Messaging.Rpc;
 /// identity visible to any other <see cref="IPrincipalAccessor"/> consumer.</para>
 /// <para>Flows across <c>await</c> (an <see cref="AsyncLocal{T}"/>); <see cref="Enter"/> also enters the tenant as a
 /// <see cref="ScopeOverride"/> when the source captured one, so YFex.Tenancy consumers see it through
-/// <see cref="ScopeContextExtensions.EffectiveIdentity"/>.</para>
+/// <see cref="ScopeContextExtensions.EffectiveIdentity"/>, and the caller's <see cref="ActorContext"/> scope (the RPC actor
+/// writer, authorization-consolidation 06 §4; anonymous callers enter <see cref="ActorScope.Anonymous"/>).</para>
 /// </remarks>
 public sealed class CallContext
 {
     private static readonly AsyncLocal<CallContext?> s_current = new();
 
     /// <summary>An unauthenticated, permission-less context — what a call with no identity runs as.</summary>
-    public static IAuthContext Anonymous { get; } =
-        new AuthContext(new ClaimsPrincipal(new ClaimsIdentity()), FrozenSet<PermissionKey>.Empty);
+    public static IAuthorizationContext Anonymous => AuthorizationContext.Anonymous;
 
     /// <summary>The context of the call being processed, or null outside of a remote call.</summary>
     public static CallContext? Current => s_current.Value;
 
-    public CallContext(IAuthContext auth, ScopeIdentity scope = default, bool hasScope = false,
+    public CallContext(IAuthorizationContext caller, ScopeIdentity scope = default, bool hasScope = false,
         string? culture = null, string? correlationId = null)
     {
-        ArgumentNullException.ThrowIfNull(auth);
-        Auth = auth;
+        ArgumentNullException.ThrowIfNull(caller);
+        Caller = caller;
         Scope = scope;
         HasScope = hasScope;
         Culture = culture;
         CorrelationId = correlationId;
-        Subject = SubjectOf(auth.Principal);
+        Subject = SubjectOf(caller.Principal);
     }
 
-    /// <summary>Principal, resolved permissions and the raw token (for on-behalf-of propagation).</summary>
-    public IAuthContext Auth { get; }
+    /// <summary>The caller: principal, actor, resolved permissions and the raw token (for on-behalf-of propagation).</summary>
+    public IAuthorizationContext Caller { get; }
 
     /// <summary>The caller's tenant scope. Meaningful only when <see cref="HasScope"/>.</summary>
     public ScopeIdentity Scope { get; }
@@ -66,7 +65,7 @@ public sealed class CallContext
     /// </summary>
     internal object? AuthorizedMessage { get; set; }
 
-    /// <summary>Makes this context (and its tenant, when <see cref="HasScope"/>) ambient until the scope is disposed.</summary>
+    /// <summary>Makes this context (its tenant, when <see cref="HasScope"/>, and its actor) ambient until the scope is disposed.</summary>
     public Activation Enter() => new(this);
 
     /// <summary>User key of <paramref name="principal"/> — same rule as YFex.Web's scope projection (user rung).</summary>
@@ -76,11 +75,12 @@ public sealed class CallContext
         return principal.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? principal.FindFirst("sub")?.Value;
     }
 
-    /// <summary>Restores the previous context (and tenant override) on dispose.</summary>
+    /// <summary>Restores the previous context (tenant override and actor scope) on dispose.</summary>
     public readonly struct Activation : IDisposable
     {
         private readonly CallContext? _previous;
         private readonly ScopeOverride.Handle _tenant;
+        private readonly ActorContext.Activation _actor;
         private readonly bool _entered;
 
         internal Activation(CallContext context)
@@ -88,12 +88,14 @@ public sealed class CallContext
             _previous = s_current.Value;
             s_current.Value = context;
             _tenant = context.HasScope ? ScopeOverride.Enter(context.Scope) : default;
+            _actor = ActorContext.Enter(ActorScope.From(context.Caller) ?? ActorScope.Anonymous);
             _entered = true;
         }
 
         public void Dispose()
         {
             if (!_entered) return;
+            _actor.Dispose();
             _tenant.Dispose();
             s_current.Value = _previous;
         }
@@ -102,8 +104,8 @@ public sealed class CallContext
 
 /// <summary>
 /// A resolved caller as produced by an identity source (connection capture, token validation, Fusion session). Instances
-/// are cached by the sources (per connection / token / session), which lets the resolved <see cref="IAuthContext"/> be
-/// reused until the caller's permissions version changes (<see cref="IPermissionsVersions"/>).
+/// are cached by the sources (per connection / token / session), which lets the resolved <see cref="IAuthorizationContext"/> be
+/// reused until the caller's permissions version changes (<see cref="IPermissionVersions"/>).
 /// </summary>
 public sealed class CallIdentity
 {
@@ -139,7 +141,7 @@ public sealed class CallIdentity
     /// <summary>Last resolved auth context and the permissions version it was built for (see CallContextResolver).</summary>
     internal ResolvedAuth? Resolved;
 
-    internal sealed record ResolvedAuth(IAuthContext Auth, long Version);
+    internal sealed record ResolvedAuth(IAuthorizationContext Caller, long Version);
 
     private static DateTimeOffset? ExpiryOf(ClaimsPrincipal principal)
         => principal.FindFirst("exp")?.Value is { } exp && long.TryParse(exp, out var seconds)

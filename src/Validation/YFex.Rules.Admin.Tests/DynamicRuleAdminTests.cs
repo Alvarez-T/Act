@@ -23,7 +23,7 @@ public class DynamicRuleAdminTests
     {
         var f = new AdminFixture();
         (await f.Dispatcher.CommandAsync<Commands.PublishRule, long>(Rule(Pro10))).TryGetError(out var denied).Should().BeTrue();
-        denied.Type.Should().Be(ErrorType.Unauthorized);
+        denied.Kind.Should().Be(ErrorKind.Forbidden);
 
         f.User.Permissions.Add("rules.dynamic.publish");
         var r = await f.Dispatcher.CommandAsync<Commands.PublishRule, long>(Rule(Pro10));

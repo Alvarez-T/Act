@@ -1,9 +1,8 @@
-using System.Security.Claims;
 using YFex.Tenancy;
 
 namespace YFex.Cqrs.Tenancy;
 
-/// <summary>Which scope levels feed <see cref="ICacheScopeContext.TenantId"/> and <see cref="ICacheScopeContext.User"/>.</summary>
+/// <summary>Which scope levels feed <see cref="ICacheScopeContext.TenantId"/> and <see cref="ICacheScopeContext.Subject"/>.</summary>
 public sealed class QueryCacheScopeOptions
 {
     internal byte? TenantRank { get; private set; }
@@ -20,8 +19,8 @@ public sealed class QueryCacheScopeOptions
     }
 
     /// <summary>
-    /// <see cref="ICacheScopeContext.User"/> = a principal named by the scope chain up to <paramref name="level"/>.
-    /// Leave unset to keep the host's own <see cref="ICacheScopeContext"/> principal.
+    /// <see cref="ICacheScopeContext.Subject"/> = the scope chain up to <paramref name="level"/>.
+    /// Leave unset to keep the host's own <see cref="ICacheScopeContext"/> subject (else the ambient actor).
     /// </summary>
     public QueryCacheScopeOptions User<TScope>(TScope level) where TScope : struct, Enum
     {
@@ -42,9 +41,6 @@ public sealed class QueryCacheScopeOptions
 /// </remarks>
 public sealed class TenancyCacheScopeContext : ICacheScopeContext
 {
-    private const string AuthenticationType = "YFex.Tenancy";
-    private static readonly ClaimsPrincipal Anonymous = new(new ClaimsIdentity());
-
     private readonly IScopeContext? _scope;
     private readonly ICacheScopeContext? _inner;
     private readonly ScopeKeyPartitioner? _tenant;
@@ -67,17 +63,7 @@ public sealed class TenancyCacheScopeContext : ICacheScopeContext
     }
 
     /// <inheritdoc />
-    public ClaimsPrincipal User
-    {
-        get
-        {
-            if (_user is null) return _inner?.User ?? Anonymous;
-            var name = Chain(_user);
-            return name is null
-                ? Anonymous
-                : new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.Name, name)], AuthenticationType));
-        }
-    }
+    public string? Subject => _user is null ? _inner?.Subject : Chain(_user);
 
     /// <inheritdoc />
     public string? TenantId => _tenant is null ? _inner?.TenantId : Chain(_tenant);

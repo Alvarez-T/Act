@@ -30,7 +30,7 @@ public sealed class ResultConversionMiddleware
         catch (Exception ex)
         {
             throw new ResultConversionException(
-                new Error(ErrorType.Fail, ex.Message), ex);
+                new Failed(ex.Message), ex);
         }
     }
 }

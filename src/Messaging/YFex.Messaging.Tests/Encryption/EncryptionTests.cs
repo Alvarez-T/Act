@@ -1,10 +1,14 @@
 using System.Text;
+using YFex.Cryptography;
 using YFex.Messaging.Rpc;
 using YFex.Persistence.Encryption;
 
 namespace YFex.Messaging.Tests.Encryption;
 
-/// <summary>Tests #32–35: AES-GCM encryption opt-in/out, AEAD tamper detection, and key derivation.</summary>
+/// <summary>
+/// Tests #32–35: AES-GCM encryption opt-in/out, AEAD tamper detection, keys. Since cryptography Phase 0 the decorator seals with
+/// YFex.Cryptography, and a value that cannot be opened throws <see cref="StorageIntegrityException"/> instead of reading as null.
+/// </summary>
 [Trait("Category", "Encryption")]
 public sealed class EncryptionTests
 {
@@ -12,8 +16,8 @@ public sealed class EncryptionTests
     private static readonly byte[] Key1 = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray();
     private static readonly byte[] Key2 = Enumerable.Range(32, 32).Select(i => (byte)(i & 0xFF)).ToArray();
 
-    private static AesGcmValueProtector Protector(byte[] key) =>
-        new AesGcmValueProtector(new ProvidedKeyProvider(key));
+    private static KeyRing Protector(byte[] key) =>
+        KeyRing.FromKey(new KeyRingName("tests/storage"), SecretKey.Import(KeyId.New(), KeyPurpose.Sealing, key));
 
     private static byte[] Bytes(string s) => Encoding.UTF8.GetBytes(s);
 
@@ -23,7 +27,7 @@ public sealed class EncryptionTests
     public async Task EncryptedStorage_GetAsync_ReturnsOriginalPlaintext()
     {
         var inner = new MemoryKeyValueStore();
-        using var protector = Protector(Key1);
+        var protector = Protector(Key1);
         var encrypted = new EncryptedKeyValueStore(inner, protector);
 
         await encrypted.SetAsync("k", Bytes("secret"));
@@ -37,7 +41,7 @@ public sealed class EncryptionTests
     public async Task EncryptedStorage_StoredBytesAreDifferentFromPlaintext()
     {
         var inner = new MemoryKeyValueStore();
-        using var protector = Protector(Key1);
+        var protector = Protector(Key1);
         var encrypted = new EncryptedKeyValueStore(inner, protector);
         var plaintext = Bytes("plaintext-value");
 
@@ -54,30 +58,29 @@ public sealed class EncryptionTests
     public async Task PlaintextValue_IsUnreadable_ThroughEncryptedStorage()
     {
         var inner = new MemoryKeyValueStore();
-        using var protector = Protector(Key1);
+        var protector = Protector(Key1);
 
         // Write WITHOUT encryption (direct to inner)
         await inner.SetAsync("k", Bytes("unencrypted-value"));
 
-        // Read WITH encryption — version byte is wrong, so Unprotect returns null
+        // Read WITH encryption — the version byte is wrong: reported, never returned as data
         var encrypted = new EncryptedKeyValueStore(inner, protector);
-        var result = await encrypted.GetAsync("k");
-
-        result.Should().BeNull(
+        (await encrypted.TryGetAsync("k")).Status.Should().Be(StoredValueStatus.UnsupportedFormat,
             "a value stored without encryption must not be readable through the encrypted decorator");
+        await FluentActions.Awaiting(() => encrypted.GetAsync("k").AsTask()).Should().ThrowAsync<StorageIntegrityException>();
     }
 
     [Fact]
     public async Task EncryptedValue_IsUnreadable_ThroughPlaintextStorage()
     {
         var inner = new MemoryKeyValueStore();
-        using var protector = Protector(Key1);
+        var protector = Protector(Key1);
         var encrypted = new EncryptedKeyValueStore(inner, protector);
 
         await encrypted.SetAsync("k", Bytes("secret"));
         var raw = await inner.GetAsync("k");
 
-        // The raw bytes start with version byte 0x01 — they are NOT valid UTF-8 meaningful data
+        // The raw bytes start with version byte 0x03 (sealed value v3) — they are NOT the plaintext
         raw.Should().NotEqual(Bytes("secret"),
             "encrypted bytes differ from the original plaintext");
     }
@@ -85,10 +88,10 @@ public sealed class EncryptionTests
     // ── Test #34: AEAD tamper detection ──────────────────────────────────────
 
     [Fact]
-    public async Task TamperedCiphertext_ReturnsNull_NotGarbage()
+    public async Task TamperedCiphertext_IsReported_NotGarbage()
     {
         var inner = new MemoryKeyValueStore();
-        using var protector = Protector(Key1);
+        var protector = Protector(Key1);
         var encrypted = new EncryptedKeyValueStore(inner, protector);
 
         await encrypted.SetAsync("k", Bytes("original"));
@@ -97,12 +100,12 @@ public sealed class EncryptionTests
         // Flip a byte in the ciphertext body (not the nonce or tag — those also cause failure,
         // but flipping the ciphertext body is the classic tamper scenario)
         var tampered = raw!.ToArray();
-        tampered[15] ^= 0xFF; // flip bits in ciphertext region
+        tampered[35] ^= 0xFF; // flip bits in the ciphertext region (the header is 31 bytes)
         await inner.SetAsync("k", tampered);
 
-        var result = await encrypted.GetAsync("k");
-        result.Should().BeNull(
-            "AEAD tag mismatch must return null, not silently return corrupt plaintext");
+        (await encrypted.TryGetAsync("k")).Status.Should().Be(StoredValueStatus.AuthenticationFailed,
+            "AEAD tag mismatch must be reported, not silently return corrupt plaintext");
+        await FluentActions.Awaiting(() => encrypted.GetAsync("k").AsTask()).Should().ThrowAsync<StorageIntegrityException>();
     }
 
     // ── Test #35: Different keys produce different ciphertext / unreadable result ─
@@ -111,62 +114,59 @@ public sealed class EncryptionTests
     public async Task ValueWrittenWithKey1_IsNotReadable_WithKey2()
     {
         var inner = new MemoryKeyValueStore();
-        using var prot1 = Protector(Key1);
-        using var prot2 = Protector(Key2);
+        var prot1 = Protector(Key1);
+        var prot2 = Protector(Key2);
         var enc1 = new EncryptedKeyValueStore(inner, prot1);
         var enc2 = new EncryptedKeyValueStore(inner, prot2);
 
         await enc1.SetAsync("k", Bytes("key1-value"));
-        var result = await enc2.GetAsync("k");
 
-        result.Should().BeNull(
-            "value encrypted with Key1 cannot be decrypted with Key2 — AEAD authentication fails");
+        (await enc2.TryGetAsync("k")).Status.Should().Be(StoredValueStatus.KeyUnknown,
+            "value encrypted with Key1 cannot be decrypted with Key2 — its key id is not in Key2's ring");
     }
 
-    // ── AesGcmValueProtector unit tests ───────────────────────────────────────
+    // ── Sealing unit tests (YFex.Cryptography) ─────────────────────────────────
 
     [Fact]
-    public void Protector_RoundTrip_ReturnsOriginalBytes()
+    public void Seal_RoundTrip_ReturnsOriginalBytes()
     {
-        using var protector = Protector(Key1);
+        var ring = Protector(Key1);
         var plaintext = Bytes("round-trip-test");
+        Span<byte> context = stackalloc byte[32];
 
-        var ciphertext = protector.Protect(plaintext);
-        var decrypted = protector.Unprotect(ciphertext);
+        var sealedValue = SealedValue.Seal(ring, plaintext, SealContext.Write(context, EncryptedKeyValueStore.StoreDomain));
+        var decrypted = new byte[SealedValue.GetPlaintextLength(sealedValue.Length)];
+        SealedValue.Open(ring, sealedValue, SealContext.Write(context, EncryptedKeyValueStore.StoreDomain), decrypted).IsOpened.Should().BeTrue();
 
         decrypted.Should().Equal(plaintext);
     }
 
     [Fact]
-    public void Protector_DifferentNonces_ProduceDifferentCiphertext()
+    public void Seal_DifferentNonces_ProduceDifferentCiphertext()
     {
-        using var protector = Protector(Key1);
+        var ring = Protector(Key1);
         var plaintext = Bytes("same-input");
+        Span<byte> context = stackalloc byte[32];
 
-        var c1 = protector.Protect(plaintext);
-        var c2 = protector.Protect(plaintext);
+        var c1 = SealedValue.Seal(ring, plaintext, SealContext.Write(context, EncryptedKeyValueStore.StoreDomain));
+        var c2 = SealedValue.Seal(ring, plaintext, SealContext.Write(context, EncryptedKeyValueStore.StoreDomain));
 
-        c1.Should().NotEqual(c2,
-            "each call must use a random nonce, producing distinct ciphertexts");
+        c1.Should().NotEqual(c2, "each call must use a random nonce, producing distinct ciphertexts");
     }
 
     [Fact]
-    public void Protector_EmptyInput_IsHandledCorrectly()
+    public async Task EmptyValue_IsHandledCorrectly()
     {
-        using var protector = Protector(Key1);
-        var empty = Array.Empty<byte>();
-
-        var ciphertext = protector.Protect(empty);
-        var decrypted = protector.Unprotect(ciphertext);
-
-        decrypted.Should().Equal(empty);
+        var encrypted = new EncryptedKeyValueStore(new MemoryKeyValueStore(), Protector(Key1));
+        await encrypted.SetAsync("empty", []);
+        (await encrypted.GetAsync("empty")).Should().BeEmpty();
     }
 
     [Fact]
-    public void ProvidedKeyProvider_WrongKeyLength_Throws()
+    public void SuppliedKey_WrongLength_Throws()
     {
         var shortKey = new byte[16]; // AES-256 requires 32 bytes
-        var act = () => new ProvidedKeyProvider(shortKey);
+        var act = () => new StorageEncryptionOptions().UseKey(shortKey);
         act.Should().Throw<ArgumentException>("key must be exactly 32 bytes");
     }
 }

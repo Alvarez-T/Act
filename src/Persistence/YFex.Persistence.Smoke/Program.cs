@@ -157,9 +157,10 @@ await Scenario("KeyValueStore: EncryptedKeyValueStore (decorator)", async () =>
 {
     var key = new byte[32];
     RandomNumberGenerator.Fill(key);
-    using var protector = new AesGcmValueProtector(new ProvidedKeyProvider(key));
+    var ring = YFex.Cryptography.KeyRing.FromKey(new YFex.Cryptography.KeyRingName("smoke/storage"),
+        YFex.Cryptography.SecretKey.Import(YFex.Cryptography.KeyId.New(), YFex.Cryptography.KeyPurpose.Sealing, key));
     var inner = new MemoryKeyValueStore();
-    var enc = new EncryptedKeyValueStore(inner, protector);
+    var enc = new EncryptedKeyValueStore(inner, ring);
 
     await StoreContractAsync(enc);
 
@@ -170,11 +171,10 @@ await Scenario("KeyValueStore: EncryptedKeyValueStore (decorator)", async () =>
     var raw = await inner.GetAsync("secret");
     A(raw is not null && !raw.SequenceEqual(Encoding.UTF8.GetBytes("hello")), "inner bytes are ciphertext (not plaintext)");
 
-    var key2 = new byte[32];
-    RandomNumberGenerator.Fill(key2);
-    using var wrong = new AesGcmValueProtector(new ProvidedKeyProvider(key2));
-    var encWrong = new EncryptedKeyValueStore(inner, wrong);
-    A(await encWrong.GetAsync("secret") is null, "wrong key → null (auth failure, not corrupt data)");
+    var wrongRing = YFex.Cryptography.KeyRing.FromKey(new YFex.Cryptography.KeyRingName("smoke/storage"),
+        YFex.Cryptography.SecretKey.Generate(YFex.Cryptography.KeyPurpose.Sealing));
+    var encWrong = new EncryptedKeyValueStore(inner, wrongRing);
+    A((await encWrong.TryGetAsync("secret")).Status == StoredValueStatus.KeyUnknown, "wrong key → reported (not corrupt data, not null)");
 });
 
 // ── 2. ICache implementations ───────────────────────────────────────────────────

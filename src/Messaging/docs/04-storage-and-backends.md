@@ -1,57 +1,76 @@
 # Storage Backends & Adapters
 
-`YFex.Messaging.Rpc` ships with an **in-memory** outbox and cache by default — fine for tests, lost on restart. The packages here swap in durable storage, encrypt it, or adapt the server side to Wolverine. They're all opt-in DI one-liners layered on top of `AddYFexMessagingRpcClient` / `UseYFexMessagingRpcServer`.
+`YFex.Messaging.Rpc` keeps its offline state (outbox, sync-failure log, client cache) in whatever `IKeyValueStore` the app
+registers (`YFex.Persistence`). With nothing registered it uses `MemoryKeyValueStore` and the in-memory outbox — fine for
+tests, lost on restart. Register a durable store and the client uses the **durable outbox** over it automatically (offline
+Phase 0, F14 — before that the durable outbox was never wired, see `docs/internal/offline/01`).
 
-## How the swap works
-
-The RPC layer resolves `IClientStorage`, `IClientCache`, `IOutbox`, and `ISyncFailureLog` from DI. Each backend package calls `services.Replace(...)` on those, so **call order doesn't matter** — register the backend before or after the RPC client, the durable implementation wins either way. Each backend also publishes its raw storage under a keyed registration (`StorageServiceKeys.Inner`) so the encryption decorator can wrap it without a circular dependency.
+## How the selection works
 
 ```
-AddYFexMessagingRpcClient        ← in-memory defaults
-   → AddYFexSqliteStorage        ← replaces with durable SQLite
-       → AddYFexStorageEncryption ← decorates storage with AES-GCM
+IKeyValueStore registered by the app (SQLite file, IndexedDB, …)        ← where bytes live
+   → AddYFexStorageEncryption (optional)                                 ← AES-256-GCM decorator over that store
+       → AddYFexMessagingRpcClient                                       ← picks the outbox:
+            Storage = Auto (default) / Sqlite / IndexedDb and the store is not MemoryKeyValueStore
+                 → StorageBackedOutbox + StorageBackedSyncFailureLog   (survive restarts)
+            Storage = InMemory, or the store is MemoryKeyValueStore
+                 → InMemoryOutbox + InMemorySyncFailureLog
 ```
+
+Register the store **before** `AddYFexMessagingRpcClient` (it only `TryAdd`s the in-memory default).
 
 ---
 
-## `YFex.Messaging.Rpc.Sqlite` — durable storage (desktop / mobile)
+## SQLite — durable storage (desktop / service)
 
 ```csharp
-services.AddYFexMessagingRpcClient(/* … */)
-        .AddYFexSqliteStorage(o => o.DatabaseFileName = "app.db");
+var sqlite = new SqliteConnectionFactory(@"C:\ProgramData\FarmaViva\caixa.db");   // YFex.Persistence.Sqlite (file path)
+services.AddYFexPersistence(new SqliteKeyValueStore(sqlite));
+services.AddYFexStorageEncryption();                                        // optional, after the store
+services.AddYFexMessagingRpcClient(o => o.WebSocketEndpoint = new("wss://api.farmaviva.com.br"));
 ```
 
-**Purpose:** persist the offline outbox, client cache, and sync-failure log in a SQLite file so a queued command survives an app restart, crash, or reboot. This is the standard production backend for native/desktop apps.
+**Purpose:** queued commands, cached query results and dead letters survive an app restart, crash or reboot. This is the
+standard production setup for native/desktop apps (a pharmacy checkout that loses internet keeps its queued sales).
 
-Registers `SqliteClientStorage`, `SqliteClientCache`, `SqliteOutbox`, and `SqliteSyncFailureLog` and `Replace`s the in-memory defaults.
-
-## `YFex.Messaging.Rpc.IndexedDb` — durable storage (Blazor WASM)
+## IndexedDB — durable storage (Blazor WASM)
 
 ```csharp
-services.AddYFexMessagingRpcClient(/* … */)
-        .AddYFexIndexedDBStorage();
+services.AddYFexIndexedDbStore();                                           // YFex.Persistence.IndexedDb (replaces IKeyValueStore)
+services.AddYFexMessagingRpcClient(/* … */);
 ```
 
-**Purpose:** the browser equivalent of the SQLite backend. Persists the same four stores in IndexedDB so state survives a page reload or tab close in a Blazor WebAssembly app. Ships a small JS interop in `wwwroot`.
-
-Registers `IndexedDBClientStorage` plus the storage-backed outbox/cache/failure-log and `Replace`s the in-memory defaults.
-
-## `YFex.Messaging.Rpc.Encryption` — AES-GCM at rest
+## Encryption at rest — `YFex.Persistence.Encryption`
 
 ```csharp
-// OS key store (recommended) — key managed by Microsoft.AspNetCore.DataProtection
+// Default: a random storage key generated once, kept wrapped by the OS (TPM-backed CNG key on Windows, DataProtection elsewhere)
 services.AddYFexStorageEncryption();
+
+// Windows service shared by several accounts: machine-scoped key in %PROGRAMDATA%\YFex\Keys
+services.AddYFexStorageEncryption(configure: o => { o.MachineScope = true; o.StoreName = "caixa-01"; });
 
 // Or supply your own 32-byte AES-256 key
 services.AddYFexStorageEncryption(EncryptionKeySource.Provided, providedKey: my32Bytes);
 ```
 
-**Purpose:** encrypt everything the client persists (queued commands, cached query results) so data at rest is unreadable without the key. A regulatory/privacy requirement for offline caches on shared or portable devices.
+**Must be called after** the store registration — it decorates the registered `IKeyValueStore` with `EncryptedKeyValueStore`.
 
-**Must be called after** a storage backend — it decorates the raw `IClientStorage` registered under `StorageServiceKeys.Inner` with `EncryptedClientStorage`. Two key sources:
+**With tenancy partitioning** (`YFex.Persistence.Tenancy`), register encryption **before** the scope decorator so the result is
+`Scoped(Encrypted(store))`: the encryption then binds each value to its scope-prefixed key. The reverse order works but leaves
+tenants separated only by the key prefix.
 
-- `OsKeyStore` *(default)* — key derived via `Microsoft.AspNetCore.DataProtection` (OS-backed).
-- `Provided` — you pass a 32-byte key (validated for length).
+- **Key source `OsKeyStore` (default):** `WrappedKeyProvider` generates a random 32-byte key once and stores only its wrapped
+  form in `<KeyDirectory>\<KeyName>.storage-key` (default `%LOCALAPPDATA%\YFex\Keys\<entry assembly>.storage-key`). On Windows
+  the wrapping key is a non-exportable CNG RSA key — TPM first (`KeyProtection.Hardware`), software provider otherwise. On other
+  platforms it is ASP.NET Core DataProtection (call `services.AddDataProtection()` and protect its key ring). The same key comes
+  back after every restart. A key that cannot be unwrapped (another account/machine) throws `StorageKeyUnavailableException`; a
+  new key is never generated silently.
+  *Before offline Phase 0 the key was derived from randomized DataProtection output and changed on every restart (F1).*
+- **Values are bound to their location:** each value is sealed with associated data `"yfex.store|" + StoreName + "|" + key`, so
+  a value copied under another key or into another store does not decrypt (F2). Layout `0x02`; values written in the old `0x01`
+  layout are still read and re-sealed on their next write.
+- **Unreadable values are reported, not hidden:** they still read as `null`, but `EncryptedKeyValueStore.ReadFailed` fires,
+  `UnreadableValues` counts them, and the first one of each kind is logged as `StorageKeyMismatch`.
 
 ## `YFex.Messaging.Rpc.Wolverine` — server handler adapter
 
@@ -59,9 +78,9 @@ services.AddYFexStorageEncryption(EncryptionKeySource.Provided, providedKey: my3
 builder.Services.UseYFexMessagingRpcServerWithWolverine();
 ```
 
-**Purpose:** let the server dispatch YFex CQRS commands/queries through **[Wolverine](https://wolverinefx.net/)** instead of the default DI-resolved handlers — so you keep Wolverine's handler discovery, middleware, and messaging features while exposing them over the YFex Fusion RPC channel.
-
-Runs the base server stack, then replaces `IHandlerInvoker` with `WolverineHandlerInvoker` and `IDispatcher` with `WolverineLocalDispatcher` (routes through Wolverine's `IMessageBus`). Optionally wires exception→result middleware and the server-pushed-events bridge.
+**Purpose:** dispatch YFex CQRS commands/queries through **[Wolverine](https://wolverinefx.net/)** instead of the default
+DI-resolved handlers, while exposing them over the YFex Fusion RPC channel. Runs the base server stack (including idempotency
+and validation), then replaces `IHandlerInvoker` with `WolverineHandlerInvoker` and `IDispatcher` with `WolverineLocalDispatcher`.
 
 ---
 
@@ -70,10 +89,8 @@ Runs the base server stack, then replaces `IHandlerInvoker` with `WolverineHandl
 | Scenario | Registration |
 |---|---|
 | Unit/integration tests | RPC client only (in-memory) |
-| Desktop / MAUI / mobile app | `+ AddYFexSqliteStorage` |
-| Blazor WASM app | `+ AddYFexIndexedDBStorage` |
-| Any of the above, sensitive data | `+ AddYFexStorageEncryption` (after the backend) |
+| Desktop / service app | `AddYFexPersistence(new SqliteKeyValueStore(…))` before the RPC client |
+| Blazor WASM app | `AddYFexIndexedDbStore()` before the RPC client |
+| Any of the above, sensitive data | `+ AddYFexStorageEncryption()` after the store |
 | Server using Wolverine | `UseYFexMessagingRpcServerWithWolverine` |
 | Server, plain DI handlers | `UseYFexMessagingRpcServer` |
-
-All decorators/backends are independent — mix as needed. Order only matters for encryption (after a storage backend).

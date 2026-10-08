@@ -15,7 +15,7 @@ services.AddYFexLogging(log => log
     .ForKind(OperationKind.Query, k => k.Level(LogLevel.Debug).SampleSuccess(0.10).SlowAfter(TimeSpan.FromMilliseconds(300)))
     .ForKind(OperationKind.Sql,   k => k.SlowAfter(TimeSpan.FromMilliseconds(200)))
     .ForModule("YFex.Data", LogLevel.Warning)
-    .ForOp("Vendas.FinalizarVenda", o => o.Level(LogLevel.Information).Audit())
+    .ForOperation("Vendas.FinalizarVenda", o => o.Level(LogLevel.Information))   // audit marking moved to YFex.Audit (L20)
     .RateLimit(perEventId: 200, per: TimeSpan.FromSeconds(1))
 
     // who / tenancy
@@ -28,7 +28,7 @@ services.AddYFexLogging(log => log
                      .ScrubExceptionMessages())
 
     // memory / pressure
-    .Buffers(b => b.Slots(2048).SlotBytes(512).OnExhausted(LogChannel.Diagnostic, Exhaustion.DropNew))
+    .Buffers(b => b.Slots(2048).SlotBytes(512).OnExhausted(ExhaustionPolicy.DropNew))
 
     // where
     .WriteTo(w => w
@@ -94,7 +94,7 @@ Names in config are **operation/kind/module names**, never indexes, so they surv
 | Control | Scope | How | Safety |
 |---|---|---|---|
 | Level override | global / kind / module / operation | `IOptionsMonitor` reload, or server push | copy-on-write threshold swap |
-| **Scoped verbose** ("debug tenant acme/loja7 for 30 min", "trace user joao", "trace session 3fa2") | tenant prefix / principal / session / trace | server push via control channel, or local API `LoggingControl.Verbose(scope, LogLevel.Trace, TimeSpan.FromMinutes(30))` | **mandatory TTL** (max 24 h), only lowers thresholds, every grant **audited** (who enabled debug for whom) |
+| **Scoped verbose** ("debug tenant acme/loja7 for 30 min", "trace user joao", "trace session 3fa2") | tenant prefix / principal / session / trace | server push via control channel, or local API `engine.Verbose(OverrideTarget.Tenant, "1=acme/2=loja7", LogLevel.Trace, TimeSpan.FromMinutes(30))` (canonical `ScopeIdentity` text; also `Principal`, `Session`, `Trace`) | **mandatory TTL** (max 24 h), only lowers thresholds, every grant **audited** (who enabled debug for whom) |
 | Upload flight recorder now | node | server push | rate-limited |
 | Pause shipping / drain | node | server push (maintenance) | Audit lane cannot be paused |
 

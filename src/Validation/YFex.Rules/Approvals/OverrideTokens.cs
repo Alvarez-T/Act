@@ -227,7 +227,7 @@ internal static class OverrideTokenChecks
     public static ApprovalVerification Binding(in OverrideToken token, in ApprovalRequest request, ulong fingerprint, DateTimeOffset now, bool checkExpiry)
     {
         if (token.Fingerprint != fingerprint) return new(ApprovalCheck.FingerprintMismatch);
-        if (!string.Equals(token.Permission, request.Permission, StringComparison.Ordinal)) return new(ApprovalCheck.PermissionMismatch);
+        if (!string.Equals(token.Permission, request.Permission.Value, StringComparison.Ordinal)) return new(ApprovalCheck.PermissionMismatch);
         if (checkExpiry && now > token.ExpiresAt) return new(ApprovalCheck.Expired);
         return new(ApprovalCheck.Valid);
     }

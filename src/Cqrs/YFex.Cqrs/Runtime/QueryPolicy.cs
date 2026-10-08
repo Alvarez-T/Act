@@ -8,7 +8,6 @@ namespace YFex.Cqrs.Runtime;
 /// </summary>
 public sealed record QueryPolicy(
     MessageValidator?                                             Validation,   // stage 5 (context rules)
-    Func<ClaimsPrincipal, object, bool>?                          Authorize,
     CachePolicy?                                                  Cache,
     CacheScope                                                    Scope,
     Func<ICacheScopeContext, string>?                             ScopeKey,

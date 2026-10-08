@@ -24,7 +24,8 @@ public static class Operations
     public static void Mark(OperationDescriptor d, LogLevel level, OperationOutcome outcome = OperationOutcome.Ok, int code = 0);
 
     public static TraceContext Current { get; }                       // ambient (05 §1)
-    internal static void Install(IOperationEngine engine);                  // YFex.Logging only (InternalsVisibleTo)
+    public static void Install(IOperationEngine engine, bool allowReinstall = false);   // composition roots only (Phase 0: public, see 10 log)
+    public static bool Uninstall(IOperationEngine engine);
 }
 
 /// Struct token. Safe to copy: Complete/Fail are idempotent (slot generation CAS), so a double Complete writes one record.
@@ -58,7 +59,7 @@ public interface ILog
 }
 public interface ILog<out TCategory> : ILog { }   // category = TCategory, index cached in a static generic
 
-// Extension sugar: log.Trace/Debug/Info/Warn/Error/Critical($"…")
+// Extension sugar (full level names, no abbreviations): log.Trace/Debug/Information/Warning/Error/Critical($"…")
 ```
 
 Usage:
@@ -70,7 +71,7 @@ public sealed class CatalogSync(ILog<CatalogSync> log)
     {
         using var operation = log.Operation("Catalog.Sync");             // span + duration + outcome
         var count = await PullAsync(ct);
-        log.Info($"Pulled {count} items from {source} in {sw.Elapsed}");   // zero-alloc; hole names = "count", "source", "sw.Elapsed"
+        log.Information($"Pulled {count} items from {source} in {sw.Elapsed}");   // zero-alloc; hole names = "count", "source", "sw.Elapsed"
         operation.Complete(OperationOutcome.Ok);
     }
 }
@@ -126,7 +127,7 @@ MEL lets you pass any object: `logger.LogInformation("Venda {Venda} finalizada",
 **YFex.Logging accepts objects too**, through the interpolated handler, without those costs:
 
 ```csharp
-log.Info($"Venda finalizada {venda}");            // venda : VendaDto (a record)
+log.Information($"Venda finalizada {venda}");            // venda : VendaDto (a record)
 ```
 
 1. `AppendFormatted<T>(T value, …)` is generic, so nothing is boxed.

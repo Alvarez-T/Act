@@ -33,13 +33,15 @@ YFex.Tenancy for isolation, YFex.Jobs for retention and alert ticks, and YFex.We
   services and non-.NET apps join the same traces.
 - **Legacy import:** LoggY's text format and `.jsonl` files (one-off upload) for old apps.
 
-## 3. Storage (`ILogStore`, ⚑L4)
+## 3. Storage (`ILogStore`, ⚑L4; full design, schema and YFex.Data integration in [14-storage](14-storage.md))
 
 | Table | Key / partition | Notes |
 |---|---|---|
 | `nodes` | instance id | identity, last heartbeat, version, clock offset, pipeline health |
 | `records` | **daily partitions**, index `(tenant_prefix, ts)`, `(trace_id)`, `(event_id, ts)`, `(level, ts)` | header columns typed; fields in `jsonb` (Postgres) / JSON text (SQLite); message rendered lazily by the reader |
 | `spans` | derived view over operation-end records | waterfall = records of a trace ordered by parent |
+| `activities` | `(tenant, user, start)`, daily partitions | one row per **root operation** (13 §5): the default list in every viewer |
+| `search_keys` | `(key_type, value)` → trace ids | ids marked `[LogValue(SearchKey = true)]`; sensitive keys stored as hash (13 §5) |
 | `issues` / `issue_occurrences` | fingerprint | first/last seen, count, affected tenants/nodes/releases, status (open/resolved/ignored/regressed), sample occurrences with breadcrumbs |
 | `metric_rollups` | (descriptor, outcome, tenant_top, bucket) | 1 min → 1 h roll-ups by Jobs |
 | `audit_entries` + `audit_anchors` | (tenant, day, chain index) | separate tablespace/schema; insert-only role; never partition-dropped by diagnostic retention |
@@ -96,6 +98,51 @@ cooldown, auto-resolve condition.
   severity, rule, count, tenants, a top frame, and a link into LoggY/web viewer. Ack is possible by link (signed, expiring token)
   or Telegram button.
 - Every notification and ack is audited.
+
+### 5.3 Channels, recipients and schedules are data and plug-ins (user decision 2026-10-01)
+
+Nobody is hard-coded. Who receives what, through which channel, and when, is **configuration/data**. New channel types
+(SMS providers, WhatsApp, PagerDuty-like services, a company chat) are **plug-ins** implementing one interface.
+
+```csharp
+namespace YFex.Logging.Alerts;
+
+/// One channel TYPE (e-mail, SMS, Telegram…). Implementations are stateless; addresses/credentials come from ChannelConfig.
+public interface INotificationChannel
+{
+    string Type { get; }                                         // "email", "sms", "telegram", "webhook", "ntfy", …
+    NotificationCapabilities Capabilities { get; }               // MaxLength, SupportsAck, SupportsRichText, CostPerMessage
+    ValueTask<DeliveryResult> SendAsync(Notification notification, ChannelAddress to, ChannelConfig config, CancellationToken ct);
+}
+
+/// SMS is its own seam because providers differ (Twilio, Zenvia, AWS SNS, a local GSM modem via YFex.Devices…).
+public interface ISmsProvider
+{
+    string Name { get; }
+    ValueTask<DeliveryResult> SendAsync(PhoneNumber to, ReadOnlyMemory<char> text, CancellationToken ct);
+}
+```
+
+| Data (runtime-editable in LoggY/admin, stored in `logs.alert_*` tables) | Example |
+|---|---|
+| **Contacts** | João: e-mail `joao@acme.com`, SMS `+55 11 9…`, Telegram chat id |
+| **Teams / on-call rotations** | `devs` (weekly rotation), `suporte-loja` |
+| **Schedules** | business hours, quiet hours 23:00–07:00, holidays (per time zone) |
+| **Routing policy** | `Critical` → on-call via SMS + Telegram, escalate after 10 min to lead via phone/SMS; `High` → team chat; `Medium` → hourly e-mail digest; per tenant/environment overrides |
+| **Channel configs** | SMTP server, SMS provider + credentials (via YFex.Web secret storage), webhook URLs |
+
+```csharp
+services.AddYFexLoggingAlerts(a => a
+    .AddChannel<EmailChannel>()                       // built-in
+    .AddChannel<TelegramChannel>()                    // built-in
+    .AddChannel<WebhookChannel>()                     // built-in (Slack/Discord/Teams/generic)
+    .AddChannel<SmsChannel>(sms => sms.UseProvider<MyZenviaSmsProvider>())   // app-supplied provider
+    .AddChannel<MyCompanyChatChannel>()               // any custom INotificationChannel
+    .RoutingFrom<SqlAlertRoutingStore>());            // contacts/teams/schedules/policies as data
+```
+
+Built-in channels in the first wave: e-mail (SMTP), Telegram, webhooks (Slack/Discord/Teams/generic HMAC), ntfy. SMS and
+WhatsApp ship as **interfaces + one reference adapter skeleton**. Concrete paid providers are added per deployment.
 
 ## 6. Remote control (server → node)
 

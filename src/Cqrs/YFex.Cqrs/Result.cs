@@ -63,11 +63,12 @@ public readonly struct Result : IUnion, IResult
     public static Result Ok() => new Success();
     public static Result Success() => new Success();
 
-    public static Error Fail(string message = "") => new(ErrorType.Fail, message);
-    public static Error NotFound(string message = "") => new(ErrorType.NotFound, message);
-    public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
-    public static Error Conflict(string message) => new(ErrorType.Conflict, message);
-    public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error Fail(string message = "") => new Failed(message);
+    public static Error NotFound(string message = "") => new NotFound(message);
+    public static Error Unauthenticated(string message = "Authentication required.") => new Unauthenticated(message);
+    public static Error Forbidden(in global::YFex.Authorization.Public.Denial denial) => new Forbidden(denial);
+    public static Error Conflict(string message) => new Conflict(message);
+    public static Error ValidationProblem(string message) => new Error(new ValidationProblem(default)).WithMessage(message);
     public static Error ValidationProblem(in YFex.Validation.ValidationResult result) => Error.Validation(result);
 }
 
@@ -126,11 +127,12 @@ public readonly struct Result<T> : IUnion, IResult
     // Static helper methods
     public static Result<T> Ok(T value) => value;
 
-    public static Error Fail(string message = "") => new(ErrorType.Fail, message);
-    public static Error NotFound(string message = "") => new(ErrorType.NotFound, message);
-    public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
-    public static Error Conflict(string message) => new(ErrorType.Conflict, message);
-    public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error Fail(string message = "") => new Failed(message);
+    public static Error NotFound(string message = "") => new NotFound(message);
+    public static Error Unauthenticated(string message = "Authentication required.") => new Unauthenticated(message);
+    public static Error Forbidden(in global::YFex.Authorization.Public.Denial denial) => new Forbidden(denial);
+    public static Error Conflict(string message) => new Conflict(message);
+    public static Error ValidationProblem(string message) => new Error(new ValidationProblem(default)).WithMessage(message);
     public static Error ValidationProblem(in YFex.Validation.ValidationResult result) => Error.Validation(result);
 }
 
@@ -198,11 +200,12 @@ public readonly struct Result<T0, T1> : IUnion, IResult
     public static implicit operator Result<T0, T1>(Error error) => new(error);
 
     // Static helpers
-    public static Error Fail(string message = "") => new(ErrorType.Fail, message);
-    public static Error NotFound(string message = "") => new(ErrorType.NotFound, message);
-    public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
-    public static Error Conflict(string message) => new(ErrorType.Conflict, message);
-    public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error Fail(string message = "") => new Failed(message);
+    public static Error NotFound(string message = "") => new NotFound(message);
+    public static Error Unauthenticated(string message = "Authentication required.") => new Unauthenticated(message);
+    public static Error Forbidden(in global::YFex.Authorization.Public.Denial denial) => new Forbidden(denial);
+    public static Error Conflict(string message) => new Conflict(message);
+    public static Error ValidationProblem(string message) => new Error(new ValidationProblem(default)).WithMessage(message);
     public static Error ValidationProblem(in YFex.Validation.ValidationResult result) => Error.Validation(result);
 }
 
@@ -286,11 +289,12 @@ public readonly struct Result<T0, T1, T2> : IUnion, IResult
     public static implicit operator Result<T0, T1, T2>(Error error) => new(error);
 
     // Static helpers
-    public static Error Fail(string message = "") => new(ErrorType.Fail, message);
-    public static Error NotFound(string message = "") => new(ErrorType.NotFound, message);
-    public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
-    public static Error Conflict(string message) => new(ErrorType.Conflict, message);
-    public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error Fail(string message = "") => new Failed(message);
+    public static Error NotFound(string message = "") => new NotFound(message);
+    public static Error Unauthenticated(string message = "Authentication required.") => new Unauthenticated(message);
+    public static Error Forbidden(in global::YFex.Authorization.Public.Denial denial) => new Forbidden(denial);
+    public static Error Conflict(string message) => new Conflict(message);
+    public static Error ValidationProblem(string message) => new Error(new ValidationProblem(default)).WithMessage(message);
     public static Error ValidationProblem(in YFex.Validation.ValidationResult result) => Error.Validation(result);
 }
 
@@ -390,10 +394,11 @@ public readonly struct Result<T0, T1, T2, T3> : IUnion, IResult
     public static implicit operator Result<T0, T1, T2, T3>(Error error) => new(error);
 
     // Static helpers
-    public static Error Fail(string message = "") => new(ErrorType.Fail, message);
-    public static Error NotFound(string message = "") => new(ErrorType.NotFound, message);
-    public static Error Unauthorized(string message = "") => new(ErrorType.Unauthorized, message);
-    public static Error Conflict(string message) => new(ErrorType.Conflict, message);
-    public static Error ValidationProblem(string message) => new(ErrorType.ValidationProblem, message);
+    public static Error Fail(string message = "") => new Failed(message);
+    public static Error NotFound(string message = "") => new NotFound(message);
+    public static Error Unauthenticated(string message = "Authentication required.") => new Unauthenticated(message);
+    public static Error Forbidden(in global::YFex.Authorization.Public.Denial denial) => new Forbidden(denial);
+    public static Error Conflict(string message) => new Conflict(message);
+    public static Error ValidationProblem(string message) => new Error(new ValidationProblem(default)).WithMessage(message);
     public static Error ValidationProblem(in YFex.Validation.ValidationResult result) => Error.Validation(result);
 }
