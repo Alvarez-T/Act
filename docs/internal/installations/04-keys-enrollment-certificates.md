@@ -61,6 +61,20 @@ Tenant root (P-256, 10 y) — a SigningKeyRing key on central servers or a CNG/T
 
 ## 3. Enrollment protocol (⚑I5)
 
+> **As built (2026-10-13, 08 §5):**
+> - **Challenge.** Step 1 is a POST of `EnrollmentChallengeRequest { code, installation id }`.
+>   - The challenge is a stateless `MessageToken` (`InstallationChallenges`; shared ring `installations/challenges` on farms).
+>   - The tenant hint key comes back only for a valid unused code, and the installation computes the hint (§7) before step 2.
+>   - Failed codes are limited per tenant.
+> - **Certificate.** Central issues it inside the registry transaction, after the code, identity, policy and replacement checks.
+> - **Display name.** The name on the code wins over the installation's suggestion.
+> - **Idempotency.** A retry after a lost answer is answered idempotently, recognized by installation id + code digest, also
+>   after the code expired.
+> - **Client checks.** The installation validates the answer (chain to the pinned root, its own key/id/role/scope, bundles)
+>   before storing it.
+> - **Endpoints.** `HttpInstallationEnrollmentTransport` (client) and `MapYFexInstallationsEnrollment` (package
+>   `YFex.Installations.Central.AspNetCore`), at `/installations/enrollment/{challenge,enroll,renew}`.
+
 ```
  admin (installations.enroll) ──► CreateEnrollmentCode(scope, role, display name) ──► "7Q4K-M2XD" (one use, 15 min)
 
@@ -123,6 +137,17 @@ Saturday outage, `CAIXA-03` dies, the manager brings the spare PC from the stock
   scope and the Terminal role. Default: **disabled**.
 
 ## 6. Installation assertion to central (⚑I11)
+
+> **As built (2026-10-13, 08 §5):**
+> - **Assertion.** The payload is `{ installation id, central challenge token, evidence key id }`, signed with the evidence key.
+>   - Freshness comes only from the challenge, fetched over RPC (`IInstallationAssertionChallenges`) and timed by central's clock.
+>   - The client signs once per challenge (default 5 minutes) and sends the result in the `yfex-installation` header on regular
+>     calls (`rpc.UseInstallationAssertion()` + `AddYFexInstallationRpcClient()`, through `SendHeader`, not the token slot).
+>   - Fusion compute calls carry no headers and run unasserted.
+> - **Server context.** The caller's installation is `InstallationCallContext.Current` (next to CallContext), not
+>   `callContext.Installation`.
+> - **Refusals.** Scope pinning refuses with `Forbidden(installation.scope)`.
+> - **Package.** The format, validator and provider are in the main package, so any transport can use them.
 
 Cloud load balancers terminate TLS, so client certificates are awkward toward central. Instead, every RPC connection carries a short
 signed assertion:

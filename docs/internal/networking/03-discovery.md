@@ -32,6 +32,11 @@ ones); the sequence number is only a duplicate filter.
 Networking never references YFex.Cryptography or Installations. A lying beacon costs one failed handshake (offline 04 §2), and with a
 verifier it costs nothing: it is dropped and counted (`discovery.announcements.rejected`).
 
+**As built (phase 5, 2026-10-13):** `AnnouncementVerdict` is `{ NotChecked = 0, Verified, Rejected }` (the default value must not mean
+"verified"); `BeaconService` exposes `ListenAsync(kind, verifier)`, `QueryAsync(kind, window, verifier)` and `Statistics`; the sequence
+filter is per listener and only advances for candidates that passed its verifier (a forged high sequence cannot block the real sender).
+mDNS sends no QU bit and does not claim the host name (shared port 5353 with the OS responder). Details in 06.
+
 ## 2. Beacons (generic multicast announcements) — ⚑N19
 
 The offline site broker's beacon (offline 04 §2, ⚑O6) becomes one **kind** of generic beacon. Kind names and payload formats belong to

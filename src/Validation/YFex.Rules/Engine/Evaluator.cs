@@ -1,4 +1,7 @@
-﻿using YFex.Helpers;
+﻿using System.Buffers;
+using System.Security.Cryptography;
+using YFex.Cryptography;
+using YFex.Helpers;
 using YFex.Validation;
 using static YFex.Rules.EvalState;
 using YFex.Authorization.Public;
@@ -724,11 +727,19 @@ internal static class Evaluator<TSituation> where TSituation : ISituation<TSitua
             var totals = new DecisionTotals(Raw(_initial), Raw(_current), Raw(_current - _initial), lines);
             var adjustments = new AdjustmentList(_adjustments.Count == 0 ? null : [.. _adjustments]);
 
-            ulong fingerprint = Fingerprint(verdict.Kind, limits, adjustments, approvals, violations, _derived);
+            ulong fingerprint;
+            Hash256 digest = default;
+            if (approvals.IsEmpty)
+            {
+                var h = StableHash64.Create(FingerprintSeed);
+                AppendOutcome(ref h, verdict.Kind, limits, adjustments, approvals, violations, _derived);
+                fingerprint = h.Finish();
+            }
+            else (fingerprint, digest) = FingerprintAndDigest(_def.Name, verdict.Kind, limits, adjustments, approvals, violations, _derived);
             var traceData = trace == TraceLevel.Off ? null : BuildTrace();
 
             return new Decision<TSituation>(_def, set.RuleArray, in s, verdict, violations, approvals, totals, adjustments, set.Version,
-                fingerprint, traceData, limits, _derived);
+                fingerprint, digest, traceData, limits, _derived);
         }
 
         /// <summary>
@@ -736,10 +747,30 @@ internal static class Evaluator<TSituation> where TSituation : ISituation<TSitua
         /// order; approval permissions; violation (path, code); derived field values (engine-computed outcome: two
         /// decisions differing only in InstallmentValue must not compare equal). Excludes the trace and the ruleset version.
         /// </summary>
-        private static ulong Fingerprint(VerdictKind verdict, FieldLimit[] limits, in AdjustmentList adjustments,
+        private const ulong FingerprintSeed = 0xDEC1510;
+
+        /// <summary>
+        /// Decisions that need approvals also get <see cref="Decision{TSituation}.Digest"/> (cryptography ⚑K12): SHA-256 of
+        /// <c>"yfex.rules.decision.v1" ‖ 0 ‖ rule set name (length-prefixed) ‖ the exact canonical outcome stream the fingerprint hashes</c>.
+        /// Approval tokens sign the digest; the 64-bit fingerprint stays for equality and UI.
+        /// </summary>
+        private static (ulong Fingerprint, Hash256 Digest) FingerprintAndDigest(string ruleSet, VerdictKind verdict, FieldLimit[] limits,
+            in AdjustmentList adjustments, in ApprovalRequestList approvals, in ViolationList violations, RawValue[] derived)
+        {
+            var outcome = new ArrayBufferWriter<byte>(256);
+            outcome.Write("yfex.rules.decision.v1\0"u8);
+            var prefix = StableHash64.Create(0, outcome);
+            prefix.Append(ruleSet);
+            var h = StableHash64.Create(FingerprintSeed, outcome);
+            AppendOutcome(ref h, verdict, limits, adjustments, approvals, violations, derived);
+            Span<byte> digest = stackalloc byte[Hash256.Size];
+            SHA256.HashData(outcome.WrittenSpan, digest);
+            return (h.Finish(), new Hash256(digest));
+        }
+
+        private static void AppendOutcome(ref StableHash64 h, VerdictKind verdict, FieldLimit[] limits, in AdjustmentList adjustments,
             in ApprovalRequestList approvals, in ViolationList violations, RawValue[] derived)
         {
-            var h = StableHash64.Create(0xDEC1510);
             h.Append((byte)verdict);
             h.Append(limits.Length);
             foreach (ref readonly var l in limits.AsSpan())
@@ -771,7 +802,6 @@ internal static class Evaluator<TSituation> where TSituation : ISituation<TSitua
             }
             h.Append(derived.Length);
             foreach (ref readonly var v in derived.AsSpan()) v.AppendTo(ref h);
-            return h.Finish();
         }
 
         private DecisionTrace BuildTrace()

@@ -88,7 +88,7 @@ AspNetCore.Tests ≥ 3 + (401/403 reason, one context per request); budgets met;
 new: client sees server grants and follows a signalled change; desktop host signals without RPC; HTTP applies a signalled change
 on the next request; handlers run inside the caller's actor scope; a per-user query is never cached without a subject.
 
-### 3b — after YFex.Cryptography Phase 2 (signatures) and the offline bundle format
+### 3b — ✅ DONE 2026-10-15 (decisions S1–S6, README)
 
 - The server signs each snapshot it hands out as a `SignedBundle` (kind `authorization.snapshot`, offline 05 §2) through
   YFex.Cryptography (`SignedPayload`, key rings, rotation); the client verifies before use and persists the signed bytes.
@@ -110,16 +110,17 @@ other subject) is rejected**.
 rejected at publish; RuleAdmin publish actions visible only to holders of a publish permission (`IMessageAuthorization.IsVisible`);
 option remap honoured; undeclared table permission fails startup.
 
-### 4b — approvals on YFex.Cryptography
+### 4b — ✅ DONE 2026-10-16 — approvals on YFex.Cryptography (decisions A1–A9)
 
-- Token family → Authorization as `ApprovalToken*` v2 (A3, A4) on YFex.Cryptography (`MessageAuthentication`, ring
-  `approvals/server`, `SignedPayload` for device tokens); v1 verified through `ApprovalTokenVersion1Codec` (golden) until the cut-off;
-  split offline caps; `IDecisionBound` → Cqrs; `IApprovalBound` + `.RequireApproval`; `YFex.Cqrs.Approvals` (A2) with
-  `Approve(permission, digest)` (A5); `IPermissionDirectory` replaces `IApproverDirectory`; `ApprovalIssued`/`ApprovalAccepted` events.
+- Token family → Authorization as `ApprovalToken` v2 (A3, A4, A6) on YFex.Cryptography (`MessageAuthentication`, ring
+  `approvals/server`, `SignedPayload` with the installation evidence key for device tokens); **v1 dropped (A9)**: `OverrideToken*`,
+  `IDeviceKeyStore`, the v1 golden and its tests deleted, no cut-off option; split offline caps (amount cap in Rules, age policy in
+  Authorization); `IDecisionBound` → Cqrs; `IApprovalBound` + `.RequireApproval`; `YFex.Cqrs.Approvals` (A2) with
+  `Approve(permission, digest)` (A5); `IPermissionDirectory` replaces `IApproverDirectory` (A8 actions); `IApprovalPolicySource` +
+  separation of duties (A7); `ApprovalEvents.Issued`/`Accepted`.
 
-**Acceptance:** **golden test: tokens signed with the pre-move code (`approval-token-v1.tsv`) verify after the move**; new:
-`.RequireApproval` round-trip incl. offline device token flagged; refusals of 06 scenarios (other decision, other bound value, other
-scope, expired, tampered).
+**Acceptance:** ~~golden test of v1 tokens~~ (dropped by A9); `.RequireApproval` round-trip incl. offline device token flagged; refusals
+of 06 scenarios (other decision, other bound value, other scope, expired, tampered). All met — log below.
 
 ## Phase 5 — Capabilities, Search, NavigatR, view-model commands (⚑Z19)
 
@@ -499,3 +500,144 @@ actor subject (same value when the name claim was the subject).
 | YFex.Messaging.Tests | 169 (+2 skipped) | 173 (+2 skipped) — the +4 are the cryptography session's EventChannel tests |
 | YFex.Web.Data.Tests | 30 | 51 — the cryptography session's C2 work |
 | Core 158, Authorization.Generator 10, AspNetCore 8, Messaging.Rpc 60, NavigatR 129 (+5 known), Capabilities 28/7/5, Tenancy 27, Search 57, Cqrs.Tenancy 11, Validation 62, Validation.Generator 50 | = | = |
+
+### Phase 3b — DONE 2026-10-15
+
+Decisions S1–S6 confirmed by the user the same day (README; S3 = configurable time policy, the user's answer). Backups:
+`C:\Temp\authz-backup\phase3b\`. No other session had touched YFex.Installations, YFex.Authorization or Messaging.Rpc that day (mtime
+check); YFex.Offline had (its Phase 2), so **Offline was not edited**.
+
+| File | Change |
+|---|---|
+| **new** `YFex.Authorization.Installations` (Authorization repo) | `AuthorizationBundleKinds` (`authorization.snapshot`, `authorization.publishers`, publisher `"authorization"`, `SnapshotStream(subject, scope)` = prefix + hex(SHA-256)[..32]); `PermissionSnapshotCodec` (canonical, UTF-8 text bytes, sorted, pinned); `IPermissionSnapshotIssuer` + checked-in proxy `ActualLabProxies/IPermissionSnapshotIssuerProxy.cs`; `SignedPermissionSnapshots` (`AcceptAsync`, `TryRestoreAsync`, `RestoreAndApplyAsync`; native `union SnapshotRestore(SnapshotRestored, SnapshotMissing, SnapshotRefused)`, `SnapshotRefusal`); `ISnapshotTimePolicy` + `SnapshotTimePolicy.Refuse` (default) / `AllowFlagged` / `RefuseWhenUncertain` / `AllowFlaggedWhenUncertain`; `SignedSnapshotRefresh` (hosted); `peers.AuthorizationBundles()`, `AddYFexSignedPermissionSnapshots()` |
+| **new** `YFex.Authorization.Installations.Central` | `PermissionSnapshotSigner` (+ `PermissionSnapshotSigningOptions`: 72 h, 1 h–14 d, ring `authorization/snapshots`); `PermissionSnapshotIssuerService`; `AuthorizationPublisherEndorsement`; `AddYFexPermissionSnapshotIssuer()`, `CentralInstallationsBuilder.PullableAuthorizationBundles()` |
+| **new** tests `YFex.Authorization.Installations.Tests` | 34: acceptance (offline start within/after validity; tampered permission, extended validity, other subject; device clock set back), audience, roster-key refusal, missing endorsement, floors, rotation, time policies, issuer service with `CallContext` × `InstallationCallContext`, refresh, composition, codec golden, proxy golden |
+| YFex.Installations `Bundles/PublisherKeySet.cs` (new) | generic `PublisherKeySet` (payload byte-identical to Offline's `OfflinePublisherKeySet`) + `EndorsedPublisherKeys : IPublicKeyDirectory` |
+| YFex.Installations `DependencyInjection/InstallationPeersBuilder.cs` | `Publishers(...)` is **additive** (was: last call wins; Offline worked around it with `otherPublishers`) |
+| YFex.Installations.Central `PublisherEndorsement.cs` (new) | generic `IBundlePublicationStore`, `InMemoryBundlePublicationStore`, `PublisherEndorsement` (= Offline's `OfflinePublisherEndorsement`, parameterized by kind) |
+| YFex.Installations.Central `DependencyInjection/CentralInstallationsServiceCollectionExtensions.cs`, `CentralEnrollmentService.cs` | `PullableBundles(...)` **additive** + an overload built from the container; `CentralInstallations.TryGetBundleKey(tenant)`; internal `CentralEnrollmentService.Authority` |
+| YFex.Installations tests | `PublisherEndorsementTests` (+3, Central.Tests 22 → 25), `PublishersBuilderTests` (+1, Installations.Tests 124 → 125) |
+| Messaging.Rpc `CallContext/CallContextClientHeaders.cs` (new), `FusionMessageBus.cs` | the bus's header building moved to the public `CallContextClientHeaders` (`GetAsync`, `CallAsync`) so plain proxy calls carry token, scope and the installation assertion; the bus delegates (same headers) |
+| Messaging.Rpc.Tests `CallContextClientHeadersTests.cs` (new) | +2 |
+| Docs | README (S1–S6, status), 05 notes, this file, repo `YFex.Authorization/README.md`, `YFex/docs/index.md` untouched (no new public guide), offline 11 §2 rows, installations 05 note |
+
+**Behaviour changes (release note):** (1) `InstallationPeersBuilder.Publishers` and `CentralInstallationsBuilder.PullableBundles` add
+instead of replacing (an app that called them twice on purpose to override now gets both). (2) `FusionMessageBus` header building is
+unchanged in content; it now lives in `CallContextClientHeaders`. Everything else is new API.
+
+**Deviations**
+
+1. **Generic endorsement in YFex.Installations** instead of a second copy of Offline's code in Authorization (S1). Offline still uses
+   its own types; the payloads are byte-identical, so moving Offline onto `PublisherKeySet`/`EndorsedPublisherKeys`/`PublisherEndorsement`
+   is a mechanical follow-up for the Offline owner.
+2. **Version = issue time in Unix ms** (S5), not the permission version: `InMemoryPermissionVersions` restarts at 0, which would put
+   every snapshot after a server restart below the installation's floor. Several central nodes with skewed clocks can issue a lower
+   version than an installation holds; it is refused (`OlderThanFloor`) and the newer copy stays, until the next refresh.
+3. **Validity is one central option** (72 h). Offline's per-site `OfflineLimitKeys.PermissionSnapshotValidity` (admin value in the
+   manifest) is not read yet: Offline Phase 3 should pass it to the signer (a per-installation validity hook), clamped to 1 h–14 d.
+4. **`SignedSnapshotRefresh` only implements `IAsyncDisposable`** (like `RpcCentralBundleRefresh`): containers must be disposed async
+   (the generic host does).
+5. The snapshot kind is **not gossiped** (audience = one installation); only the endorsement is.
+
+**Open items**
+
+- Offline Phase 3: call `RestoreAndApplyAsync(subject, scope, accessor)` from offline sign-in; feed the per-site validity (deviation 3).
+- Offline: move to the generic endorsement types (deviation 1).
+- `YFex.Installations.Windows.Tests` `Mutual_TLS_13_with_the_terminal_transport_key_in_the_TPM` failed once with a socket error when
+  run in parallel with the other Installations suites (port contention), 6/6 when run alone twice. Not related to this phase.
+
+| Suite | Before | After |
+|---|---|---|
+| YFex.Authorization.Installations.Tests (new, tracked from now) | — | **34** |
+| YFex.Messaging.Rpc.Tests | 76 | **78** |
+| YFex.Installations.Tests / Central.Tests | 124 / 22 | **125 / 25** |
+| YFex.Installations.Rpc.Tests 13, Windows.Tests 6, AotSmoke (publish 0 warnings, exit 0) | = | = |
+| YFex.Authorization.Tests 77, AspNetCore 8, Generator 10, Messaging 175 (+2 skipped), Offline 36 | = | = |
+
+### Phase 4b — DONE 2026-10-16
+
+Decisions A1–A9 (README; A9 "v1 is dropped" re-confirmed by the user on 2026-10-16). Backups: `C:\Temp\authz-backup\phase4b\`
+(every pre-existing file below, plus the deleted v1 files and golden). No other session had touched these trees since the 3b session
+(mtime check). Edit scripts: `C:\Temp\yfex-edits\phase4b_*.py`. **Process note:** Git Bash heredocs collapse `\\` to `\`; one
+script wrote a literal NUL into `Evaluator.cs` (fixed at once); later scripts were written with the editor tool.
+
+| File | Change |
+|---|---|
+| core `Helpers/StableHash64.cs` | `Create(seed, IBufferWriter<byte> capture)`: copies every appended byte to `capture` (one null check per append otherwise); the 64-bit value is unchanged |
+| Rules `Decisions/Decision.cs`, `Engine/Evaluator.cs` | `Decision.Digest` (`Hash256`): SHA-256 of `"yfex.rules.decision.v1" ‖ 0 ‖ rule set name ‖ the exact outcome stream the fingerprint hashes` (captured), only when the decision has approvals. Trace and digest share one lazily-allocated slot, so ordinary decisions allocate nothing more (the allocation budget test caught the first, 32-byte version) |
+| Rules `Approvals/OverrideTokens.cs` (**deleted**), `Approvals/OfflineApprovalCap.cs` (new), `Approvals/Enforcement.cs` | v1 token family gone; `OfflineApprovalCap(Permission, RawValue MaxRequested)` + `Allows`/`AllowedBy` (age moved to Authorization); `EnforceOptions.OfflineCaps`; `IDecisionBound` moved out |
+| Rules.Tests `HandWritten/ApprovalTokenGoldenTests.cs`, `ApprovalTokenTests.cs`, `Golden/approval-token-v1.tsv` (**deleted**), `HandWritten/DecisionDigestTests.cs` (new) | digest determinism/sensitivity, no digest without approvals, offline cap |
+| Authorization.Public `Approvals.cs` (new) | `ApprovalTokenKind {Server, Device, Site}`, `ApprovalToken` (kind, approver subject, approver scope, permission, digest, `ValidityPeriod`, key id, `InstallationId`, signature), `IApprovalBound`, `ApprovalDigest.Of(type, string/Guid/long/ICanonicalValue)`, `ApprovalGrant`, `IApprovalTokenIssuer`, `ApprovalExpectation` (+ `ApprovalOrigin`: deciding installation and decision time), `ApprovalCheck`, `ApprovalFlags`, `ApprovalVerification`, `IApprovalTokenVerifier`, `IPermissionDirectory` + `PermissionDirectoryAnswer`, `ApprovalPolicy` + `IApprovalPolicySource`, `IApprovalOriginAccessor`. Still a leaf (core + BCL, LeafGuardTests green) |
+| Authorization runtime `YFex.Authorization.csproj`, `Approvals/*.cs` (new) | references YFex.Cryptography (A3). `ApprovalDomains.Version2` (`yfex.approval.v2`), `ApprovalTokenCodec.Body` (canonical, pinned), `ServerApprovalTokens` (HMAC on the ring, reload on unknown key, `FromProvider`/`WithProcessKey`), `IApprovalSignatureVerifier`, `ApprovalTokenVerifier` (kind → permission → digest → signature → validity / offline age at decision time → installation → scope → separation of duties → approver re-check), `ApprovalOptions` (15 min, 1 min–24 h; `AllowOffline`; `WhenNoDirectory`/`WhenUnknownApprover`/`WhenDirectoryUnavailable`), `OfflineApprovalPolicy`, `UnverifiedApproverAction`/`Reason`, `IUnverifiedApproverHandler`, `ApprovalEvents` (`Issued`, `Accepted`, startup warning `NoDirectory`), `AddYFexApprovals()` |
+| Authorization.Installations `DeviceApprovalTokenIssuer.cs` (new) | device tokens signed with the evidence `ISigningKey` through `SignedPayload` |
+| Authorization.Installations.Central `DeviceApprovalSignatures.cs` (new) | `DeviceApprovalSignatures` (installation's evidence keys from `IInstallationKeyDirectory`, verified as of the token's issue time), `InstallationCallApprovalOrigin` (RPC installation assertion), `AddYFexDeviceApprovalVerification()` |
+| Authorization.Testing `FakePermissionDirectory.cs` (new) | grants per subject/scope, `Unavailable`, question counter |
+| Cqrs `IDecisionBound.cs` (new), `Error.cs`, `Runtime/ApprovalStage.cs` (new), `Runtime/RulesStage.cs`, `Configuration/CommandConfigurationBuilder.cs` | `IDecisionBound : IApprovalBound` in YFex.Cqrs; `ApprovalRequired.DecisionDigest` + `Error.ApprovalRequired(approvals, fingerprint, digest, violations)`; `.RequireApproval(permission, bind, separationOfDuties = true)` for `string`/`Guid`/`long`/`ICanonicalValue` (both command builders); `ApprovalStage<TMessage>` rides the rules slot (`ApprovalStages.Combine`: after the rules when both are configured); rules approvals verified through `IApprovalTokenVerifier` against `Decision.Digest`, offline tokens also need `EnforceOptions.OfflineCaps`; policy sources applied; `RulesStage.SituationType` nullable; `IApproverDirectory` deleted |
+| Messaging.Rpc `Serialization/RpcResultFormatters.cs` | **wire v5**: `ApprovalRequired` carries the digest (v4 payloads read with a zero digest); `ApprovalTokenFormatter`, `PermissionFormatter`, `Hash256Formatter` registered |
+| **new** `YFex/src/Cqrs/YFex.Cqrs.Approvals` (+ `.Tests`), `yfex.slnx` | `Approvals.Commands.Approve(Permission, Hash256) : ICommand<ApprovalToken>` (RPC contract generated), `ApproveRequirement`, `ApprovalsBaseline`, `ApproveHandler` (refuses anonymous, impersonating/delegated callers and a zero digest), `AddYFexCqrsApprovals()`, `AddYFexApprovalRequirements()`, `AddApprovals()` |
+| Rules.Admin `RuleAdmin.cs`, `RuleAdminHandlers.cs`, `RuleAdminSetup.cs`, `RuleAdminAuthorization.cs`; tests `AdminFixture.cs`, `PublishTests.cs` | `ApproveDecision`, its wire `ApprovalToken`, handler and requirement deleted (the test moved to Cqrs.Approvals.Tests) |
+| Messaging.Tests `Fixtures/CheckoutAggregate.cs`, `Cqrs/RulesStageTests.cs`; Messaging.Rpc.Tests `WireFormatTests.cs` | v2 tokens over the decision digest; offline device approval of a rule limit capped and flagged; digest and token wire round trips |
+| Authorization.Tests `ApprovalTokenTests.cs`; Authorization.Installations.Tests `DeviceApprovalTests.cs`; core `StableHash64Tests.cs` | server tokens, ring reload, scope containment, pinned body and digests, options bounds; real-key device tokens (F7 replay, decision-time age, other installation, revoked/foreign keys, tampering, A8 actions, custom handler, Site refused, DI); capture |
+| YFex.Cryptography.Tests `ArchitectureTests.cs` | allow-list entry of `OverrideTokens.cs` removed (the file is gone) |
+| `C:\Temp\yfex-edits\run-tests.sh` | tracks `CqrsApprovals` and `Cryptography` |
+
+**Behaviour changes (release note):** (1) Approval tokens are v2 only: `OverrideToken*`, `HmacOverrideTokens`, `DeviceOverrideToken*`,
+`IDeviceKeyStore` and Rules' `ApprovalCheck`/`ApprovalVerification` are gone; nothing in flight was affected (A9). (2) `IDecisionBound`
+moved from YFex.Rules to YFex.Cqrs and carries `IReadOnlyList<ApprovalToken>`. (3) RuleAdmin `ApproveDecision(permission, fingerprint)`
+is replaced by `Approvals.Commands.Approve(permission, digest)` (YFex.Cqrs.Approvals). (4) RPC wire v5. (5) `IApproverDirectory` →
+`IPermissionDirectory` (scope-aware, four answers); without one, device tokens are refused (`WhenNoDirectory`). (6) A device token is
+accepted only from the installation that decided the operation, within `OfflineApprovalPolicy.MaxAge` of its issue measured at the
+decision time, with an offline amount cap for rule limits, and always flagged. (7) The approver may not be the requester unless the
+policy opts out. (8) `[MemoryPackable]` commands that carry approvals annotate the member `[MemoryPackAllowSerialize]` (formatters live in
+Messaging.Rpc, the leaf cannot reference MemoryPack).
+
+**Deviations**
+
+1. **`.RequireApproval` rides the rules slot** (`ApprovalStage<TMessage> : RulesStage`, combined after the rules stage) instead of a
+   new verdict case in the gate: the three dispatchers (LocalDispatcher, ValidatingHandlerInvoker, Wolverine) needed no change and the
+   answer is the same `Error.ApprovalRequired` as rule approvals. The gate stays a pure permission check.
+2. **Rules digest by capture:** `StableHash64` got an optional byte capture so the digest hashes exactly the fingerprint's canonical input
+   (no second serializer to keep in sync). Domain + rule set name prefix it.
+3. **Device verification in `.Installations.Central`** (needs the central `IInstallationKeyDirectory`), issuer in `.Installations`
+   (store side); the deciding installation comes from the RPC assertion until Offline Phase 3 supplies `Provenance`.
+4. **Site tokens** (`ApprovalTokenKind.Site`) exist in the enum but are refused (`UnsupportedKind`) until Offline Phase 4 designs them.
+5. **Approval-only flags** reach `IDecisionAuditSink` with the `ApprovalPolicy` as the "decision" (there is no rules decision).
+6. `Approve` refuses callers acting for someone else (`ActorRelation != None`) now; 06 §3 had listed "issuing approvals" among the
+   impersonation restrictions of Phase 6.
+
+**Open items**
+
+- 4c: Rules.Admin approval-policy table as an `IApprovalPolicySource` (A7).
+- Offline Phase 3: an `IApprovalOriginAccessor` for replay (envelope installation + `Provenance.DecidedAt`) and the review queue behind
+  `UnverifiedApproverAction.Defer` (today it refuses with `ApproverDeferred`).
+- Offline Phase 4: site tokens.
+- Unrelated failures seen in the full run: `YFex.Installations.Tests` `MeshAcceptanceTests.Bundles_from_a_friend_are_verified_like_bundles_from_central`
+  failed once in the parallel run, passed twice alone (flaky); `YFex.Cryptography.Tests` `CertificateTests.Expiry_not_yet_valid_revocation_and_foreign_roots`
+  fails deterministically (`InvalidExtension` where `PartialChain` is expected; test file from 2026-10-05, no code of this phase in its graph).
+
+| Suite | Before | After |
+|---|---|---|
+| YFex.Authorization.Tests | 77 | **88** |
+| YFex.Authorization.Installations.Tests | 34 | **42** |
+| YFex.Cqrs.Approvals.Tests (new, tracked) | — | **12** |
+| YFex.Tests (core) | 233 | **234** |
+| YFex.Messaging.Tests | 175 (+2 skipped) | **176** (+2 skipped) |
+| YFex.Messaging.Rpc.Tests | 78 | **79** |
+| YFex.Rules.Tests | 65 | 65 (3 v1 tests deleted: golden 1 + tokens 2; 3 digest tests added) |
+| YFex.Rules.Admin.Tests | 30 | **29** (ApproveDecision test moved) |
+| YFex.Cryptography.Tests (now tracked) | — | 138 + 1 unrelated failure (above) |
+| Authorization.Generator 10, AspNetCore 8, NavigatR 129 (+5 known), Capabilities 28/7/5, Tenancy 27, Web.Data 51, Search 57, Rules.Dynamic 20, Rules.Generator 23, Rules.Data 15, Cqrs.Tenancy 11, Validation 62, Validation.Generator 50, Installations 125 (1 flaky, above), Installations.Central 25, Installations.Rpc 13, Offline 36 | = | = |
+
+### 2026-10-13 — Note from the Installations I2 rework (not an Authorization phase)
+
+Additive hook in Messaging.Rpc for YFex.Installations.Rpc, made while no Authorization session was running. Please review.
+- **The hook:** `CallContextClientBuilder.SendHeader(headerName, provider)`, and `FusionMessageBus.HeadersAsync` sends those headers
+  after the token and the scope.
+- **Validation:** reserved names (the token header, `yfex-scope`, `yfex-idempotency`) and duplicates throw.
+- **Why:** the installation assertion no longer takes the single `SendToken` slot, so per-call actor tokens and installation
+  assertions can be combined.
+- **Test:** `FusionMessageBus_sends_extra_headers_without_taking_the_token_slot`. Messaging.Rpc.Tests 69 → 70, all green.
+- **Server side:** the installation middlewares wrap `CallContextMiddleware` (priority ±5) and refuse through `RpcErrorResults<T>`
+  (`Unauthenticated`, or `Forbidden(Denial(ResourceDenied, "installation.scope"))`).
+- **Backup:** `C:\Temp\installations-backup\I2-review-2026-10-09\messaging-rpc`. Details in installations 08 §5.
+

@@ -30,6 +30,7 @@ public sealed class RuleAdminBaseline : IAggregateConfiguration<RuleAdmin>
                 v.Field(c => c.TierPath).Required();
             })
             .Invalidates<Queries.GetRuleData, RuleDataPayload[]>()
+            .Invalidates<Queries.GetSignedRuleData, SignedRuleDataPayload[]>()
             .Invalidates<Queries.GetDataVersions, RuleDataHeader[]>();
         b.Command<Commands.PublishParameters, long>().RequireAuthenticated().Authorize<RuleAdminRequirements>()
             .Validation(v =>
@@ -39,6 +40,7 @@ public sealed class RuleAdminBaseline : IAggregateConfiguration<RuleAdmin>
                 v.Field(c => c.TierPath).Required();
             })
             .Invalidates<Queries.GetRuleData, RuleDataPayload[]>()
+            .Invalidates<Queries.GetSignedRuleData, SignedRuleDataPayload[]>()
             .Invalidates<Queries.GetDataVersions, RuleDataHeader[]>();
         b.Command<Commands.SetRuleOverride, long>().RequireAuthenticated().Authorize<RuleAdminRequirements>()
             .Validation(v =>
@@ -48,6 +50,7 @@ public sealed class RuleAdminBaseline : IAggregateConfiguration<RuleAdmin>
                 v.Field(c => c.Action).Required();
             })
             .Invalidates<Queries.GetRuleData, RuleDataPayload[]>()
+            .Invalidates<Queries.GetSignedRuleData, SignedRuleDataPayload[]>()
             .Invalidates<Queries.GetDataVersions, RuleDataHeader[]>();
         b.Command<Commands.PublishRule, long>().RequireAuthenticated().Authorize<RuleAdminRequirements>()
             .Validation(v =>
@@ -57,11 +60,11 @@ public sealed class RuleAdminBaseline : IAggregateConfiguration<RuleAdmin>
                 v.Field(c => c.TierPath).Required();
             })
             .Invalidates<Queries.GetRuleData, RuleDataPayload[]>()
+            .Invalidates<Queries.GetSignedRuleData, SignedRuleDataPayload[]>()
             .Invalidates<Queries.GetDataVersions, RuleDataHeader[]>();
-        b.Command<Commands.ApproveDecision, ApprovalToken>().RequireAuthenticated().Authorize<ApproveDecisionRequirement>()
-            .Validation(v => v.Field(c => c.Permission).Required());
 
         b.Query<Queries.GetRuleData, RuleDataPayload[]>().RequireAuthenticated().Authorize<RuleAdminViewRequirement>().Cacheable();
+        b.Query<Queries.GetSignedRuleData, SignedRuleDataPayload[]>().RequireAuthenticated().Authorize<RuleAdminViewRequirement>().Cacheable();
         b.Query<Queries.GetDataVersions, RuleDataHeader[]>().RequireAuthenticated().Authorize<RuleAdminViewRequirement>().Cacheable();
         b.Query<Queries.GetDataVersion, RuleDataPayload[]>().RequireAuthenticated().Authorize<RuleAdminViewRequirement>().Cacheable();
         b.Query<Queries.GetRuleDefinition, RuleDefinitionView>().RequireAuthenticated().Authorize<RuleAdminViewRequirement>().Cacheable();
@@ -86,17 +89,43 @@ public interface IRuleDataCache
 /// <summary>
 /// <see cref="IRuleDataCache"/> over the device's <see cref="IKeyValueStore"/> (SQLite / IndexedDB / file / encrypted —
 /// whatever the app registered). One entry per version: <c>yfex.rules/{ruleSet}/{version:D19}</c> → MemoryPack
-/// <see cref="RuleDataPayload"/>.
+/// <see cref="RuleDataPayload"/>. With an <see cref="IRuleDataVerifier"/> (offline 05 §2.1, fixes F6) each version's signed form is
+/// kept next to it (<c>yfex.rules.signed/{ruleSet}/{version:D19}</c>) and every load re-verifies: unsigned, tampered or rolled-back
+/// versions are not returned and are listed in <see cref="Refused"/>.
 /// </summary>
-public sealed class KeyValueRuleDataCache(IKeyValueStore store, int keepVersions = 16, TimeProvider? clock = null) : IRuleDataCache
+public sealed class KeyValueRuleDataCache(IKeyValueStore store, int keepVersions = 16, TimeProvider? clock = null, IRuleDataVerifier? verifier = null)
+    : ISignedRuleDataCache
 {
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
 
     public int KeepVersions { get; } = keepVersions > 0 ? keepVersions : throw new ArgumentOutOfRangeException(nameof(keepVersions));
 
+    /// <summary>Versions the last loads did not return because they failed verification (for logging and offline findings).</summary>
+    public List<(RuleDataRecord Record, RuleDataCheck Check)> Refused { get; } = [];
+
     private static string Prefix(string ruleSet) => "yfex.rules/" + ruleSet + "/";
+    private static string SignedPrefix(string ruleSet) => "yfex.rules.signed/" + ruleSet + "/";
 
     public async ValueTask<ImmutableArray<RuleDataRecord>> LoadAsync(string ruleSet, CancellationToken ct)
+    {
+        var records = await LoadStoredAsync(ruleSet, ct).ConfigureAwait(false);
+        if (verifier is null) return [.. records];
+
+        var signed = new SignedRuleData[records.Count];
+        string signedPrefix = SignedPrefix(ruleSet);
+        for (int i = 0; i < signed.Length; i++)
+            signed[i] = new(records[i], await store.GetAsync(Key(signedPrefix, records[i].Info.Version), ct).ConfigureAwait(false) ?? []);
+        var checks = await verifier.VerifyAsync(signed, received: false, ct).ConfigureAwait(false);
+        var verified = new List<RuleDataRecord>(records.Count);
+        for (int i = 0; i < signed.Length; i++)
+        {
+            if (checks[i] == RuleDataCheck.Valid) verified.Add(records[i]);
+            else lock (Refused) Refused.Add((records[i], checks[i]));
+        }
+        return [.. verified];
+    }
+
+    private async ValueTask<List<RuleDataRecord>> LoadStoredAsync(string ruleSet, CancellationToken ct)
     {
         var keys = await store.GetKeysWithPrefixAsync(Prefix(ruleSet), ct).ConfigureAwait(false);
         var records = new List<RuleDataRecord>(keys.Count);
@@ -108,7 +137,21 @@ public sealed class KeyValueRuleDataCache(IKeyValueStore store, int keepVersions
             if (payload is not null) records.Add(payload.ToRecord());
         }
         records.Sort(static (a, b) => a.Info.Version.CompareTo(b.Info.Version));
-        return [.. records];
+        return records;
+    }
+
+    /// <summary>Stores <paramref name="records"/> with their signed forms (idempotent per version) and prunes old versions.</summary>
+    public async ValueTask SaveSignedAsync(string ruleSet, IReadOnlyList<SignedRuleData> records, CancellationToken ct)
+    {
+        if (records.Count == 0) return;
+        string signedPrefix = SignedPrefix(ruleSet);
+        var plain = new RuleDataRecord[records.Count];
+        for (int i = 0; i < plain.Length; i++)
+        {
+            plain[i] = records[i].Record;
+            await store.SetAsync(Key(signedPrefix, plain[i].Info.Version), records[i].Signature.ToArray(), ct: ct).ConfigureAwait(false);
+        }
+        await SaveAsync(ruleSet, plain, ct).ConfigureAwait(false);
     }
 
     public async ValueTask SaveAsync(string ruleSet, IReadOnlyList<RuleDataRecord> records, CancellationToken ct)
@@ -120,7 +163,7 @@ public sealed class KeyValueRuleDataCache(IKeyValueStore store, int keepVersions
 
         // Prune per stream: keep the newest N versions and, whatever N is, the version in force today (a long run of
         // future-dated versions must not evict it).
-        var all = await LoadAsync(ruleSet, ct).ConfigureAwait(false);
+        var all = await LoadStoredAsync(ruleSet, ct).ConfigureAwait(false);
         var today = DateOnly.FromDateTime(_clock.GetUtcNow().UtcDateTime);
         var streams = new Dictionary<RuleDataKey, List<RuleDataRecord>>();
         foreach (var r in all)
@@ -137,7 +180,10 @@ public sealed class KeyValueRuleDataCache(IKeyValueStore store, int keepVersions
                 if (r.Info.EffectiveFrom <= today && (inForce < 0 || r.Info.EffectiveFrom >= best)) { inForce = r.Info.Version; best = r.Info.EffectiveFrom; }
             for (int i = 0; i < list.Count - KeepVersions; i++)                 // ascending → oldest first
                 if (list[i].Info.Version != inForce)
+                {
                     await store.DeleteAsync(Key(prefix, list[i].Info.Version), ct).ConfigureAwait(false);
+                    await store.DeleteAsync(Key(SignedPrefix(ruleSet), list[i].Info.Version), ct).ConfigureAwait(false);
+                }
         }
     }
 
@@ -153,7 +199,9 @@ public sealed class KeyValueRuleDataCache(IKeyValueStore store, int keepVersions
 /// <item>each <see cref="Events.RulesetPublished"/> and each reconnect (<see cref="IServerConnection"/>, optional) repeats the
 ///   incremental fetch — versions missed while offline are caught up in order.</item>
 /// </list>
-/// A failed fetch (offline) keeps what the device has; nothing is lost.
+/// A failed fetch (offline) keeps what the device has; nothing is lost. With an <see cref="IRuleDataVerifier"/> (offline 05 §2.1, fixes F6)
+/// the sync fetches <c>GetSignedRuleData</c>, applies and caches only versions that verify (with their signed form, re-verified by the
+/// cache at load) and lists the others in <see cref="Refused"/>.
 /// </summary>
 public sealed class RuleSetSync : IAsyncEventRecipient<Events.RulesetPublished>, IDisposable
 {
@@ -162,19 +210,25 @@ public sealed class RuleSetSync : IAsyncEventRecipient<Events.RulesetPublished>,
     private readonly IEventBus _events;
     private readonly IRuleDataCache? _cache;
     private readonly IServerConnection? _server;
+    private readonly IRuleDataVerifier? _verifier;
     private readonly Dictionary<string, long> _lastVersion = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _gate = new(1, 1);
     private IDisposable? _subscription;
     private bool _started;
 
-    public RuleSetSync(IDispatcher dispatcher, RuleSetRegistry registry, IEventBus events, IRuleDataCache? cache = null, IServerConnection? server = null)
+    public RuleSetSync(IDispatcher dispatcher, RuleSetRegistry registry, IEventBus events, IRuleDataCache? cache = null, IServerConnection? server = null,
+        IRuleDataVerifier? verifier = null)
     {
         _dispatcher = dispatcher;
         _registry = registry;
         _events = events;
         _cache = cache;
         _server = server;
+        _verifier = verifier;
     }
+
+    /// <summary>Received versions refused by the <see cref="IRuleDataVerifier"/> (not applied, not cached) — for logging and offline findings.</summary>
+    public List<(RuleDataRecord Record, RuleDataCheck Check)> Refused { get; } = [];
 
     /// <summary>Records that failed to decode (removed tables/rules) — for logging.</summary>
     public List<(RuleDataRecord Record, Exception Error)> Failures { get; } = [];
@@ -209,6 +263,7 @@ public sealed class RuleSetSync : IAsyncEventRecipient<Events.RulesetPublished>,
     /// <summary>Fetches the versions of <paramref name="host"/>'s rule set after the last applied one. False = fetch failed.</summary>
     public async Task<bool> SyncAsync(IRuleSetHost host, CancellationToken ct = default)
     {
+        if (_verifier is not null) return await SyncSignedAsync(host, _verifier, ct).ConfigureAwait(false);
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
@@ -219,6 +274,39 @@ public sealed class RuleSetSync : IAsyncEventRecipient<Events.RulesetPublished>,
             for (int i = 0; i < records.Length; i++) records[i] = payloads[i].ToRecord();
             if (_cache is not null) await _cache.SaveAsync(host.Name, records, ct).ConfigureAwait(false);
             foreach (var r in records) Apply(host, r);
+            return true;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<bool> SyncSignedAsync(IRuleSetHost host, IRuleDataVerifier verifier, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var result = await _dispatcher.QueryAsync<Queries.GetSignedRuleData, SignedRuleDataPayload[]>(new(host.Name, LastVersion(host.Name)), ct)
+                .ConfigureAwait(false);
+            if (!result.TryGetValue(out SignedRuleDataPayload[]? payloads) || payloads is null) return false;
+            var received = new SignedRuleData[payloads.Length];
+            for (int i = 0; i < received.Length; i++) received[i] = payloads[i].ToSigned();
+            var checks = await verifier.VerifyAsync(received, received: true, ct).ConfigureAwait(false);
+            var accepted = new List<SignedRuleData>(received.Length);
+            for (int i = 0; i < received.Length; i++)
+            {
+                if (checks[i] == RuleDataCheck.Valid) accepted.Add(received[i]);
+                else lock (Refused) Refused.Add((received[i].Record, checks[i]));
+            }
+            if (_cache is ISignedRuleDataCache signedCache) await signedCache.SaveSignedAsync(host.Name, accepted, ct).ConfigureAwait(false);
+            else if (_cache is not null)
+            {
+                var plain = new RuleDataRecord[accepted.Count];
+                for (int i = 0; i < plain.Length; i++) plain[i] = accepted[i].Record;
+                await _cache.SaveAsync(host.Name, plain, ct).ConfigureAwait(false);
+            }
+            foreach (var r in accepted) Apply(host, r.Record);
             return true;
         }
         finally
@@ -272,8 +360,9 @@ public static class RuleAdminServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Server: the RuleAdmin handlers + publish pipeline. Register an <see cref="IRuleStore"/> (SQL, in-memory…), and an
-    /// <see cref="IOverrideTokenIssuer"/> (e.g. <see cref="HmacOverrideTokens"/>) for <c>ApproveDecision</c>.
+    /// Server: the RuleAdmin handlers + publish pipeline. Register an <see cref="IRuleStore"/> (SQL, in-memory…). Rule approvals are
+    /// issued by <c>YFex.Cqrs.Approvals</c> (<c>AddYFexCqrsApprovals</c>). With an
+    /// <see cref="IRuleDataSigner"/> registered (YFex.Offline.Rules) every published version is signed and <c>GetSignedRuleData</c> serves it.
     /// </summary>
     public static IServiceCollection AddYFexRulesAdmin(this IServiceCollection services, Action<RuleAdminOptions>? configure = null)
     {
@@ -287,8 +376,8 @@ public static class RuleAdminServiceCollectionExtensions
         services.TryAddTransient<ICommandHandler<Commands.PublishParameters, long>, PublishParametersHandler>();
         services.TryAddTransient<ICommandHandler<Commands.SetRuleOverride, long>, SetRuleOverrideHandler>();
         services.TryAddTransient<ICommandHandler<Commands.PublishRule, long>, PublishRuleHandler>();
-        services.TryAddTransient<ICommandHandler<Commands.ApproveDecision, ApprovalToken>, ApproveDecisionHandler>();
         services.TryAddTransient<IQueryHandler<Queries.GetRuleData, RuleDataPayload[]>, GetRuleDataHandler>();
+        services.TryAddTransient<IQueryHandler<Queries.GetSignedRuleData, SignedRuleDataPayload[]>, GetSignedRuleDataHandler>();
         services.TryAddTransient<IQueryHandler<Queries.GetDataVersions, RuleDataHeader[]>, GetDataVersionsHandler>();
         services.TryAddTransient<IQueryHandler<Queries.GetDataVersion, RuleDataPayload[]>, GetDataVersionHandler>();
         services.TryAddTransient<IQueryHandler<Queries.GetRuleDefinition, RuleDefinitionView>, GetRuleDefinitionHandler>();
@@ -300,7 +389,8 @@ public static class RuleAdminServiceCollectionExtensions
     /// <summary>
     /// Client: keeps the hosted rule sets in sync with the server (call <see cref="RuleSetSync.StartAsync"/> once). With
     /// <paramref name="deviceCache"/> the received versions are mirrored into the registered <see cref="IKeyValueStore"/>
-    /// (<see cref="KeyValueRuleDataCache"/>, last <paramref name="keepVersions"/> per stream) so offline restarts keep them.
+    /// (<see cref="KeyValueRuleDataCache"/>, last <paramref name="keepVersions"/> per stream) so offline restarts keep them. With an
+    /// <see cref="IRuleDataVerifier"/> registered (YFex.Offline.Rules) both verify signed rule data (offline 05 §2.1, fixes F6).
     /// </summary>
     public static IServiceCollection AddYFexRuleSetSync(this IServiceCollection services, bool deviceCache = true, int keepVersions = 16)
     {
@@ -308,7 +398,7 @@ public static class RuleAdminServiceCollectionExtensions
         services.AddYFexRuleAdminRequirements();                                 // the client registry carries RuleAdminBaseline too
         if (deviceCache)
             services.TryAddSingleton<IRuleDataCache>(sp => new KeyValueRuleDataCache(sp.GetRequiredService<IKeyValueStore>(), keepVersions,
-                sp.GetService<TimeProvider>()));
+                sp.GetService<TimeProvider>(), sp.GetService<IRuleDataVerifier>()));
         services.TryAddSingleton<RuleSetSync>();
         return services;
     }
@@ -320,8 +410,8 @@ public static class RuleAdminServiceCollectionExtensions
             .AddCommand<Commands.PublishParameters, long>()
             .AddCommand<Commands.SetRuleOverride, long>()
             .AddCommand<Commands.PublishRule, long>()
-            .AddCommand<Commands.ApproveDecision, ApprovalToken>()
             .AddQuery<Queries.GetRuleData, RuleDataPayload[]>()
+            .AddQuery<Queries.GetSignedRuleData, SignedRuleDataPayload[]>()
             .AddQuery<Queries.GetDataVersions, RuleDataHeader[]>()
             .AddQuery<Queries.GetDataVersion, RuleDataPayload[]>()
             .AddQuery<Queries.GetRuleDefinition, RuleDefinitionView>()

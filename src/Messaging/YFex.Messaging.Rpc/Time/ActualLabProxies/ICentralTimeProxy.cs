@@ -2,7 +2,11 @@
 #nullable enable
 #nullable disable warnings
 
+using System.Buffers;
 using ActualLab.Rpc;
+using Microsoft.Extensions.DependencyInjection;
+using YFex.Canonical;
+using YFex.Cryptography;
 using YFex.Time;
 
 namespace YFex.Messaging.Rpc.ActualLabProxies;
@@ -27,8 +31,10 @@ namespace YFex.Messaging.Rpc.ActualLabProxies;
 public sealed class ICentralTimeProxy : global::ActualLab.Interception.Internal.InterfaceProxy, global::YFex.Messaging.Rpc.ICentralTime, global::ActualLab.Interception.IProxy
 {
     private static global::System.Reflection.MethodInfo? __cachedMethod0 = __cachedMethod0 = global::ActualLab.Interception.Internal.ProxyHelper.GetMethodInfo(typeof(global::YFex.Messaging.Rpc.ICentralTime), "GetTimeAsync", new[] { typeof(global::System.Threading.CancellationToken) });
+    private static global::System.Reflection.MethodInfo? __cachedMethod1 = __cachedMethod1 = global::ActualLab.Interception.Internal.ProxyHelper.GetMethodInfo(typeof(global::YFex.Messaging.Rpc.ICentralTime), "GetSignedTimeAsync", new[] { typeof(global::System.Byte[]), typeof(global::System.Threading.CancellationToken) });
     private global::System.Func<global::ActualLab.Interception.ArgumentList, global::System.Threading.Tasks.Task<global::System.Byte[]>>? __cachedIntercepted0;
     private global::System.Func<global::ActualLab.Interception.Invocation, global::System.Threading.Tasks.Task<global::System.Byte[]>>? __cachedIntercept0;
+    private global::System.Func<global::ActualLab.Interception.ArgumentList, global::System.Threading.Tasks.Task<global::System.Byte[]>>? __cachedIntercepted1;
     private global::ActualLab.Interception.Interceptor? __interceptor;
     global::ActualLab.Interception.Interceptor global::ActualLab.Interception.IProxy.Interceptor
     {
@@ -61,6 +67,21 @@ public sealed class ICentralTimeProxy : global::ActualLab.Interception.Internal.
         return __cachedIntercept0.Invoke(invocation);
     }
 
+    public global::System.Threading.Tasks.Task<global::System.Byte[]> GetSignedTimeAsync(global::System.Byte[] nonce, global::System.Threading.CancellationToken cancellationToken)
+    {
+        var intercepted = __cachedIntercepted1 ??= args =>
+        {
+            if (args is global::ActualLab.Interception.ArgumentListG2<global::System.Byte[], global::System.Threading.CancellationToken> ga)
+                return ((global::YFex.Messaging.Rpc.ICentralTime)ProxyTarget!).GetSignedTimeAsync(ga.Item0, ga.Item1);
+            var sa = (global::ActualLab.Interception.ArgumentListS2)args;
+            return ((global::YFex.Messaging.Rpc.ICentralTime)ProxyTarget!).GetSignedTimeAsync((global::System.Byte[])sa.Item0, (global::System.Threading.CancellationToken)sa.Item1);
+        };
+        var invocation = new global::ActualLab.Interception.Invocation(this, __cachedMethod1!, global::ActualLab.Interception.ArgumentList.New(nonce, cancellationToken), intercepted);
+        if (__cachedIntercept0 == null)
+            throw global::ActualLab.Interception.Internal.Errors.NoInterceptor();
+        return __cachedIntercept0.Invoke(invocation);
+    }
+
 #if !NETSTANDARD2_0 && !NET472
     [global::System.Runtime.CompilerServices.ModuleInitializer]
 #endif
@@ -71,6 +92,7 @@ public sealed class ICentralTimeProxy : global::ActualLab.Interception.Internal.
             global::ActualLab.Interception.Trimming.ProxyCodeKeeper.KeepProxy<global::YFex.Messaging.Rpc.ICentralTime, ICentralTimeProxy>();
             global::ActualLab.Trimming.CodeKeeper.Keep<ICentralTimeProxy>();
             global::ActualLab.Interception.Trimming.ProxyCodeKeeper.KeepAsyncMethod<System.Byte[], global::System.Threading.CancellationToken>("GetTimeAsync");
+            global::ActualLab.Interception.Trimming.ProxyCodeKeeper.KeepAsyncMethod<System.Byte[], global::System.Byte[], global::System.Threading.CancellationToken>("GetSignedTimeAsync");
         }
     }
 }

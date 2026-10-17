@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
+using YFex.Authorization;
 using YFex.Authorization.Public;
 using YFex.Cqrs;
 using YFex.Cqrs.Configuration;
@@ -66,7 +67,7 @@ public partial class CheckoutAggregate
     public static partial class Commands
     {
         public sealed partial record CloseCheckout(string Tenant, DateOnly Date, PayKind Pay, int Installments, Percentual Discount, Money Amount,
-            RulesetVersion RulesetVersion = default, ulong DecisionFingerprint = 0, IReadOnlyList<OverrideToken>? Approvals = null)
+            RulesetVersion RulesetVersion = default, ulong DecisionFingerprint = 0, IReadOnlyList<ApprovalToken>? Approvals = null)
             : ICommand<Money>, IDecisionBound;
     }
 
@@ -124,7 +125,8 @@ public sealed class CheckoutContextRule(StageLog log) : IContextRule<CheckoutAgg
     }
 }
 
-public sealed class CheckoutBaseline(DecisionMismatchPolicy mismatch, Func<SituationPathMap, SituationPathMap>? paths = null)
+public sealed class CheckoutBaseline(DecisionMismatchPolicy mismatch, Func<SituationPathMap, SituationPathMap>? paths = null,
+    IReadOnlyList<OfflineApprovalCap>? caps = null)
     : IAggregateConfiguration<CheckoutAggregate>
 {
     public void Configure(AggregateConfigurationBuilder<CheckoutAggregate> b)
@@ -132,7 +134,7 @@ public sealed class CheckoutBaseline(DecisionMismatchPolicy mismatch, Func<Situa
         var close = b.Command<CheckoutAggregate.Commands.CloseCheckout, Money>()
             .Authorize((u, c) => true)
             .UseSituation<CheckoutSituation, CheckoutLoader>()
-            .Enforce(CheckoutRules.Set)
+            .Enforce(CheckoutRules.Set, caps is null ? null : EnforceOptions.Default with { OfflineCaps = caps })
             .OnDecisionMismatch(mismatch)
             .Validate<CheckoutContextRule>();
         if (paths is not null) close.MapSituationPaths(paths);
@@ -145,9 +147,10 @@ public sealed class CheckoutBaseline(DecisionMismatchPolicy mismatch, Func<Situa
 public sealed class CheckoutFixture
 {
     public CheckoutFixture(DecisionMismatchPolicy mismatch = DecisionMismatchPolicy.Reject, bool ruledHandler = true, bool decorateInvoker = false,
-        Func<SituationPathMap, SituationPathMap>? paths = null)
+        Func<SituationPathMap, SituationPathMap>? paths = null, IReadOnlyList<OfflineApprovalCap>? caps = null,
+        Action<ApprovalOptions>? approvals = null, Action<IServiceCollection>? configure = null)
     {
-        Registry = CompiledMessagingRegistry.Build(baseline: [new CheckoutBaseline(mismatch, paths)]);
+        Registry = CompiledMessagingRegistry.Build(baseline: [new CheckoutBaseline(mismatch, paths, caps)]);
         var services = new ServiceCollection();
         services.AddSingleton(Log);
         // The one message gate (authorization-consolidation 04 §2): requirements are exported and enforced through it.
@@ -157,7 +160,9 @@ public sealed class CheckoutFixture
         services.AddSingleton(Actor);
         services.AddSingleton<ISituationSanitizer<CheckoutSituation>, CheckoutSanitizer>();
         services.AddSingleton<IDecisionAccessor<CheckoutSituation>, DecisionAccessor<CheckoutSituation>>();
-        services.AddSingleton<IOverrideTokenVerifier>(Tokens);
+        services.AddSingleton(Tokens);
+        services.AddYFexApprovals(approvals);                                   // verifier over the same server tokens
+        configure?.Invoke(services);
         services.AddTransient<ICommandHandler<CheckoutAggregate.Commands.CloseCheckout, Money>, ClassicCloseCheckoutHandler>();
         if (ruledHandler)
             services.AddTransient<IRuledCommandHandler<CheckoutAggregate.Commands.CloseCheckout, Money, CheckoutSituation>, CloseCheckoutHandler>();
@@ -175,7 +180,7 @@ public sealed class CheckoutFixture
 
     public StageLog Log { get; } = new();
     public ActorStub Actor { get; } = new();
-    public HmacOverrideTokens Tokens { get; } = new(new Dictionary<string, byte[]> { ["k1"] = new byte[32] }, "k1", TimeSpan.FromMinutes(15));
+    public ServerApprovalTokens Tokens { get; } = ServerApprovalTokens.WithProcessKey();
     public CompiledMessagingRegistry Registry { get; }
     public IServiceProvider Services { get; }
     public IHandlerInvoker Invoker { get; }

@@ -59,9 +59,11 @@ public sealed class FinalizarVendaOffline(ILocalStock stock) : IOfflineHandler<F
 | `.Offline(...)` member | Effect |
 |---|---|
 | `.RecordsFact()` | replay semantics = fact (§3). Default = request |
-| `.Consumes(key, subject, amount)` | budget reservation before the handler (§4) |
+| `.Consumes(key, subject, amount)` | budget reservation before the handler (§4); only when the app declared the `AllowanceKey` (⚑O14) |
+| `.WhenExhausted(Refuse \| RequireApproval \| AllowAndFlag)` | what happens when the budget of `.Consumes` runs out (§4.1, ⚑O14; default `Refuse`) |
 | `.ClaimsUnique(selector)` | store-wide unique claim before the handler (§4.3) |
-| `.SharedWithSite<TProjection>()` | after the handler, the envelope goes on the site feed. Other terminals run `TProjection` (§5) |
+| `.SharedWithSite<TProjection>()` | marks the command as shareable; when the site's manifest also switches it on, the envelope goes on the site feed after the handler and other terminals run `TProjection` (§5, ⚑O23) |
+| `.WhenRulesDiffer(RuleVersionPolicy.KeepAndReport \| Reevaluate)` / `.WhenRulesDiffer<TResolver>()` | how central treats a fact decided with another rule-data version than today's (§8, ⚑O18; default `KeepAndReport`) |
 | `.Lane(OfflineLane.Deadline)` | upload priority at sync ([08](08-sync-reconciliation-conflicts.md) §6) |
 
 | What the developer writes | Without central |
@@ -75,6 +77,8 @@ public sealed class FinalizarVendaOffline(ILocalStock stock) : IOfflineHandler<F
 - `.Offline(...)` on a non-`IQueueable` record is a startup configuration error. The marker stays the visible "may be accepted without
   central" signal on the record.
 - Compiled per message into an `OfflinePolicy` table; the route decision is a table lookup ([04](04-connectivity-and-failover.md) §3).
+  **2026-10-15 (⚑O18):** a source generator should later compile the `.Offline(...)` chains into that table (Phase 3), as the
+  validation generator does for rules.
 
 ## 3. Facts versus requests (fixes F13)
 
@@ -102,7 +106,7 @@ public sealed class FinalizarVendaReconciler(ITarefas tarefas) : IFactReconciler
 }
 ```
 
-## 4. Coordination without double spending (⚑O14)
+## 4. Coordination without double spending (⚑O14 ✅ 2026-10-15)
 
 Time limits are soft ([05](05-protecting-offline-data.md) §4). **Budgets** and **unique claims** are the hard bounds that let several
 terminals decide at the same time.
@@ -138,16 +142,48 @@ public sealed record OfflineAllowance(
   per-subject budgets only for subjects active at that site in the last N days (default 90). Everyone else gets a small default per
   installation (`Subject = "*"`, e.g., R$ 100 per customer per day). Worst-case exposure is then explicit and configurable.
 
-### 4.2 Caps without budgets
+**Confirmed 2026-10-15 (⚑O14, amended by the user).** Budgets are an **optional** mechanism: nothing is granted, signed or reserved
+unless the app declares an `AllowanceKey`. Central grants per site; the broker cuts signed slices per terminal (Phase 4).
+`.Consumes(key, subject, amount)` reserves before the handler, and `.WhenExhausted(...)` decides what happens when the budget runs out
+(Phase 3):
 
-No new mechanism is needed. The rules engine already does limits. YFex.Offline only exposes the mode as a situation fact:
+| `.WhenExhausted(...)` | Effect when the reservation does not fit |
+|---|---|
+| `Refuse` (default) | `Error.Unavailable("acima do limite offline")`; the handler never runs |
+| `RequireApproval` | the operation needs a site or device approval (§6) for the excess |
+| `AllowAndFlag` | the handler runs; the envelope carries a finding for central's review |
+
+Where the amount of a grant comes from (first one with a value narrows the one before it):
 
 ```csharp
-// ✍ a normal rule (sketch: field path helper name per the Rules generator); [SituationSource] fills IsOffline from IConnectivity
+// ✍ Central composition (built in Phase 2: YFex.Offline.Central)
+services.AddYFexOfflineCentral(central => central
+    .Allowance(FarmaAllowances.ConvenioCredito, allowance => allowance
+        .DefaultPerSubject(amount: 100m)                                   // 1. code default
+        .FromRules(sp => sp.GetRequiredService<LimiteConvenioRegras>())    // 2. IAllowanceAmountSource: admin-edited rule data per tenant or store
+        .CappedBy(sp => sp.GetRequiredService<SaldoConvenioCap>())));      // 3. IAllowanceCap: never more than the customer's real balance
+// The Phase 3 command-side spelling (.Offline(o => o.Consumes(...).FromRules<T>().CappedBy(...).DefaultPerSubject(...))) maps onto it.
+```
+
+Phase 2 builds `AllowanceKey`, the grant computation at central and the signed `offline.allowance` bundle (one per key and site,
+golden-pinned); Phase 3 adds `.Consumes(...)`/`.WhenExhausted(...)` and the per-terminal grants; Phase 4 the broker's slices.
+
+### 4.2 Caps without budgets
+
+No new mechanism is needed. The rules engine already does limits. **2026-10-15 (⚑O11):** the optional package `YFex.Offline.Rules`
+exposes the offline situation as one situation field of type `OfflineFacts` (mode, hours without central, snapshot age, coordinator
+present, flags), filled by the view model's `[SituationSource]` from `IOfflineFactsSource`; YFex.Offline itself never references
+YFex.Rules:
+
+```csharp
+// ✍ the app's situation gains one field; the view model fills it (private partial OfflineFacts __Situation_Offline() => facts.Current;)
+[Situation("venda")]
+public readonly partial record struct VendaSituation(/* … */ OfflineFacts Offline);
+
 [Rule("venda.offline.limite", Group = nameof(VendaRules.Limites))]
 public readonly struct LimiteVendaOffline : IRule<VendaSituation>
 {
-    public static bool Applies(in VendaSituation s) => s.IsOffline && s.Total > 2_000m;
+    public static bool Applies(in VendaSituation s) => s.Offline.IsOffline && s.Total > 2_000m;
     public static void Evaluate(in VendaSituation s, ref DirectiveWriter d)
         => d.RequireApproval(VendaPermissions.AprovarVendaOffline, VendaSituation.Paths.Total, "venda.offline.limite");
 }
@@ -167,7 +203,7 @@ The broker keeps `(message type, claimed value)` for the store until central con
 `Error.Conflict("já registrada nesta loja")`. A standalone terminal records a **provisional** claim, and a duplicate becomes a High
 finding at sync. Central is always the final authority on uniqueness.
 
-## 5. Changes other terminals must see: the site feed (⚑O23)
+## 5. Changes other terminals must see: the site feed (⚑O23 ✅ 2026-10-15)
 
 Real case: during the outage the manager lowers the price of dipyrone from R$ 12,90 to R$ 9,90 because the shelf label is wrong. The
 other checkouts must charge the same price.
@@ -224,9 +260,17 @@ edit layers the rules engine already has (`RuleTierPath`, `EditableAt`). Central
    one in the sequence wins, and both are recorded.
 4. The projection's own checks pass (e.g., central's signed price guardrails).
 
-**Which messages may be shared** is an explicit allow-list in the site manifest (`OfflineLimits.SharedWithSite`). Recommended start:
-store-tier price within guardrails, blocking a product or lot for sale (recall), customers registered at the counter. Anything that
-changes things for other stores or for central (tenant-level prices, permissions, stock transfers) stays central-only.
+**Which messages may be shared** (⚑O23, confirmed 2026-10-15, amended by the user) — three layers, each only narrowing the one before:
+
+| Layer | Who | What it decides |
+|---|---|---|
+| 1. mark | developer | `.SharedWithSite<TProjection>()` in the aggregate configuration: the command **may** be shared. Nothing marked means no feed |
+| 2. switch | admin, per site | `Sites.Commands.Configure(SiteFeed: [...])`, signed into the manifest (`SiteManifest.SiteFeed`): on or off for that site; central refuses to switch on an unmarked command |
+| 3. rules | the command itself | its normal validation and rules run before the envelope exists, so a change they refuse is never shared |
+
+Recommended start: store-tier price within guardrails, blocking a product or lot for sale (recall), customers registered at the
+counter. Anything that changes things for other stores or for central (tenant-level prices, permissions, stock transfers) stays
+central-only, because nobody marks it.
 
 **Readability:** feed payloads are signed and readable by the store's terminals (they need them to project). Personal data fields are
 already sealed for central with the intake key (privacy 05 §5.5), so neither the broker nor other terminals can read them.
@@ -284,7 +328,7 @@ store keeps `(subject, version, changed at)` rows ([08](08-sync-reconciliation-c
   cannot be issued offline.
 - **Impersonation** is never available offline.
 
-## 8. Rules offline (⚑O18)
+## 8. Rules offline (⚑O18 ✅ 2026-10-15)
 
 - A terminal evaluates with the **latest verified rule-data version it holds**, plus any store-tier overrides received on the feed.
   Envelopes carry the `RulesetVersion` (including the override version) and decision fingerprint (`IDecisionBound`), as today.
@@ -294,6 +338,24 @@ store keeps `(subject, version, changed at)` rows ([08](08-sync-reconciliation-c
   older than one it had acknowledged is a rollback finding. **Facts are never re-priced.** A difference against the current table is a
   finding ("vendido a R$ 10,00; tabela vigente R$ 11,00").
 - For a **request**: today's `DecisionMismatchPolicy` (`EnforceOptions.OnMismatch`) applies unchanged.
+
+**Confirmed 2026-10-15 (⚑O18).** "Delivered" is proven by **delivery receipts**: when an installation accepts a bundle (rule data,
+manifest, allowance), it signs `(installation, kind, stream, version, accepted at)` with its evidence key and sends it to central
+(relay item `offline.delivery`, or RPC); central keeps them (`IDeliveryReceiptStore`) and asks "the newest version of this stream
+delivered to this installation before T". A per-command override changes how a difference is treated:
+
+```csharp
+b.Command<FinalizarVenda, Recibo>()
+    .OnOffline<FinalizarVendaOffline>()
+    .Offline(offline => offline
+        .RecordsFact()
+        .WhenRulesDiffer(RuleVersionPolicy.KeepAndReport));          // default: keep the terminal's decision, report the difference
+//      .WhenRulesDiffer(RuleVersionPolicy.Reevaluate)               // re-run with today's version (requests, never money already taken)
+//      .WhenRulesDiffer<ConvenioVersionResolver>()                  // IRuleVersionResolver<FinalizarVenda> decides per case
+```
+
+Phase 2 builds the delivery receipts and `MaxOfflineAge` (`OfflineLimitKeys.MaxOfflineAge`, 05 §7); `.WhenRulesDiffer(...)` and the
+resolver arrive with the `.Offline(...)` verb in Phase 3.
 
 ## 9. Tenancy scope
 

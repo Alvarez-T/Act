@@ -1,5 +1,11 @@
 # 03 — Installation identity, enrollment, LAN trust (mutual TLS) and pairing
 
+> **2026-10-14:** built in YFex.Installations I1–I3 (keys `installation/transport` + `installation/evidence` over
+> `CngSigningKeyStore`, CA operation, certificate profile, `InstallationTrust`, enrollment and renewal, assertion, revocation, peer
+> endpoint). Pairing (§6) is Installations I5, not built. Read the Installations docs and source, not §2–§7 below. Two findings from
+> the build that this file never covered: a TPM key works as a TLS **client** credential but Schannel refuses it as a **server**
+> credential (⚑I25, open), and a macOS listener cannot do TLS 1.3 in .NET 11 (installations 09, ⚑I22 TLS 1.2 fallback).
+>
 > **2026-10-05 (⚑N6):** §2–§7 of this file are superseded by the YFex.Installations design ([../installations](../installations/README.md):
 > 02 core types, 04 keys/certificates/enrollment/revocation/pairing/assertion, 05 friends and peer channels). The goals (§1) and
 > alternatives (§8) still hold. Changes: `Site` → `Scope` (roaming installations), `urn:yfex:site:` → `urn:yfex:scope:`, root P-256

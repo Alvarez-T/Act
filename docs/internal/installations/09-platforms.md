@@ -67,6 +67,18 @@ Blazor WASM has no sockets, no persistent non-exportable keys and no TPM → **n
 | R4 | macOS Local Network permission for a non-UI daemon (broker) | macOS brokers are not supported in v1 (pharmacy brokers are Windows PCs); macOS terminals are clients |
 | R5 | `UnixCreateMode` + rename atomicity on network/home directories | state directory must be local; diagnostics refuse a network path |
 
+| R6 | *(added by the I3 spike, 2026-10-14)* Can a **TPM-held** CNG key be the TLS **server** credential? | Measured on the development PC (Windows 11, TPM 2.0, user-scope key in the Platform Crypto Provider): **no** — Schannel refuses it with `SEC_E_UNKNOWN_CREDENTIALS` (TLS 1.3 and 1.2). As the TLS **client** credential the same key works (TLS 1.3 and 1.2). Machine-scope TPM keys (a broker as a Windows service) need an elevated run of `Machine_scope_TPM_key_as_TLS_server_measurement`: **not verified**. Until then, an installation that **listens** needs a software transport key (CNG software KSP, non-exportable) while its evidence key stays in the TPM → ⚑I25 |
+
+**I3 spike results (2026-10-14, Windows 11 development PC only; no Docker/WSL/Mac):**
+
+| Check | Result |
+|---|---|
+| Mutual TLS 1.3, `SslStream` both sides, software keys (in-memory store via PKCS#12 round trip; CNG software KSP) | ✅ (tests, AOT smoke) |
+| Mutual TLS 1.3, terminal transport + evidence keys in the TPM, broker on a software KSP key | ✅ `WindowsPeerTests` |
+| TPM key (user scope) as the TLS server credential | ❌ R6 (guard test `A_user_scope_TPM_key_cannot_serve_TLS_and_the_endpoint_says_so`; the endpoint counts `ServerCredentialFailures`) |
+| TLS 1.2 fallback (⚑I22): a TLS-1.2-only client against `Tls13OrTls12` → ECDHE-ECDSA AES-GCM, accepted and flagged; against `Tls13Only` → refused | ✅ simulated on Windows 11 by forcing the client to TLS 1.2; **a real Windows 10 PC was not available** |
+| macOS (`UseNetworkFramework` switch set by `InstallationTls`), Local Network permission (R4), Linux OpenSSL | **not verified** (no Mac, no container) |
+
 **Answers from the crypto session (2026-10-07, crypto 14 §5.3, §6; desk research, not run):** R1: macOS clients can use TLS 1.3 with
 the `UseNetworkFramework` switch (Installations sets it on macOS); macOS **listeners** stay TLS 1.2 in .NET 11, so ⚑I22's fallback
 applies to them (Macs are terminals in v1). Windows 10 stays TLS 1.2 (unchanged). R2: unverified; keep the recommendation

@@ -37,6 +37,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\YFex.Messaging.Rpc\YFex.Messaging.Rpc.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Cryptography\src\YFex.Cryptography.Testing\YFex.Cryptography.Testing.csproj" />
     <ProjectReference Include="..\..\Cqrs\YFex.Cqrs\YFex.Cqrs.csproj" />
     <ProjectReference Include="..\..\State\YFex.State\YFex.State.csproj" />
     <!-- Analyzer for this project AND a plain reference: ProxyGoldenTests drives CQRSGenerator directly. -->

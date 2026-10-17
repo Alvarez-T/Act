@@ -217,7 +217,11 @@ public sealed class DnsClient(DnsClientOptions options)            // RFC 1035 o
 // opt-in (⚑N26): new DnsClient(DnsClientOptions.OverHttps(new Uri("https://dns.example/dns-query")))   — RFC 8484 wire format
 ```
 
-`Traceroute.RunAsync(host, maxHops: 30, probesPerHop: 3)` uses `Ping` with increasing TTL (`PingOptions.Ttl`), within the budget.
+**As built (phase 4):** the record types are `DnsAddressRecord`, `DnsServiceRecord`, `DnsTextRecord`, `DnsNameRecord`, `DnsOpaqueRecord`
+(⚑N28: no bare "Address"); `DnsAnswer<T>` carries a `DnsQueryStatus` (Answered, NoRecords, NameNotFound, ServerFailure, Refused,
+TimedOut, Unreachable, Malformed, NoServers); `QueryAsync(name, type, server)` asks one server; the codec is `DnsMessage`.
+
+`Traceroute.RunAsync(address, maximumHops: 30, probesPerHop: 3)` (as built: an `IPAddress`; resolve first) uses `Ping` with increasing TTL (`PingOptions.Ttl`), within the budget.
 Results stream as `IAsyncEnumerable<TracerouteHop>` (hop, address, round trips, timed out).
 
 ## 5. Endpoint monitor and link quality — ⚑N20
@@ -367,6 +371,10 @@ await foreach (SnmpVariable v in snmp.WalkAsync(prefix, maxVariables: 256, ct)) 
 `SnmpCredentials` is classified `Secret` (community strings and USM keys are credentials). Walking **many hosts** is survey
 ([04](04-survey-and-safety.md)). Printer supplies (RFC 3805) and UPS battery (RFC 1628) helpers belong to Devices.Peripherals.
 
+As built (phase 6): `SnmpAuthentication.Sha256/Sha384/Sha512(passphrase)` (no SHA-224/MD5/SHA-1), `SnmpResult<T>` is a record with
+`SnmpStatus` + stable `Code` (like `DnsAnswer<T>`), `SnmpValue` is a struct with a `SnmpValueType` tag, `WalkAsync` throws `SnmpException`
+on a failed request, one budget slot per datagram, read only. Tests use `SnmpTestAgent` (`.Testing`): a loopback v2c/v3 agent over a test MIB.
+
 ## 12. Telnet — ⚑N5, ⚑N12
 
 ```csharp
@@ -383,7 +391,8 @@ await session.WriteLineAsync("show status", ct);
 string? line = await session.ReadLineAsync(ct);
 ```
 
-Telnet is plaintext: the docs say LAN only, and `TelnetSession` logs a warning when the peer is not local scope.
+Telnet is plaintext: LAN only. As built (phase 6), `TelnetSession.ConnectAsync` **refuses** an address that is not local scope unless
+`TelnetSessionOptions.AllowNonLocalPeer` is set (the library has no logger to warn with). `ReadUntilAsync("login: ")` reads up to a prompt.
 
 ## 13. Ports and firewall (read only)
 

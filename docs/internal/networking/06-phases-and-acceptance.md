@@ -78,7 +78,7 @@ Tests that need a real network are `[Trait("Category", "Network")]` (skipped in 
   non-local `LOCATION`; two in-memory nodes discover each other, partition stops it, healing restores it; real-LAN test (trait
   Network) finds this PC's own advertisement.
 
-## Phase 6 — Telnet move + SNMP
+## Phase 6 — Telnet move + SNMP (DONE 2026-10-14, log below)
 
 - Telnet moved (⚑N5/⚑N12); Devices `Rfc2217*` on it; `SnmpClient` v2c + v3 (USM HMAC-SHA-2, AES-128-CFB), BER codec, bounded walk
   of one host.
@@ -208,3 +208,154 @@ Tests that need a real network are `[Trait("Category", "Network")]` (skipped in 
   instead of `FirewallBlockedByPolicy` (`FromPolicy` flag on the found rule); `IFirewallRules.FindInbound` is synchronous.
 - **New open decision ⚑N29:** macOS package (user's cross-platform rule, 2026-10-07) — spike on a Mac first.
 
+
+### Phase 4 — DNS, traceroute, TLS check, diagnosis, public IP — 2026-10-13
+
+- **DNS** (`Dns/`): `DnsMessage` = RFC 1035 codec shared with phase-5 mDNS: `WriteQuery`/`WriteName` (UTF-8 labels, `\.`/`\DDD` escapes),
+  `ReverseLookupName` (in-addr.arpa / ip6.arpa nibbles, IPv4-mapped → IPv4), `TryParse` (never throws: pointers must go strictly
+  backwards — each jump below the previous one, so loops are impossible — max 127 jumps, labels ≤ 63, names ≤ 255 wire bytes, extended
+  label types refused, counts checked against the length before allocating, RDATA bounds-checked, names in A/PTR/SRV RDATA must end
+  exactly at the RDATA end). Records: `DnsAddressRecord`, `DnsNameRecord` (PTR/CNAME/NS), `DnsServiceRecord`, `DnsTextRecord`,
+  `DnsOpaqueRecord` (SOA, OPT, others: raw). `DnsClient`: A/AAAA, SRV (sorted priority ↑, weight ↓), TXT, PTR, any type; random id,
+  answer must echo id + question; UDP (connected socket, ignores datagrams with another id) → TCP on TC; SERVFAIL/REFUSED/timeout →
+  next server (≤ 3), NXDOMAIN/NODATA final; CNAME chain followed inside the answer (≤ 8 hops); servers = options or the primary
+  adapter's DNS servers then the others (fec0::ffff placeholders and duplicates dropped); IDN → punycode; one budget slot per exchange
+  (⚑N24); DNS-over-HTTPS (RFC 8484 POST, id 0) only through `DnsClientOptions.OverHttps(uri)` / `UseDnsOverHttps(uri)` (⚑N26).
+  Seam `Transports.IDnsTransport` + `SystemDnsTransport`.
+- **Traceroute**: `IProbeTransport.PingHopAsync(address, ttl, …)` (default interface method → `ttl-unsupported`, so other transports
+  keep compiling) returning `HopOutcome` (`ProbeReached` | `HopExpired(Router, RoundTrip)` | `ProbeTimedOut` | `ProbeUnreachable`);
+  `NetworkProbe.PingHopAsync` (budgeted, metric kind `hop`); `Traceroute.RunAsync(IPAddress, maximumHops = 30, probesPerHop = 3, probe)`
+  streams `TracerouteHop` (classified Personal/location), stops at the destination, an error, or 4 silent hops in a row.
+- **TLS** (`Tls/TlsEndpointCheck.cs`): `TlsEndpointCheck.RunAsync(host, port, time[, options], ct)` → `TlsEndpointReport` (outcome
+  union `TlsHandshakeSucceeded` | `TlsCertificateRejected` | `TlsConnectionFailed`, `DeviceClockSuspect`, `DaysUntilExpiry`, stable
+  `Code` `tls.ok` / `tls.certificate.<problem>` / `tls.connection.<reason>`). Own chain build in the validation callback (device-clock
+  verification time, OS store or `TrustedRoots` custom trust, revocation off by default), validity problem from the chain elements,
+  then revocation → untrusted root → partial chain → name mismatch. **Nothing is sent to a rejected server** (callback returns false).
+  `HEAD /` for the `Date` header only on 443/8443 (or `ReadHttpDate`), `ClockSkew` = trusted now − server date. `DeviceClockSuspect`
+  = rollback flag, or anchored trusted time vs `options.DeviceClock` beyond 5 min, or NotYetValid/Expired by the device clock but
+  valid at anchored trusted time, or (unanchored) server date beyond 5 min. Trusted time through core `ITrustedClock`/`GetTrustedNow()`:
+  no reference to the YFex.Time repo.
+- **Diagnosis** (`Diagnosis/NetworkDiagnosis.cs`): `NetworkDiagnosis.RunAsync(DiagnosisPlan)` → `DiagnosisReport` (ordered
+  `DiagnosisStep(Code, Passed, Subject, Detail, Duration)` + `MaskedDetail`; `Passed`, `FirstFailure`, `ToText(masked: true)`). Order:
+  `adapter.up|none` → `address.assigned|link-local` (stop) → `gateway.ping.*` → `gateway.neighbor.found|missing` (gateway neither pings
+  nor shows in ARP → internet branch skipped) → `dns.server.answered|refused|timeout|…` per primary DNS server (root NS query; each
+  server once) → per endpoint `endpoint.proxy.direct|via` (proxied: skip direct DNS/TCP/TLS) → `endpoint.dns.resolved|not-found` →
+  `endpoint.tcp.*` → `endpoint.tls.*` (+ `endpoint.tls.clock-suspect`) → `endpoint.http.responded|proxy-authentication|server-error|tls|…`
+  → per LAN host `host.ping.*` → `host.tcp.*` (≤ 8 ports) → `host.neighbor.found|missing` (on-link only; skipped when the platform has
+  no neighbour table). Plans: ≤ 16 endpoints, ≤ 32 hosts, local addresses only (⚑N24). Vendor names through
+  `NetworkDiagnosisOptions.VendorName` (the main package does not reference `.Vendors`).
+- **Public IP** (⚑N7): `PublicIPAddressSource.Stun("host[:port]")` / `.Https(uri)`, `IPublicIPAddress` + `PublicIPAddressLookup`
+  (sources in order, one budget slot each; `PublicIPAddressReading` = `PublicIPAddressFound` (classified) | `PublicIPAddressUnavailable`).
+  STUN binding codec (RFC 8489: XOR-MAPPED-ADDRESS, MAPPED-ADDRESS fallback, transaction id checked, one retransmission). Registered
+  only by `UsePublicIPAddressLookup(...)`.
+- DI: `DnsClient`, `IDnsTransport`, `NetworkDiagnosis` (+ `NetworkingBuilder.Dns`, `.Diagnosis`, `UseDnsOverHttps`, `UseDnsTransport`,
+  `UsePublicIPAddressLookup`); `NetworkProbe.Budget` exposed for helpers that share it. `.Testing`: `ScriptedDnsTransport` (+ `WithId`),
+  `FakeNeighborTable` (`LearnOnPing`), `ScriptedProbeTransport.Hop/Path`.
+- **Verified on this PC (AOT):** DNS UDP → TCP fallback against a loopback server; TLS 1.3 against a loopback `SslStream` (self-signed →
+  untrusted-root; pinned root → ok, `TLS_AES_256_GCM_SHA384`, skew < 1 s); STUN; traceroute to loopback; a real LAN-only diagnosis:
+  adapter, address, gateway ping 23 ms, gateway MAC + vendor, IPv4 DNS answers — and the router's advertised **IPv6 link-local DNS
+  server answers REFUSED** (Windows' own `Resolve-DnsName` gets the same; Windows lists it twice, so servers are de-duplicated).
+- **Counts:** YFex.Networking.Tests 105 → 168 (golden DNS packets incl. compression; 14 hostile messages; 20 000 random corruptions +
+  5 000 noise buffers; client: TC → TCP, NXDOMAIN vs SERVFAIL fallback, timeouts, id/question mismatch, DoH id 0, PTR, server list; real
+  loopback UDP/TCP DNS server; traceroute; TLS with generated ECDSA certificates: valid + server date, skewed date, expired + nothing
+  sent, device clock set back with/without an anchored trusted clock, untrusted root, name mismatch, refused; RFC 5769 STUN vectors
+  IPv4/IPv6 + 5 000 mutations + loopback server; HTTPS echo; diagnosis order/short-circuits/masking/validation/TLS step/DI).
+  YFex.Networking.Windows.Tests 19 (unchanged). AotSmoke: publish 0 IL/AOT warnings, `ALL PASSED`.
+- **Deviations from 02:** DNS record types carry a `Dns` prefix (`DnsAddressRecord`, `DnsServiceRecord`, … — ⚑N28: no bare "Address",
+  and `ServiceRecord`/`TextRecord` are too generic); `DnsAnswer<T>` is a record with a `DnsQueryStatus` instead of a union (generic
+  cases); `Traceroute.RunAsync` takes an `IPAddress` (a name that does not resolve has no hop to report; resolve first); the TLS check
+  takes the OS clock as `TlsEndpointCheckOptions.DeviceClock` (YFex.Time's provider already returns corrected time); `DiagnosisStep`
+  has a `Subject` and `MaskedDetail`; `DiagnosisHost(Name, IPAddress, Ports)`; DNS server reachability is a root `NS` query per server.
+
+
+### Phase 5 — discovery, in-memory LAN — 2026-10-13
+
+- **Seam** `Transports.IMulticastTransport` (`Join(group)` = bound to the group port, shared; `OpenClient(group)` = ephemeral port for
+  searches) / `IMulticastSocket` (`SetAdapters`, `SendAsync(datagram, destination?, adapter?)`, `ReceiveAsync`); `MulticastGroup`
+  presets `Beacons`, `MulticastDns`, `Ssdp`, `WsDiscovery`. `SystemMulticastTransport`: one IPv4 + one IPv6 socket, `ReuseAddress` (works
+  next to Windows' mDNS responder — verified), memberships per adapter (IPv4 by address, IPv6 by the link-local scope id), loopback on,
+  IPv6 best effort. Arrival adapter = the adapter the **source** is on-link for (IPv6 link-local by scope id); anything else is dropped.
+- **Beacons** (`Discovery/Beacons.cs`, `BeaconService.cs`): wire v1 exactly as 03 §2.2 (`BeaconWire.Write/TryRead`; reserved flag bits
+  rejected); `IAnnouncementSigner`, `IAnnouncementVerifier`, `AnnouncementToVerify` (ref struct, fields as agreed with Installations),
+  `AnnouncementVerdict { NotChecked = 0, Verified, Rejected }` (NotChecked is the default value, not Verified), `BeaconCandidate`
+  (classified). `BeaconService` (also `IHostedService` when kinds are announced): announce every ≥ 1 s ±20 %, goodbye on stop, sequence =
+  wall-clock µs or previous + 1 (survives restarts); listen / `QueryAsync(kind, window)`; inbound: > 512 B, off-link, > 5/s per source
+  (bounded table), malformed → dropped and counted (`BeaconStatistics`, `yfex.networking.discovery.announcements.rejected{kind,reason}`);
+  queries answered by multicast at most once per second per querier. Public category: only kinds in `AllowPublicNetworkCategory`, and then
+  listening requires a verifier and announcing a signer (`InvalidOperationException` otherwise). **Deviation from 03 §2.3:** the
+  duplicate filter is per listener and updated only for candidates that passed its verifier, so a forged datagram with a huge sequence
+  cannot block the real sender (no verdict cache needed: duplicates never reach the verifier).
+- **DNS writer** `DnsMessageWriter.TryWrite` (name compression everywhere incl. PTR/SRV data); records carry `Class` (+ `CacheFlush`).
+- **mDNS/DNS-SD** (`MulticastDns`): `AdvertiseAsync(ServiceAdvertisement)` → `ServiceRegistration` (probe ×3 / 250 ms, conflict →
+  `"Name (2)"`, simultaneous-probe tie-break on the SRV data, announce ×2, answers PTR / SRV / TXT / `_services._dns-sd._udp`, known-answer
+  suppression, legacy unicast (id + question echoed, TTL ≤ 10 s, no cache-flush bit), 20–120 ms delay for shared answers, one multicast
+  per record per second, goodbye TTL 0; not on Public networks unless `AllowPublicNetworkCategory`); `BrowseAsync` / `FindAsync` (PTR
+  queries 1 s doubling to 1 h with known answers, SRV/TXT and A/AAAA follow-ups, goodbye/expiry → `Goodbye`). **Deviations:** no QU bit
+  (the port is shared with the OS responder, a unicast reply could reach its socket); the host name is not claimed (the OS responder owns
+  it; addresses ride in the additional section; `AnswerHostAddressQueries` opt-in); conflicts after the announcement are not re-probed;
+  `ServiceTextEntry(Key, Value)` instead of tuples.
+- **SSDP** (`SsdpClient`): `SearchAsync(st, window)` (M-SEARCH ×2, MX ≤ 5, IPv4, ≤ 20 answers/s per sender, de-duplicated by USN+ST);
+  `GetDescriptionAsync` only for an IP-literal http `LOCATION` that is on-link (loopback only from loopback), ≤ 64 KB, no proxy, no
+  redirects, `XmlReader` with DTDs ignored and no resolver; root device fields only. **WS-Discovery** (`WsDiscoveryClient.ProbeAsync`,
+  `WsDiscoveryType.Device/PrintDevice/NetworkVideoTransmitter`): Probe ×2 to 239.255.255.250:3702, matches only with our `RelatesTo`.
+- **`.Testing`**: `InMemoryNetwork` (`Join(name, address, category, prefix, gateway)`, `Partition/Heal`, `Impair`, `ImpairmentFor`,
+  `DroppedDatagrams`), `InMemoryNode` (adapter with per-node category, `Conditions`, `LocalNetwork`, `Probes` — ping/TCP to nodes, names
+  resolve to node names, `Listen(port)` — `Multicast`, `Unplug/Plug`), `NetworkImpairment`, `ChaosStream`, `UseInMemory(node)`.
+- DI: `IMulticastTransport`, `BeaconService`, `MulticastDns`, `SsdpClient`, `WsDiscoveryClient` (sockets open on first use);
+  `network.Beacons(b => b.Announce(...).AllowPublicNetworkCategory(kind))`, `network.MulticastDns` options, `UseMulticastTransport`.
+- **Verified on this PC (tests + AOT, real sockets):** own beacon (4 candidates: IPv4 + IPv6 sources) and own mDNS advertisement found
+  next to Windows' responder; SSDP found 2 root devices and read the router's description ("Linux UPnP IGD"); WS-Discovery: no devices.
+- **Counts:** YFex.Networking.Tests 168 → 215 (+1 real-LAN test, trait `Network`); Windows.Tests 19. AotSmoke: 0 IL/AOT warnings,
+  `ALL PASSED`. mDNS tests browse **before** advertising: a record is multicast at most once per second (RFC 6762 §6), so a browser started
+  right after the announcements waits for the next round (~2 s).
+
+
+### Phase 6 — Telnet move + SNMP client — 2026-10-14
+
+- **Telnet** (`Telnet/`, ⚑N5/⚑N12): `TelnetChannel` moved from Devices, public, over a `Stream` (owned); `ITelnetHandler`, `TelnetCommands`
+  (RFC 854 bytes incl. NOP/AYT/GA…), `TelnetOptions` (Binary, Echo, SuppressGoAhead, TerminalType, WindowSize), `TelnetChannel.MaxSubnegotiation`
+  = 1 024, internal `AsyncSignal` copy. Changes on the way: the receive loop ends on **any** stream or handler exception and keeps it in `Fault`
+  (it listed Devices' `DeviceException` before), nothing after disposal is a fault, `QueueCommand(byte)` for two-byte commands, the
+  `Transport` property is gone. `TelnetSession` (line-oriented client): `ConnectAsync(host, 23)`, `Create(stream)`, `WriteLineAsync` (CR LF),
+  `ReadLineAsync` (CR LF / LF / CR NUL / lone CR, long lines in pieces), `ReadUntilAsync(prompt)` (bounded), `ServerEchoes`; accepts the
+  server's ECHO/SGA/BINARY, refuses every option on our side, asks DO SGA; Latin-1 by default.
+- **Devices migration:** `TelnetChannel.cs` deleted; `YFex.Devices` references `YFex.Networking`; `Rfc2217.OptionComPort = 44`;
+  `Rfc2217SerialPort` creates `new TelnetChannel(transport.AsStream(leaveOpen: false), …)` and keeps its own `IByteTransport` for
+  `FlushAsync`; it no longer implements `ITelnetHandler` publicly (a private forwarding class: callers cannot inject "received" bytes);
+  `Rfc2217Server` passes `client.AsStream()`. `ArchitectureTests.Layers` loses `Network` (05 §1). **There were no Telnet or RFC 2217 tests in
+  Devices to move:** new `Serial/Rfc2217Tests` (client ↔ server over loopback TCP on a `VirtualSerialPair`: settings applied to the real
+  port, IAC both ways, DTR → peer DSR, peer RTS → client CTS via NOTIFY-MODEMSTATE, `ConfigureAsync`; a server answering `DONT COM-PORT` →
+  `NotSupported`).
+- **SNMP** (`Snmp/`, ⚑N17): BER codec (`BerReader` ref struct — definite lengths of ≤ 3 bytes, single-byte tags, never throws; `BerWriter`
+  with minimal lengths), `SnmpObjectIdentifier` (2–128 arcs of 32 bits, lexicographic order, `Append`, `StartsWith`), `SnmpValue` (struct with
+  a type tag: Integer32, OctetString, Null, OID, IpAddress, Counter32, Gauge32, TimeTicks, Opaque, Counter64, noSuchObject/Instance,
+  endOfMibView), `SnmpVariable`, `SnmpErrorStatus` (RFC 3416), `SnmpStatus` + `SnmpResult<T>` (record with status and stable `Code`, like
+  `DnsAnswer<T>`), `SnmpException` (walks only). `SnmpCredentials` (`Community(…)` / `User(name, auth, priv)`, classified **Secret**, ToString
+  hides secrets), `SnmpAuthentication.Sha256/Sha384/Sha512(passphrase)` (RFC 7860, 24/32/48-byte MACs; the 1 MiB password-to-key runs once,
+  the passphrase is not kept), `SnmpPrivacy.Aes128(passphrase)` (RFC 3826 CFB-128). `SnmpClient(address, credentials, options)`: `GetAsync`
+  (one or ≤ 64 OIDs), `GetNextAsync`, `GetBulkAsync`, `WalkAsync(prefix, maxVariables ≤ 10 000)` (GetBulk, halves max-repetitions on tooBig,
+  stops at the subtree end, endOfMibView or a non-increasing OID). v3: engine discovery, keys localized per engine, authenticated
+  notInTimeWindow resync (clock moves forward only), rediscovery on unknownEngineID, Reports → statuses (unknown user, wrong digest,
+  decryption, security level), responses checked (msgID, MAC, engine id, request id, no downgrade). One `ProbeBudget` slot **per datagram**
+  (retransmissions and discovery included); metric kind `snmp`. Read only: no Set.
+- **Crypto rule:** all USM HMAC/AES is in `Snmp/SnmpSecurity.cs`, added to the YFex.Cryptography architecture-test allow-list as
+  protocol-mandated (P-class), next to Payment's webhook HMAC. Nothing else in Networking uses keyed crypto.
+- **`.Testing`:** `SnmpTestAgent` (loopback UDP, v2c community or one v3 USM user; Get/GetNext/GetBulk over a test MIB; discovery,
+  notInTimeWindow, unknown user/engine, wrong digest, decryption and security-level Reports; `DropNextRequests`, `EngineBoots` (reboot),
+  `MaximumResponseSize`, `AnswerTooBigToLargeBulk`, `ReportClockOnDiscovery`). Shares the internal codec (`InternalsVisibleTo`
+  YFex.Networking.Testing). Meant also for Devices.Peripherals' Printer-MIB/UPS-MIB helpers.
+- **Vectors:** RFC 3414 A.3.2 (SHA-1 `Ku`/`Kul` for "maplesyrup" — checks the procedure), SHA-256/384/512 localized keys and a truncated
+  HMAC computed independently with Python `hashlib` (`C:\Temp\networking-edits\snmp_vectors.py`; SHA-256 equals RFC 7860's example), NIST
+  SP 800-38A F.3.13 AES-128-CFB (+ a partial block), X.690 `2.999.3`, a hand-assembled v2c GetRequest.
+- **Counts:** YFex.Networking.Tests 216 → 284 (11 Telnet, 57 SNMP; incl. the real-LAN test); Windows.Tests 19; YFex.Devices.Tests 157 → 159
+  (157 pass; the same two environmental failures as phase 0: `ArchitectureTests` cannot find `devices.slnx` under `--artifacts-path`, the
+  COM-arbiter test); YFex.Cryptography architecture tests 2/2. Networking AotSmoke: 0 IL/AOT warnings, `ALL PASSED` (Telnet session, SNMP
+  v2c get, v3 authPriv walk, `SnmpCredentials` classified Secret). Devices AotSmoke publish: 0 warnings (its exe not run: the pre-existing
+  named-pipe hang).
+- **Not verified against a real agent:** no SNMP device on this LAN was queried (the router's SNMP was not probed); interoperability rests
+  on the vectors and the RFCs. First real check: a printer with SNMPv3 at a shop.
+- **Deviations from 02/05:** types in namespace `YFex.Networking` (folders `Telnet/`, `Snmp/`), as every other area, not
+  `YFex.Networking.Telnet`; `TelnetSession` **refuses** a non-local peer unless `TelnetSessionOptions.AllowNonLocalPeer` (02 §12 said "logs a
+  warning": the library has no logger); `SnmpResult<T>` is a record with a status (generic cases), `SnmpValue` a struct with a type tag (walks
+  return hundreds); no HMAC-SHA-224 (not in the BCL), MD5/SHA-1 not offered; `SnmpCredentials` is a class; no DI registration (one client per
+  agent, built by the caller); `WalkAsync` throws `SnmpException` (an async enumeration has no status).

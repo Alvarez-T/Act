@@ -1,6 +1,8 @@
 <Solution>
   <Folder Name="/Cqrs/">
     <Project Path="src/Cqrs/YFex.Cqrs.Analyzer/YFex.Cqrs.Analyzer.csproj" />
+    <Project Path="src/Cqrs/YFex.Cqrs.Approvals/YFex.Cqrs.Approvals.csproj" />
+    <Project Path="src/Cqrs/YFex.Cqrs.Approvals.Tests/YFex.Cqrs.Approvals.Tests.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs.Compensation/YFex.Cqrs.Compensation.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs.Compensation.Tests/YFex.Cqrs.Compensation.Tests.csproj" />
     <Project Path="src/Cqrs/YFex.Cqrs.SourceGenerator.Test/YFex.Cqrs.SourceGenerator.Test.csproj" />

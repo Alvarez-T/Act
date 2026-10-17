@@ -11,6 +11,17 @@ The pharmacy: **FarmaViva**, store **Loja Centro** (`0=farmaviva/1=loja-centro`)
 
 ## 1. Composition roots
 
+> **As built (2026-10-13, 08 §5):**
+> - **Installation side:** `services.AddYFexInstallations(i => i.Application("farma-pdv", version).Terminal().UseWindowsKeyStore()
+>   .UseWindowsHardwareHints().EnrollAt(uri))`.
+> - **RPC client:** `rpc.UseInstallationAssertion()` + `services.AddYFexInstallationRpcClient()`.
+> - **Central:** `services.AddYFexInstallationsCentral(c => c.Tenant("farmaviva", (sp, options) => new InstallationAuthority(...))
+>   .RequireHardwareKeys(InstallationRole.SiteBroker))`, `services.AddYFexInstallationRpcServer()`, and
+>   `app.MapYFexInstallationsEnrollment()` (package `.Central.AspNetCore`).
+> - **Admin codes:** `CentralEnrollmentService.CreateCodeAsync(new EnrollmentCodeRequest(scope, role, applicationName, displayName))`.
+>   Permission checks are the host's command handler's job.
+> - **SQL registry:** not built yet (in-memory registry only).
+
 ```csharp
 // ✍ CAIXA-01 / CAIXA-02 — Program.cs of the PDV
 services.AddYFexInstallations(installations => installations
@@ -167,6 +178,12 @@ public interface IInstallationRelay
     ValueTask<RelayReceipt> ForwardToCentralAsync(RelayItem item, CancellationToken cancellationToken);
 }
 ```
+
+> **As built (I4, 2026-10-14):** exactly this contract (plus `RelayItemKind.IsValid`). The producer's side is `InstallationRelay`
+> (also registered as `IInstallationRelay` by `.Peers()`); at central the owner implements
+> `IRelayItemConsumer { RelayItemKind Kind; ValueTask<bool> ConsumeAsync(RelayedItem item, InstallationKeyRecord producer, CancellationToken) }`
+> and registers it as a service; `AddYFexInstallationsCentral` + `AddYFexInstallationCentralLink()` serve it over RPC, and installations add
+> `peers.RelayThroughCentralRpc()`. Bundles of an owner's kind are gossiped with `peers.GossipBundles(kind)` (needs an `IBundleStorage`).
 
 The friend **never opens** `SignedBytes`; central verifies the producer's signature. `HeldByFriend` is not custody in the offline
 sense: Offline adds its signed receipts (R1/R2) on top for envelopes (06 §2).

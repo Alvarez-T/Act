@@ -27,6 +27,9 @@ public enum TimeSourceKind : byte
     /// <summary>A GNSS receiver (GPS NMEA, unauthenticated).</summary>
     Satellite = 6,
 
-    /// <summary>Another installation of the same site (evidence only: never an anchor, time README §8.3).</summary>
+    /// <summary>
+    /// Another installation of the tenant over the mesh <c>time</c> channel (time README §8.3, ⚑T13): when it is itself anchored, an
+    /// <b>unauthenticated</b> candidate like NTP (never usable for security, never pulls time back); otherwise evidence only.
+    /// </summary>
     Peer = 7,
 }

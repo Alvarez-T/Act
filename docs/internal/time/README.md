@@ -1,7 +1,10 @@
 # YFex.Time — trusted time from pluggable sources — Plan
 
 > **Status:** APPROVED (2026-10-04: ⚑T1–T7; 2026-10-05: ⚑T8–T11 and the site-time instructions §8 for YFex.Offline).
-> **T0 + T1 + T2 (central anchor) DONE 2026-10-05** (implementation log §10). Next: Offline adoption (offline Phase 1), T3.
+> **T0 + T1 + T2 (central anchor) DONE 2026-10-05; T13 built 2026-10-14; T3 DONE 2026-10-14 (SEFAZ, GNSS, Windows time check);
+> T4 DONE 2026-10-14 except Roughtime and NTS (⚑T15)** (implementation log §10).
+> Next: adoption (Authorization 3b, Logging skew; apps register `UseTpmClock()`, `AuthenticateHighWater()`, `UseWindowsTimeService()`
+> and, once central publishes its time keys, `UseSignedCentralAnchor()`), a Linux TPM clock (`/dev/tpmrm0`).
 > **Origin:** authorization-consolidation Phase 3 (Q7). The persisted permission snapshot, approval tokens and offline envelopes
 > must not trust the device clock. The offline design (`../offline/05` §4, ⚑O10) planned a `TrustedTimeProvider` inside
 > YFex.Offline. The user asked for **one reusable service for real time** that every project can use, with different providers.
@@ -119,7 +122,9 @@ if (!now.IsUsableForSecurity(maximumUncertainty: TimeSpan.FromMinutes(10))) retu
 |---|---|
 | `YFex.Time` | `TrustedTimeProvider` (sync read path), `TimeSynchronizer` (async sampling + vote), `TimeSynchronizationService` (refresh loop, network trigger, device-clock check, high-water saves), `IHighWaterStore`, `NetworkTimeSource` (SNTP v4), `HttpsDateTimeSource`, `TimeChange` events, `YFex.Time` meter, `AddYFexTime` |
 | `YFex.Time.Persistence` | `KeyValueHighWaterStore` over `IKeyValueStore` (kept out of the main project so YFex.Time does not pull MemoryPack/FusionCache) |
-| `YFex.Time.Testing` | `FakeDeviceClock` (FakeTimeProvider + `ChangeSystemClock`), `FakeTimeSource` |
+| `YFex.Time.Testing` | `FakeDeviceClock` (FakeTimeProvider + `ChangeSystemClock`), `FakeTimeSource`, `FakeHardwareClock`, `FakeDeviceClockMonitor` |
+| `YFex.Time.Windows` | T3 Windows time check (`WindowsTimeServiceMonitor`, `UseWindowsTimeService()`), T4 TPM clock (`TpmClock`, `UseTpmClock()`) |
+| `YFex.Time.Cryptography` | T4: keyed tag on the stored high-water mark (`HighWaterAuthentication`, `AuthenticateHighWater()`), RFC 3161 timestamp authorities (`TimestampAuthorityTimeSource`, `UseTimestampAuthority(...)`); YFex.Cryptography + `System.Security.Cryptography.Pkcs` |
 | tests, AotSmoke, Benchmarks | §9 |
 
 Dependencies: YFex core, `Microsoft.Extensions.DependencyInjection.Abstractions`, `Microsoft.Extensions.Hosting.Abstractions`
@@ -189,6 +194,16 @@ authenticated anchor active" as a bit):
 The high-water mark limits the **device** clock only. An authenticated anchor may correct it (a stored "2030" would otherwise freeze
 the shop forever). `GetUtcNow()` respects it too (⚑T10), so every `TimeProvider` consumer is protected.
 
+**T4 — the hardware clock and the keyed tag.** With `UseTpmClock()` the mark also stores the TPM's `Clock` (milliseconds the TPM was
+powered; it only moves forward and survives restarts; `TPM2_ReadClock` needs no authorization). At start-up `H` becomes
+`H + 0.85 × (TPM now − TPM at save)`: powered time while the app was not running counts, and a **restored older copy** of the mark
+lands near the newest one — it gains only the powered-off time between the two saves (the residual of scenario 10). 0.85 because a TPM
+owner may slow the clock by ~15 %. A TPM clock behind the stored reading by more than 1 h (TPM cleared or replaced) is ignored and
+reported (`HardwareClockReset`); a few minutes behind (an unorderly shutdown loses the unsaved part) counts as zero. With
+`AuthenticateHighWater()` the stored mark carries an HMAC from a YFex.Cryptography ring (`time/high-water`), so it cannot be lowered,
+given a smaller TPM reading or marked "authenticated" by hand; an edited, foreign or untagged mark reads as "no mark" (fail closed: no
+floor, no `AuthenticatedFloor`).
+
 Timers, `Task.Delay(x, time)`, `GetTimestamp`, `LocalTimeZone` pass through to the device clock: durations are real seconds and must
 not follow corrections.
 
@@ -219,10 +234,13 @@ are the hard bound. A standalone PC that boots without internet can therefore us
 | Peers | other installations of the same site (§8.3) | channel yes, but peers are equally untrusted devices | ms | LAN | YFex.Offline | offline Phase 4 (disagreement only) |
 | **NTP (SNTP v4)** | UDP 123 to public servers: NIC.br `a/b/c.ntp.br` (Brazil's official time, ONRJ-traceable), `time.google.com`, `time.windows.com`, `time.cloudflare.com`; AWS `169.254.169.123` on servers | no (spoofable on the LAN) | ms | internet, UDP 123 not blocked | library | T1 |
 | HTTPS Date header | `Date:` of HEAD requests to a few large HTTPS sites (port 443 passes most firewalls/proxies) | no for voting — TLS proves the host, but certificate validation itself assumes a roughly right clock | ±1 s | internet | library | T1 |
-| SEFAZ | NF-e/NFC-e status service (`NfeStatusServico`) answers with `dhRecbto` | yes — mTLS with the company's A1 certificate | ±1 s + RTT | internet, certificate installed | YFex.Fiscal | T3 |
-| GNSS receiver | serial/USB NMEA (`$GPRMC`/`$GNZDA`) | no | < 1 s | no internet at all | YFex.Devices | T3 (optional) |
-| Windows time service | W32Time status — a **quality signal**, not a source | — | — | Windows | `.Windows` package | T3 (optional) |
-| Roughtime / NTS / RFC 3161 TSA / signed central anchor | signed or AEAD replies | yes | ±1 s / ms | internet | after YFex.Cryptography Phase 2; RFC 3161 needs `System.Security.Cryptography.Pkcs` (ask, ⚑K14) | T4 |
+| SEFAZ | NF-e/NFC-e status service (`NfeStatusServico`) answers with `dhRecbto` | yes — mTLS with the company's A1 certificate | ±1 s + RTT | internet, certificate installed | YFex.Fiscal (`YFex.NFe.Sefaz`: `UseSefazTime()`) | T3 ✅ |
+| GNSS receiver | serial/USB NMEA (`$GPRMC`/`$GNZDA`) | no | < 1 s | no internet at all | YFex.Devices (`GnssTimeSource`: `UseGnssTime()`) | T3 ✅ |
+| Windows time service | W32Time status — a **quality signal**, not a source (off / periodic / continuous, source, Secure Time Seeding, rate) | — | — | Windows | `YFex.Time.Windows` (`UseWindowsTimeService()`) | T3 ✅ |
+| **Signed central anchor** | `ICentralTime.GetSignedTimeAsync(nonce)` → `SignedTimeReply` (ECDSA P-256 over nonce + reply) | yes — signature, whatever the transport; kept as evidence | RTT/2 | online | Messaging.Rpc (`AddCentralTimeSigning()` on central, `UseSignedCentralAnchor(keys)` on clients) | T4 ✅ |
+| RFC 3161 TSA | HTTP `application/timestamp-query`; signed CMS token over a random hash + nonce | yes — signature + chain to the configured (or OS) roots **at the token's time** | ±1 s + RTT | internet | YFex.Time.Cryptography (`UseTimestampAuthority(...)`) | T4 ✅ |
+| Roughtime | UDP, Ed25519-signed reply over a nonce | yes | ±1 s | internet | — | deferred (⚑T15: no Ed25519 in .NET 11) |
+| NTS (RFC 8915) | TLS 1.3 key establishment + authenticated NTP | yes | ms | internet | — | dropped (⚑T15: .NET has no TLS exporter and no AES-SIV) |
 
 ## 4. Phases
 
@@ -232,7 +250,7 @@ are the hard bound. A standalone PC that boots without internet can therefore us
 | **T1** | repo `YFex.Time` (§2.2): provider, synchronizer, selection, slew, drift, device-clock check, high-water (`IHighWaterStore` + `.Persistence` over `IKeyValueStore`), events, SNTP, HTTPS Date, server-side `CreateReply` (used by central and the broker), `AddYFexTime`, `.Testing`, AOT smoke, benchmarks (`GetUtcNow` ≤ 50 ns, no allocation) | T0 | §9 |
 | **T2** | `UseCentralAnchor()` in Messaging.Rpc (`TimeReply` in a health call); YFex.Offline adopts the library; logging uses the offset for skew reports | T1 | anchor over a real RPC round trip in `Messaging.Rpc.Tests`; offline 05 §4 example passes |
 | **T3** | domain providers: `SefazTimeSource` (Fiscal), `GnssTimeSource` (Devices), W32Time quality (Windows) | T1 | each with a recorded-response test |
-| **T4** | authenticated sources: signed central anchor, Roughtime, NTS, RFC 3161 TSA; sealed/monotonic high-water; signed beacons | **YFex.Cryptography Phase 2** (user rule: crypto waits) | signed-reply verification; tampered reply rejected |
+| **T4** | authenticated sources: signed central anchor ✅, RFC 3161 TSA ✅ (Roughtime, NTS: ⚑T15); high-water: keyed tag ✅ + TPM clock binding ✅ (instead of a monotonic counter, ⚑T16); signed beacons: covered by YFex.Installations (signed `yfex.installation` beacons ⚑I12, mutual-TLS `time` channel) | **YFex.Cryptography Phase 2** (user rule: crypto waits) | signed-reply verification; tampered reply rejected ✅ |
 | (offline) | site time server, `UseSiteAnchor()`, site time table, peer comparison (§8) | T1, offline Phases 1–4 | offline 11 |
 
 ## 5. Decisions (⚑T) — CONFIRMED
@@ -251,6 +269,10 @@ are the hard bound. A standalone PC that boots without internet can therefore us
 | **T10** | `GetUtcNow()` respects the high-water mark (every `TimeProvider` consumer is protected) | 2026-10-05 |
 | **T11** | security checks accept an authenticated anchor, or `Unanchored` + `AuthenticatedFloor` without `RollbackDetected` (§2.5) | 2026-10-05 |
 | **T12** | the site broker is the shop's time server (authenticated, stratum + 1); installations compare clocks across the site (§8) | 2026-10-05 |
+| **T14** | the Windows time check uses **documented sources only** (W32Time service state and start type, its registry settings, `GetSystemTimeAdjustmentPrecise`): `DeviceClockStatus` off / periodic / continuous + source + Secure Time Seeding + rate correction — a quality signal, never a source. No last-sync time: the w32time.dll status exports have no public header or confirmed layout | 2026-10-14 |
+| **T15** | **Roughtime deferred**: it needs Ed25519, which .NET 11 lacks; nothing else in the ecosystem needs Ed25519, X25519, AES-SIV or Argon2id (survey 2026-10-14), so neither NSec nor an own implementation now. If Roughtime is wanted: a verify-only Ed25519 in YFex.Cryptography (public data only, RFC 8032 + Wycheproof vectors) is preferred over NSec (native libsodium per RID). **NTS dropped**: it needs the TLS exporter (RFC 5705) and AES-SIV-CMAC, neither in .NET | 2026-10-14 (recommended; the user asked for a recommendation) |
+| **T16** | RFC 3161 approved (⚑K14): `System.Security.Cryptography.Pkcs` **10.0.13** (CVE-2026-84008/70162 fixed; every 11.0 preview before rc.2 is affected) in a new package **`YFex.Time.Cryptography`** with the high-water tag, so YFex.Time stays light. Restore protection = keyed tag + **TPM clock** binding; no TPM NV counter (creating one needs the TPM owner password, which Windows sets randomly and does not hand to apps; NV wear). Signed central anchor built | 2026-10-14 (user) |
+| **T13** | amends T12: an **anchored** peer (no `Unanchored`, stratum < 16) is an **unauthenticated** candidate like NTP — it votes with NTP (Marzullo), never pulls time back, never makes security usable; unanchored peers stay evidence only. Central and the broker always win. Sub-options not built: "peers strictly after NTP" (per-kind priority) and peer-raised `RollbackDetected` (installations 06 §2.3) | 2026-10-07 (built 2026-10-14) |
 
 ## 6. Pitfalls to test
 
@@ -307,6 +329,10 @@ anyone's Windows clock (that is a privileged OS setting, and our clock does not 
                  │ POS-01       │  │ POS-02       │  │ POS-03       │  stratum broker + 1; compare with peers when the broker is down
                  └─────────────┘  └─────────────┘  └─────────────┘
 ```
+
+> **As built (2026-10-14, installations I4):** `UseSiteAnchor()` and `UsePeerTime()` live in **YFex.Installations** (⚑I19) and ride the
+> mesh `time` channel (mutual TLS), not the `Sites.Queries.Health` probe; peers follow ⚑T13 (§5), not "evidence only" below. The site
+> time table (§8.2) stays Offline's.
 
 ### 8.1 The broker as the shop's time server
 
@@ -475,3 +501,181 @@ green after the rename.
 **Network trigger (2026-10-07, networking D5):** `TimeSynchronizationService` takes the optional core `INetworkConditions` (registered by
 YFex.Networking) and resynchronizes when the internet returns or its medium changes (cable → Wi-Fi/4G); without it, it also listens
 to `NetworkAddressChanged` (before: availability only, which never fires on a cable → Wi-Fi switch). YFex.Time.Tests 56 → 62.
+
+### T13 — anchored peers fill in, unauthenticated — 2026-10-14 (built by the installations I4 session)
+
+No Time session was running; the decision was approved on 2026-10-07 (installations README ⚑T13), so the rule was built with installations I4.
+- `TimeSelection.ToCandidate`: `EvidenceOnly` = the reply is `Unanchored` or stratum ≥ 16 (any kind); a `Peer` candidate is never
+  `Authenticated`. Nothing else changed: the vote, T4/T10 (no pull back by unauthenticated sources) and T11 apply as before.
+- Core `TimeSourceKind.Peer` doc updated.
+- Tests 62 → 65: an anchored peer fills in (`Unauthenticated`, not usable for security, stratum + 1); an unanchored peer stays evidence;
+  peers vote with NTP (a liar is outvoted and reported) and a peer behind never pulls time back. `Peers_count_only_as_evidence` (next to an
+  authenticated central) still holds.
+- The sources (`SiteAnchorTimeSource`, `PeerTimeSource`, `UseSiteAnchor()`, `UsePeerTime()`) are in YFex.Installations (installations 08 §5).
+- Not built: "peers strictly after NTP" (per-kind priority) and peer-raised `RollbackDetected`.
+
+### T3 — SEFAZ time source — 2026-10-14
+
+The user asked to build T3 with the SEFAZ call on YFex.Web (the outbound-HTTP library). The SEFAZ client was a stub (`ISefazClient`,
+"Phase E deferral"), and SEFAZ needs mutual TLS with the company's ICP-Brasil certificate (crypto 13 §5), which YFex.Web did not have.
+Ownership follows crypto 13 §6: the certificate is Cryptography's (`CertificateFiles`), attaching it to HTTP calls is YFex.Web's,
+which certificate a company uses is Fiscal's.
+
+**YFex.Web** (mutual TLS, usable by any API client):
+- `ClientCertificateCredential(byte[] Pkcs12, string? Password)`: a credential variant like the others (data, protected at rest by the
+  store); `ToString` hides the key file and the password.
+- `.UseClientCertificates(o => …)` on `AddApi`: required when an endpoint carries the credential (like `AddOAuth`). Installs a primary
+  handler with **one `SocketsHttpHandler` per certificate** (keyed by SHA-256 of the PKCS#12), because a pooled TLS connection keeps the
+  identity it was opened with: a shared pool would send tenant B's request as tenant A. Plus one plain pool for endpoints without a
+  certificate. Cookies off. Pools idle for 10 min are retired and disposed on a later sweep once nothing uses them.
+  `ServerCertificateValidation` validates servers the OS does not trust (SEFAZ: ICP-Brasil roots).
+- PKCS#12 is loaded with `CertificateFiles.LoadPkcs12` and **`DefaultKeySet` on Windows**: Schannel refuses ephemeral keys in TLS
+  (crypto 12, 2026-10-07 probe). `YFex.Web.Refit` now references `YFex.Cryptography`.
+- Tests (Refit.Tests 14 → 22): a loopback mutual-TLS server echoes the certificate it received; tenants A/B alternate on one host and each
+  gets its own certificate and connection; plain pool; untrusted server refused; wrong password leaves no pool; idle retire + reopen.
+  YFex.Web solution: Web.Tests 32, Data.Tests 51, Generator.Tests 1, Refit.Tests 22 — green.
+
+**YFex.Fiscal** — new project `src/YFex.NFe.Sefaz` (transport kept out of `YFex.NFe`, which stays free of HTTP/Refit/tenancy):
+- `StatusServicoClient.ConsultarAsync(UF, AmbienteFiscal)` → `RetornoStatusServico` (MOC 7.0 §5.5: `consStatServ` 4.00 in a SOAP 1.2
+  envelope, `retConsStatServ` reader; SOAP fault or unusable body → `SefazException`; a `dhRecbto` without a time zone is refused).
+- `AddSefazStatusServico(...)`: per-tenant endpoint from the store, or a fixed address + certificate (a checkout). The service URL is
+  endpoint data; no URL table per authorizer was added.
+- `SefazTimeSource` (`Kind = Authority`, authenticated, stratum 2) + `UseSefazTime(UF, AmbienteFiscal)`: sample = `dhRecbto + 0.5 s`,
+  resolution 0.5 s (whole seconds), reply uncertainty 0.5 s (the authority's own clock) → about ±1 s + RTT/2, as §3 planned. Any answer
+  counts (also 108/109 and rejections: they carry the authority's clock); HTTP failure or unusable answer → no sample.
+- New `tests/YFex.NFe.Sefaz.Tests` (the Fiscal solution had no test project): 14 tests. The answers in `Samples\` are **built from MOC
+  Tabela 5-18, not captured** from a live authorizer (no certificate available here). Includes an end-to-end anchor: a POS 3 min slow is
+  anchored by SEFAZ as authenticated authority time, ±1 s, stratum 3.
+
+**Deviations / notes**
+- Synchronization runs outside any request: `UseSefazTime` needs an endpoint that resolves without a request tenant (the static
+  registration, or a store answering for the installation's company).
+- `YFex.Fiscal.Public` did not build: Fiscal still had `using YFex.Entity;` while YFex.Domain's value objects are in
+  `YFex.Entity.Public`. Fixed the same day across the ecosystem (user request): all 26 Fiscal files, `ChaveNFe.Cnpj` moved to the new
+  `TryParse(span, provider, out)` API, and YFex.Brain now references YFex.Entity.Public (its TODO). `fiscal.slnx` builds whole again;
+  Audit tests and Farma already used the right namespace.
+- Crypto `ArchitectureTests` green (no banned API; SHA-256 is unkeyed hashing).
+
+**Open (T3):** `GnssTimeSource` (Devices: NMEA `RMC`/`ZDA` parsers exist), W32Time quality signal (optional), real SEFAZ captures
+(homologação) to replace the MOC-built samples, the ICP-Brasil root set for `ServerCertificateValidation` (crypto 13 §6
+`YFex.Cryptography.IcpBrasil`, a proposal awaiting the user).
+
+### T3 — GNSS time source — 2026-10-14
+
+Built in YFex.Devices next to the NMEA parsers it reads (`Protocols.Nmea`). `YFex.Devices` now references `YFex.Time` (for
+`TimeBuilder`; `ITimeSource` is core). This adds no new package: Devices already gets the DI and Hosting abstractions through YFex.Networking.
+
+- `GnssTimeSource : ITimeSource` (`Kind = Satellite`, **unauthenticated**: ⚑T4, reply flagged `Unauthenticated`, stratum 1, so the
+  clock reports 2). It reads UTC from `RMC` and `ZDA` (`RmcData`/`ZdaData`) and stamps each line with the device clock when it arrives.
+  The parse path does not allocate (`AllocationTests`).
+- **Only valid fixes count:** `RMC` status `A` with a mode that is not `N` (no fix), `E` (dead reckoning), `M` (manual input) or `S`
+  (simulator). `ZDA` has no status field: a receiver without a fix sends its battery clock. So a `ZDA` counts only while the last `RMC`,
+  at most `MaximumAge` (2 s) earlier, was a valid fix. A void `RMC` drops the last reading.
+- **One-way, like the beacons in §8.3:** t1 = t4 = when the line arrived. The time field names the epoch. A field with n decimals covers
+  10⁻ⁿ s, and the line arrives up to `MaximumLatency` after the epoch (output delay + serial transfer; default 1 s, because NMEA 0183
+  does not bound it). So the sample is `epoch + (resolution + latency) / 2`, with `Resolution` = resolution / 2 and reply uncertainty
+  = latency / 2: `hhmmss` → ± 1 s, `hhmmss.ss` → ± 0.505 s. The first sentence of an epoch is kept, because later ones only add delay.
+- Feeding it: `Process(line)` / `Process(line, receivedTimestamp)` from an existing NMEA loop, or `RunAsync(port, receiver?)`, which
+  also passes every line to an `NmeaGnssReceiver`, so one COM port serves position and time. When the last reading is older than
+  `MaximumAge`, a sample waits up to `WaitForReading` (1.5 s, inside the 2 s `SampleTimeout`) for the next reading. Otherwise there is
+  no sample.
+- `TimeBuilder.UseGnssTime(maximumLatency?, name)` registers the `GnssTimeSource` singleton. It is stamped with
+  `TrustedTimeProvider`, whose timestamps are the device's. The app feeds it from its port. Calling it twice throws (one receiver per
+  clock).
+- Tests (Devices.Tests 159 → 175, +16): recorded u-blox M8–style sentences (`GN` talker, NMEA 4.1, real checksums). They cover: a valid
+  whole-second RMC (a one-way sample, ± 0.5 s resolution + ± 0.5 s latency); centiseconds and a tighter latency bound; void, mode-`N`,
+  simulator and dead-reckoning RMC give no sample; losing the fix drops the reading; ZDA only behind a recent valid RMC; the first
+  sentence of an epoch wins; GGA and bad checksums are ignored; a stale reading waits for the next one or times out; **the
+  TimeSynchronizer fills in a POS 3 min slow as unauthenticated Satellite time (± 0.505 s, stratum 2,
+  `IsUsableForSecurity` false)**; GNSS never pulls a fast clock back, and an authenticated central anchor wins over it; `UseGnssTime`
+  registration; `RunAsync` over a virtual serial pair shared with `NmeaGnssReceiver`; no allocation. 174/175 green: the failure is the
+  live `WindowsSerialTests.Reserved_ports_are_readable_without_elevation` (this machine's COM7/COM8 are not reserved in the arbiter), which
+  is unrelated to this change.
+- AOT: `YFex.Devices.AotSmoke` publish → 0 IL2xxx/IL3xxx warnings. The new check "GNSS time source (unauthenticated fill-in)" passes
+  under NativeAOT: `AddYFexTime` + `UseGnssTime`, then an RMC fills in as `Satellite` time that is not usable for security. The smoke run
+  then hangs at the existing "overlapped transport round-trip (named pipe)" step, after "serial port watcher", so it never prints
+  `ALL PASSED` on this machine. The GNSS check was moved ahead of that step so it runs. The hang is in pre-existing code that this
+  change does not touch.
+
+**Not built / notes:** no PPS input (a PPS-disciplined receiver could claim ms, but that is a serial-line-signal API that does not exist
+yet). There is no guard against GPS week-number rollover (an old receiver can report a date 1024 weeks back). Such a date can never pull
+time back, but with no other source it would be the only answer when the device clock is even further behind. No hosted runner: the app
+owns the port (`RunAsync`), because position and time usually share it.
+
+### T3 — Windows time check — 2026-10-14
+
+The user asked to continue with the Windows time check, then T4. The plan only said "W32Time status — a quality signal, not a
+source", so the shape was designed here (⚑T14).
+
+- **Probe (this PC, standard user):** W32Time is `DEMAND_START` with a domain-join trigger, **stopped**; `Type = NTP`,
+  `NtpServer = time.windows.com,0x9`; the "SynchronizeTime" task ran today (result 0) — outside a domain Windows starts the service
+  about weekly, sets the clock and stops it. `UtilizeSslTimeData = 1` (Secure Time Seeding on). `GetSystemTimeAdjustmentPrecise` →
+  adjustment disabled. `W32TimeQueryNTPProviderStatus` exists in w32time.dll but has no public header and no confirmed layout, so the
+  last-sync time is not read.
+- **YFex.Time** (cross-platform contract): `DeviceClockSynchronization` (Unknown / Off / Periodic / Continuous), `DeviceClockStatus`
+  (synchronization, source, Secure Time Seeding, frequency adjustment), `IDeviceClockMonitor`; `TimeBuilder.UseDeviceClockMonitor(...)`;
+  `TrustedTimeProvider.DeviceClockStatus`; new `TimeChange` case `DeviceClockStatusChanged`; gauge `yfex.time.device_synchronization`.
+  The synchronization service reads the monitor at start and every `HighWaterInterval` (60 s); a throwing monitor reads as Unknown.
+- **YFex.Time.Windows** (new, `[SupportedOSPlatform("windows")]`, LibraryImport, `DisableRuntimeMarshalling`):
+  `WindowsTimeServiceMonitor` = registry (`Services\W32Time\Start`, `Parameters\Type`/`NtpServer`, `TimeProviders\NtpClient\Enabled`,
+  `Config\UtilizeSslTimeData`) + SCM `QueryServiceStatus` + `GetSystemTimeAdjustmentPrecise` (api-set
+  `api-ms-win-core-sysinfo-l1-2-4.dll` — **not exported by kernel32**; falls back to `GetSystemTimeAdjustment`). The classification is a
+  pure `WindowsTimeSettings.ToStatus()`: Off = disabled / `NoSync` / NTP client off (unless something still adjusts the clock);
+  Continuous = the kernel applies an adjustment or the service runs; Periodic otherwise; "domain" for `NT5DS`, the server list without
+  `,0x…` flags for NTP. `UseWindowsTimeService()` does nothing outside Windows.
+- Tests (recorded values, ⚑T3 acceptance): this PC → Periodic / `time.windows.com` / STS on; a disciplined domain member → Continuous /
+  "domain" / +12.8 ppm; three ways to be Off; nothing readable → Unknown; server-list parsing; a live read on Windows.
+
+### T4 — authenticated sources and the protected high-water mark — 2026-10-14
+
+User decisions this session (⚑T15, ⚑T16): RFC 3161 approved, in `YFex.Time.Cryptography`; restore protection = "TPM clock + MAC";
+signed central anchor built; Roughtime deferred on my recommendation (the user asked whether NSec or an own Ed25519 — survey: nothing
+else needs either).
+
+**High-water mark v2 + hardware clock (YFex.Time).** `HighWaterMark(Value, Authenticated, HardwareClock?)`; stored form version 2 =
+version 1's 10 bytes + hardware ticks (18 bytes); version 1 is still written without a hardware reading and still read.
+`IHardwareClock`, `TimeBuilder.UseHardwareClock(...)`, `TimeOptions.HardwareClockMinimumRate` (0.85),
+`CaptureHighWater(hardware)`, `RestoreHighWater(mark, hardware)` (§2.4 "T4"), `HardwareClockReset` change.
+**`TpmClock`** (YFex.Time.Windows): `TPM2_ReadClock` through TBS (`Tbsi_Context_Create` / `Tbsip_Submit_Command`), context per read,
+"no TPM" remembered. Probe on this PC as a standard user: works (clock ≈ 271.4 days powered, resetCount 119, safe). For the record,
+`Tbsi_Get_OwnerAuth` returned the 20-byte **endorsement** auth to a standard user but not the storage (owner) auth — nothing uses it.
+
+**`IHighWaterProtector`** (YFex.Time) + `TimeBuilder.ProtectHighWater(...)`; `KeyValueHighWaterStore` / `PersistHighWater()` use the
+registered protector. **YFex.Time.Cryptography** (new): `HighWaterAuthentication` (version 1 · key id · HMAC-SHA256 tag over the stored
+form, domain `yfex.time.high-water.v1`, ring `time/high-water` MAC yearly rotation) + `AuthenticateHighWater()`.
+
+**RFC 3161** — `TimestampAuthorityTimeSource` (Kind `Authority`, authenticated, stratum 1): random SHA-256 imprint + 16-byte nonce,
+`certReq`; `Rfc3161TimestampRequest.ProcessResponse` (status, imprint, nonce) + `VerifySignatureForHash` + an `X509Chain` with the
+time-stamping EKU at **genTime** (custom roots or the OS store, no downloads, no revocation). Uncertainty = token accuracy, else 1 s.
+`UseTimestampAuthority(roots?, addresses)`. **Recorded response:** DigiCert (`http://timestamp.digicert.com`, 6 007 B, 551 ms) for
+SHA-256("yfex.time.tsa-golden") with nonce "YFexTme1", genTime 2026-10-15 01:18:59 UTC, chain to DigiCert Assured ID Root CA (in
+`tests/YFex.Time.Tests/Golden/`).
+
+**Signed central anchor (Messaging.Rpc)** — `ICentralTime.GetSignedTimeAsync(byte[] nonce)` (proxy regenerated with ActualLab 13.0.12
+through `ProxyGoldenTests`); `SignedTimeReply` (canonical: tag 2 · nonce · 27-byte reply · detached signature; domain
+`yfex.time.central-reply.v1`; verified as of `Reply.Sent`; carries its nonce so it is evidence); `CentralTimeSigner` (ring
+`time/central-signing`, P-256, yearly, propagate 10 min) + `AddCentralTimeSigning()`; `CentralTimeService` answers an empty array
+without a signer. `CentralTimeSource(central, SignatureVerifier)` / `UseSignedCentralAnchor(sp => directory)`: fresh 32-byte nonce per
+round, fixed-time nonce compare, `LastSignedReply`. How clients get central's public keys is the app's (YFex.Installations' tenant key
+directory is the natural home — not wired here).
+
+**Deviations / notes**
+- Pkcs **10.0.13**, not the 11.0 preview the repo's other packages use: NuGet flagged 11.0.0-preview.5 with CVE-2026-84008 (high,
+  `SignedCms.CheckSignature` quadratic CPU) and CVE-2026-70162 (moderate, Windows `EnvelopedCms.Decode`); fixed in 10.0.13 and
+  11.0.0-rc.2. A TSA reply is attacker-reachable input. The net10.0 asset runs on the 11.0 preview 4 runtime.
+- Signed beacons (T4 list): not built here — YFex.Installations already signs its beacons (⚑I12) and runs peers over the mutual-TLS
+  `time` channel.
+- No change to the read path (`ValueTicks`, `GetUtcNow`, `GetTrustedNow`).
+- Gotcha: the RoselYn MCP server locks generator DLLs in the YFex repo's default `bin` folders — build/test Messaging with
+  `--artifacts-path C:/Temp/rpc-artifacts`.
+
+**Counts:** YFex.Time.Tests 65 → **100** (HardwareClockTests 11, WindowsTimeTests 14, TimeCryptographyTests 10).
+Messaging.Rpc.Tests → **76** green (SignedCentralTimeTests 6; proxy golden 3/3). AOT smoke (`YFex.Time.AotSmoke`, win-x64): **0
+IL warnings, exit 0** — new checks: high-water v2 + hardware floor, Windows status + TPM read, HMAC tag + tamper, the recorded DigiCert
+token verified by Pkcs under native AOT + tamper. Benchmarks (ShortRun, in-process; the machine was slower this run — the system
+baseline went 21.4 → 30.7 ns): `GetUtcNow` 33.4 ns (1.09× system, was 1.05×), `GetTrustedNow` 40.1 ns (1.30×), extension 46.8 ns
+(1.52×); all 0 B. Backup before the change: `C:\Temp\time-backup\T4-*`.
+
+**Not built / open:** Roughtime, NTS (⚑T15); a Linux TPM clock (same command over `/dev/tpmrm0`, needs the `tss` group); the last
+W32Time sync time; a `HighWaterRejected` event (a refused tag reads as "no mark" silently); publishing central's time-signing keys to
+clients (Installations); the site broker relaying central's signed reply.

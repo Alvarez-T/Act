@@ -97,6 +97,10 @@ its own `IByteTransport` reference where it used `_channel.Transport`; `YFex.Dev
 Devices RFC 2217 tests (in-memory stream, ser2net-compatible) pass unchanged; Telnet golden tests (IAC escaping, negotiation loops,
 sub-negotiation limits 1 024 bytes) move with the code.
 
+**Done 2026-10-14 (phase 6).** Devices had no Telnet or RFC 2217 tests to move: the golden Telnet tests were written in
+YFex.Networking.Tests and a new Devices `Serial/Rfc2217Tests` runs client ↔ server over loopback TCP. Types stayed in namespace
+`YFex.Networking` (the repo's convention), and `Rfc2217SerialPort` handles the telnet callbacks through a private class.
+
 ## 5. YFex.System `NetworkSnapshot` (⚑N22)
 
 No change in this plan: `CaptureNetworkSnapshot()` keeps its shape and Profiling keeps working. Two follow-ups: (1) the unsalted

@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics.CodeAnalysis;
 using Microsoft.Extensions.DependencyInjection;
+using YFex.Authorization.Public;
 using YFex.Rules;
 using YFex.Validation;
 
@@ -31,7 +32,8 @@ public readonly struct RulesOutcome
 /// </summary>
 public abstract class RulesStage
 {
-    public abstract Type SituationType { get; }
+    /// <summary>The situation the rules evaluate; null for an approval-only stage (<see cref="ApprovalStage{TMessage}"/>).</summary>
+    public abstract Type? SituationType { get; }
 
     /// <summary>Runs stages 3–4 for <paramref name="message"/>.</summary>
     public abstract ValueTask<RulesOutcome> RunAsync(object message, IServiceProvider services, CancellationToken ct);
@@ -46,6 +48,10 @@ public abstract class RulesStage
     /// <summary>Void-command counterpart of <see cref="TryInvokeRuled{TCommand,TResult}"/>.</summary>
     public abstract Task? TryInvokeRuled<TCommand>(IServiceProvider services, TCommand command, object decision, CancellationToken ct)
         where TCommand : ICommand;
+
+    /// <summary>Runs <paramref name="approvals"/> (<c>.RequireApproval</c>) after this stage accepted the message.</summary>
+    internal virtual void AttachApprovals(RulesStage approvals)
+        => throw new InvalidOperationException($"{GetType().Name} cannot be combined with another approval stage.");
 }
 
 /// <summary>
@@ -68,7 +74,12 @@ public sealed class RulesStage<TMessage, TSituation> : RulesStage where TSituati
 
     public RuleSetDefinition<TSituation> Set { get; }
     public EnforceOptions Options { get; }
-    public override Type SituationType => typeof(TSituation);
+    public override Type? SituationType => typeof(TSituation);
+
+    /// <summary><c>.RequireApproval(...)</c> on the same message: checked after the rules accepted it.</summary>
+    public ApprovalStage<TMessage>? Approvals { get; private set; }
+
+    internal override void AttachApprovals(RulesStage approvals) => Approvals = (ApprovalStage<TMessage>)approvals;
 
     public override async ValueTask<RulesOutcome> RunAsync(object message, IServiceProvider services, CancellationToken ct)
     {
@@ -92,7 +103,7 @@ public sealed class RulesStage<TMessage, TSituation> : RulesStage where TSituati
         var bound = msg as IDecisionBound;
         if (decision.Verdict.IsNeedsApproval)
         {
-            var check = await CheckApprovalsAsync(decision, bound, services, ct).ConfigureAwait(false);
+            var check = await CheckApprovalsAsync(decision, msg as IApprovalBound, services, ct).ConfigureAwait(false);
             // Not `is { } rejected`: on a [Union] type a property pattern matches the case Value, not the union itself.
             if (check.Error.HasValue) return new(check.Error.Value, decision, false);
             flagged |= check.Flagged;
@@ -112,6 +123,13 @@ public sealed class RulesStage<TMessage, TSituation> : RulesStage where TSituati
                     flagged = true;
                     break;
             }
+        }
+
+        if (Approvals is not null)
+        {
+            var approval = await Approvals.CheckAsync(msg, services, ct).ConfigureAwait(false);
+            if (approval.Error.HasValue) return new(approval.Error.Value, decision, false);
+            flagged |= approval.Flagged;
         }
 
         if (flagged && services.GetService<IDecisionAuditSink>() is { } audit)
@@ -137,36 +155,27 @@ public sealed class RulesStage<TMessage, TSituation> : RulesStage where TSituati
             new RuleArgs(RawValue.From(unchecked((long)bound.DecisionFingerprint)), RawValue.From(unchecked((long)d.Fingerprint))),
             new ViolationOrigin(ViolationSource.Rule, 0));
 
-    /// <summary>Every required permission needs a valid token bound to THIS fingerprint (09 §6 step 3, D34).</summary>
-    private async ValueTask<(Error? Error, bool Flagged)> CheckApprovalsAsync(Decision<TSituation> d, IDecisionBound? bound,
+    /// <summary>
+    /// Every required permission needs a valid token bound to THIS decision's digest (09 §6 step 3, D34; authorization-consolidation
+    /// Phase 4b): the <see cref="IApprovalTokenVerifier"/> checks signature, validity, scope, separation of duties and re-checks offline
+    /// approvers; offline tokens must also fit the request's <see cref="EnforceOptions.OfflineCaps"/>.
+    /// </summary>
+    private async ValueTask<(Error? Error, bool Flagged)> CheckApprovalsAsync(Decision<TSituation> d, IApprovalBound? bound,
         IServiceProvider services, CancellationToken ct)
     {
-        var required = Error.ApprovalRequired(MapReasons(d.Approvals, Options.Paths), d.Fingerprint, Options.Paths.Map(d.Violations));
         var tokens = bound?.Approvals;
-        var verifier = services.GetService<IOverrideTokenVerifier>();
-        if (tokens is null || tokens.Count == 0 || verifier is null) return (required, false);
-
-        var now = (services.GetService<TimeProvider>() ?? TimeProvider.System).GetUtcNow();
-        var directory = services.GetService<IApproverDirectory>();
         bool flagged = false;
         for (int r = 0; r < d.Approvals.Count; r++)
         {
             var request = d.Approvals[r];
-            bool ok = false;
-            foreach (var token in tokens)
-            {
-                if (!string.Equals(token.Permission, request.Permission.Value, StringComparison.Ordinal)) continue;
-                var v = verifier.Verify(in token, in request, d.Fingerprint, now);
-                if (!v.IsValid) continue;
-                // Device (offline) tokens: the approver's permission is re-checked now — the server didn't issue them.
-                if (token.Kind == OverrideTokenKind.Device
-                    && (directory is null || !await directory.HasPermissionAsync(token.ApproverId, token.Permission, ct).ConfigureAwait(false)))
-                    continue;
-                ok = true;
-                flagged |= v.Flagged;
-                break;
-            }
-            if (!ok) return (required, false);
+            var policy = ApprovalGate.Resolve(services, typeof(TMessage), new ApprovalPolicy(request.Permission));
+            if (!policy.IsRequired) continue;
+            var caps = Options.OfflineCaps;
+            var check = await ApprovalGate.CheckAsync(services, tokens, policy, d.Digest,
+                () => OfflineApprovalCap.AllowedBy(caps, in request), ct).ConfigureAwait(false);
+            if (!check.Satisfied)
+                return (Error.ApprovalRequired(MapReasons(d.Approvals, Options.Paths), d.Fingerprint, d.Digest, Options.Paths.Map(d.Violations)), false);
+            flagged |= check.Flags != ApprovalFlags.None;
         }
         return (null, flagged);
     }
@@ -240,17 +249,11 @@ public sealed class DecisionAccessor<TSituation> : IDecisionAccessor<TSituation>
     public Decision<TSituation>? Current => DecisionContext.Current?.Decision as Decision<TSituation>;
 }
 
-/// <summary>Receives flagged decisions (mismatch accepted under AcceptAndFlag, offline approvals) — audit/review queue.</summary>
+/// <summary>
+/// Receives flagged decisions (mismatch accepted under AcceptAndFlag, offline approvals) — audit/review queue. For an approval-only stage
+/// (<c>.RequireApproval</c>) the decision is its <see cref="YFex.Authorization.Public.ApprovalPolicy"/>.
+/// </summary>
 public interface IDecisionAuditSink
 {
     ValueTask OnFlaggedAsync(object message, object decision, ulong clientFingerprint, CancellationToken ct);
-}
-
-/// <summary>
-/// "Does user X hold permission P now?" — needed to accept OFFLINE (device-signed) approvals, whose approver the server
-/// did not check when the token was issued (D34). Without a registered directory, device tokens are rejected.
-/// </summary>
-public interface IApproverDirectory
-{
-    ValueTask<bool> HasPermissionAsync(string userId, string permission, CancellationToken ct);
 }

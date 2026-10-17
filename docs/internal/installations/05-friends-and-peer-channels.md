@@ -84,6 +84,12 @@ public interface IBundleStore                             // persisted bundles +
 - **Owners keep meaning**: Offline registers `OfflineBundleKinds.Manifest/Allowance/CredentialVerifiers/SiteAuthorization`,
   Authorization 3b `PermissionSnapshot`, Rules.Admin `RuleData` — they call `IBundleStore.AcceptAsync` and read payloads they
   understand. Offline's Phase 2 acceptance ("S4 tampered table") runs through this verifier.
+- **2026-10-15 (Authorization 3b, reviewed by no Installations session yet):** owners that sign with their own ring get it endorsed by the
+  tenant through generic types: `PublisherKeySet` + `EndorsedPublisherKeys` (YFex.Installations, payload byte-identical to Offline's
+  `offline.publishers`), `PublisherEndorsement` + `IBundlePublicationStore` (Installations.Central). `Peers(p => p.Publishers(...))` and
+  `PullableBundles(...)` are now additive (+ a `PullableBundles(Func<IServiceProvider, …>)` overload), and
+  `CentralInstallations.TryGetBundleKey(tenant)` exposes the tenant's bundle key for endorsements. Tests: Installations 125, Central 25.
+  Details: authorization-consolidation 09 "Phase 3b".
 - **Same version, different hash** = `ConflictingSameVersion`, a security finding (offline 05 §6, unchanged).
 
 ## 4. The peer endpoint and channels (⚑I10)
@@ -116,6 +122,26 @@ public interface IPeerChannelHandler
     ValueTask OnPushAsync(Friend from, ReadOnlyMemory<byte> message, CancellationToken cancellationToken);
 }
 ```
+
+**As built (I3, 2026-10-14; types in `YFex.Installations`, folder `Peers/`):**
+- Frame header exactly as above (11 bytes, big-endian). Kinds: `Open` (payload = channel name) → `Accepted` | `Failure`, `Request` →
+  `Response` | `Failure` (payload = one `PeerRequestStatus` byte), `Push`, `Close` (channel 0 = the connection). The side that opens a channel
+  numbers it: TLS client 1…0x7FFF, TLS server 0x8001…0xFFFF. Unknown and unshared channels get the same `Failure` (no listing of what a peer
+  serves). Malformed (unknown kind, oversize, request on an unopened channel, wrong id space) → disconnect + `installations.peer.malformed`.
+- Limits (`PeerEndpointOptions`, all configurable): frames/s and bytes/s per friend are **paced** (read loop waits; nothing lost), requests
+  and pushes per friend and channel are **refused** beyond their rate (`RateLimited`), 64 requests in flight (`Busy`), 1 MiB frames,
+  handshakes per remote address per minute (before TLS), maximum connections, idle close.
+- Both sides check the roster before a channel opens; `InstallationTrust.Check(peer, chain, role, now)` (no channel) accepts a connection when
+  at least one roster channel is shared with the peer, `Shares(channel, friend, now)` per channel. A dialled address must answer as the
+  **expected** installation (`PeerRefusal.UnexpectedInstallation`), so a spoofed or stale address only costs a refused handshake.
+- `FriendConnection` is a channel handle over the shared connection (`RequestAsync` → `PeerReply` struct, `PushAsync`); channels live as long
+  as the connection. `InstallationTrustSource` holds the current trust and applies newer signed rosters/revocations; a change closes the
+  connections of friends no longer accepted.
+
+**As built (I4, 2026-10-14):** every installation with `.Peers()` serves `time`, `relay` and `bundles` (the roster decides who may open
+them; `bundles` is registered with `maximumScope: SameSite`; an app's own handler for one of these names wins). Wire forms: `PeerTimeWire`,
+`RelayWire`, `BundleGossipWire` (08 §5, 2026-10-14). The bundle gossip offers a bundle only when its audience includes the requester's
+authenticated id and scope (§3 "audience check before sending").
 
 ### 4.1 TLS helpers for other hosts
 
@@ -187,6 +213,16 @@ Beacon payload v1 (canonical, inside Networking's `YFXB` frame):
 
 `InstallationAnnouncementVerifier` (sync, cached by source + sequence): key id → roster entry → `SignatureVerifier`; unknown key,
 bad signature, wrong site tag or stale → `Rejected`.
+
+**As built (I3, 2026-10-14):** payload v1 = `version 1 | installation 16 | role 1 | flags 1 | site tag 16 | peer port 2 | offered channels 4 |
+roster version 8 | revocations version 8 | time 27 | issued at 8` = **92 bytes** (`InstallationBeaconPayload`); added: a **flags** byte
+(`ReachesCentral`, `SiteTagged`) and the **revocations version** (a friend with an older revocation list asks for it, I4). Proof = evidence
+key id 16 + signature 64 over the whole datagram up to the payload's end (domain `yfex.installation.beacon.v1`); datagram ≈ 210 of Networking's
+512 bytes. The verifier rejects, and counts by reason: malformed, unknown key, forged (key of another installation or bad signature), revoked,
+stale (> 30 s old or > 5 s ahead), replayed (a sequence older than the last verified one of that installation, from any address), wrong site
+(member's role or site tag). An equal sequence is accepted (Networking delivers IPv4 and IPv6 copies); a same-window replay from another
+address can at most add a candidate, which TLS refuses. The site-tag key is derived from the tenant key (⚑I24). The network-fingerprint
+ordering of (1)–(2) is **not built** (needs the per-tenant fingerprint key delivered, like ⚑I24). The last address is kept in memory only.
 
 ## 7. Failure and attack table
 

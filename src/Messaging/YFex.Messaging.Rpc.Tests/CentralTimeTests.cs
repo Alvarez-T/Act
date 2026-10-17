@@ -127,6 +127,8 @@ public class CentralTimeTests
     private sealed class GarbageCentral : ICentralTime
     {
         public Task<byte[]> GetTimeAsync(CancellationToken cancellationToken = default) => Task.FromResult(new byte[] { 9, 9, 9 });
+
+        public Task<byte[]> GetSignedTimeAsync(byte[] nonce, CancellationToken cancellationToken = default) => Task.FromResult(new byte[] { 9, 9, 9 });
     }
 
     private sealed class ThrowingCentral : ICentralTime
@@ -134,6 +136,12 @@ public class CentralTimeTests
         public int Calls { get; private set; }
 
         public Task<byte[]> GetTimeAsync(CancellationToken cancellationToken = default)
+        {
+            Calls++;
+            throw new InvalidOperationException("must not be called");
+        }
+
+        public Task<byte[]> GetSignedTimeAsync(byte[] nonce, CancellationToken cancellationToken = default)
         {
             Calls++;
             throw new InvalidOperationException("must not be called");

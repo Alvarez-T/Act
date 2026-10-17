@@ -3,7 +3,7 @@
 ## 1. Connectivity is a mode, not a boolean (fixes F9)
 
 ```csharp
-// YFex core, namespace YFex.Offline — read by Messaging, Audit/Logging shippers, Jobs, UI
+// YFex core, namespace YFex.Offline — read by Messaging, Jobs, UI
 public interface IConnectivity
 {
     ConnectivityMode Mode { get; }                 // Central | Site | Standalone (02 §2)
@@ -11,11 +11,16 @@ public interface IConnectivity
     event Action<ConnectivityChange>? Changed;     // (previous, current, reason, at trusted time)
 }
 
-public readonly record struct Reachability(
-    PeerHealth Central,                            // Healthy | Degraded | Unreachable
-    PeerHealth SiteBroker,                         // NotConfigured when SiteTopology.Direct
-    bool SiteBrokerReachesCentral);                // reported by the broker in its health reply
+public readonly record struct Reachability(      // built 2026-10-15 (offline Phase 1)
+    EndpointHealth Central,                        // core EndpointHealth (YFex.Networking), from ICentralHealth (the RPC link)
+    InstallationId? Coordinator,                   // null = no coordinator (SiteTopology.Direct); the same-site SiteBroker friend
+    EndpointHealth CoordinatorHealth,              // from IInstallationFriends (Seen/Connected = Healthy), after its own hysteresis
+    bool AnyFriendReachesCentral);                 // a friend advertises ReachesCentral → relay works even when this RPC is down
 ```
+
+> **2026-10-14:** `Reachability` now uses the built types: core `EndpointHealth` (was `PeerHealth`), the coordinator from the
+> Installations roster seen through `IInstallationFriends` (was "SiteBroker"), and `ReachesCentral` from any friend (the `relay`
+> channel, ⚑O26). The mode stays Offline's decision: relay keeps signed items moving, but only the coordinator can serve `Site` mode.
 
 `IServerConnection` (Messaging.Rpc; renamed from `INetworkStatus` by networking ⚑N4, one instance per server peer: central and the site broker) stays the per-peer link state; machine-level conditions come from core `INetworkConditions`, and `PeerHealth` is core `EndpointHealth` (networking 05 §7). `SyncStatus` gains `Mode`,
 `ModeText`, `OfflineSince`, `PendingOnThisInstallation`, `HeldBySiteBroker`, `LastCentralContact` and `OpenFindings`. The UI can then
@@ -32,6 +37,9 @@ say what is true:
 
 > **2026-10-05:** candidates come from YFex.Networking beacons (kind `yfex.installation`, signed and verified by
 > YFex.Installations) and the roster's last known addresses; trust from the installation certificate + roster (installations 05 §1, §6).
+> **2026-10-14: built** (Networking Phase 5, Installations I3: last address → roster addresses → verified beacons → typed address).
+> Offline does not implement discovery; the list below is the original plan, kept for the reasoning. Open in Installations: the
+> site-tag key for beacons (⚑I24) and persisting the last address.
 
 Discovery only returns **candidate addresses**. Trust always comes from the certificate check ([03](03-trust-enrollment-pairing.md) §4),
 so a lying beacon costs a failed handshake and nothing more.
@@ -47,6 +55,10 @@ so a lying beacon costs a failed handshake and nothing more.
 DHCP changing the broker's IP needs no reconfiguration: the next beacon carries the new address.
 
 ## 3. Routing: where a call goes in each mode (Fusion, no fork)
+
+> **⚑O31 (open, README):** the recommendation is now to reach the broker services over Installations **peer channels**
+> (`offline.session`, `offline.coordination`, `offline.custody`, `offline.feed`) instead of a second Fusion peer. The routing logic below
+> is the same either way; only the `broker` transport changes.
 
 There are two Fusion client peers: `central` and `broker`. The broker peer exposes only the generic broker services. **No app message
 is ever executed on the broker.** In `Site` and `Standalone` modes the terminal runs the app's own `OnOffline<T>` handler locally.

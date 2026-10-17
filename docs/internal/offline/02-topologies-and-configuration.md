@@ -107,12 +107,53 @@ leaves central.
 | Split-brain risk (some terminals on central, others in site mode) | possible for a short time. It is harmless because offline decisions are budget-bounded ([06](06-offline-authority.md) §4) | none |
 | Broker load and hosting | only matters when central is down | every call passes through it: must be an always-on service |
 
-**Recommendation:** `CentralFirst` by default. `ThroughSiteBroker` is a per-site manifest option for poor uplinks. Both use the same
-code paths: the route only changes which Fusion peer a call goes to ([04](04-connectivity-and-failover.md) §3).
+**Decision (⚑O3, confirmed 2026-10-15):** `CentralFirst` by default. `ThroughSiteBroker` is a per-site manifest option for poor uplinks.
+Both use the same code paths: the route only changes where a call goes ([04](04-connectivity-and-failover.md) §3). Since the
+Installations `relay` channel (⚑O26), logs, audit batches and envelopes reach central through any friend in both routes.
 
-**One active site broker per site.** A standby can be listed and promoted by a manager (signed manifest change, or offline promotion
-with `sites.broker.promote`, flagged). Automatic election between two brokers is a consensus problem with failure modes worse than the
-outage it solves. Not offered (⚑O2).
+### 4.1 Which machine is the broker (⚑O2, confirmed 2026-10-15)
+
+**One active site broker per site, chosen automatically by central while it is reachable, and saved in the signed roster.** Nobody has
+to pick a machine, and the choice never changes during an outage. The user's rule (2026-10-15): "have a machine elected at least once and
+save it", with a manual option.
+
+1. **Every eligible PC of the site also runs the generic broker service, dormant** (07 §2). Each is its own installation with role
+   `SiteBroker`, enrolled once (machine-scope keys). The roster (YFex.Installations, built) lists them all: exactly one
+   `RosterEntryStatus.Active`, the others `Standby`. A dormant broker keeps its peer endpoint and answers nothing on the `offline.*`
+   channels.
+2. **Central ranks the candidates** from what it already receives while the site is online (sketch; Offline Phase 4 owns the policy):
+
+   | Signal | Source | Why |
+   |---|---|---|
+   | hours online during the site's opening hours | last contact per installation at central (assertion, relay ingress, bundle pulls) | the broker must be on when the outage happens |
+   | it can listen: peer endpoint up, firewall rule present | the installation's diagnostics report (firewall-rule presence = Installations I5 item) | an unreachable broker is useless |
+   | how many terminals reach it, and how reliably | friend reachability reported by the terminals (small Installations addition) | the broker must be seen by the checkouts |
+   | hardware-backed key | enrollment record | site approvals are signed with its evidence key |
+   | pinned by an admin | `Sites.Commands.Configure(PinnedSiteBroker: …)` | the manual option |
+
+3. **The best candidate becomes `Active`** in a new roster version, which reaches every installation by push and `bundles` gossip.
+   Central re-ranks periodically (default weekly) and switches only when the difference is clear and lasting (hysteresis), never in the
+   middle of a busy day. A pinned machine wins unless it has been unreachable for longer than the pin's tolerance (then central raises an
+   alert and keeps the pin; the admin decides).
+4. **The change happens only while central is reachable**, so there is no state to hand over: the old broker has already delivered its
+   journal, receipts and unused budget to central, and the new one starts with a fresh grant. This is why no machine ever has to share
+   broker memory with another one.
+5. **During an outage nothing is elected or promoted.** The saved broker serves the site; if it is off, terminals are `Standalone`
+   within their own slices, and exclusive claims are accepted and flagged (06 §4). Two machines can never both believe they are the
+   broker, because only central ever decides.
+
+**Example:** in its first week PC2 is on 11 h a day, PC-GERENTE 6 h. Central marks PC2 `Active` (roster v43); every machine has v43
+within seconds. During Saturday's outage PC2 coordinates. If PC2 is off too, the checkouts sell alone within their slices. When the
+internet returns, central may promote another machine, still only while online.
+
+**Costs:** one more dormant Windows service per eligible PC; every candidate must be able to listen, so installations ⚑I25 (Windows
+refuses TPM keys as a TLS server credential) must be solved or eligible machines use software keys with the hardware-key requirement
+relaxed for that role; a small Installations addition (terminals report friend reachability).
+
+**Not offered now:** elections during an outage (consensus, leases, terms, fencing tokens, state hand-over through the terminals and a
+per-term succession reserve). The `Standby` list is exactly the ordered successor list such an election would need, so it can be added
+later as a per-site opt-in if real sites show the broker off during outages often. Manual promotion during an outage was dropped for the
+same split-brain reason (the old broker may be alive on the other side of a cable).
 
 ## 5. Configuration: data at central, enrollment on the installation
 
@@ -120,8 +161,13 @@ Two layers, so nobody edits the site setup in a local file:
 
 1. **Site manifest** (data, central). An administrator configures each site at central. Central signs the manifest
    ([05](05-protecting-offline-data.md) §2), and every installation of the site keeps the latest copy.
-2. **Enrollment** (once per installation, [03](03-trust-enrollment-pairing.md)). The installation gets its identity, role, site and
-   the tenant's trust anchor. After that, everything else comes from the manifest.
+2. **Enrollment** (once per installation, YFex.Installations — [installations 04](../installations/04-keys-enrollment-certificates.md)).
+   The installation gets its identity, role, scope and the tenant's trust anchor. **Who** belongs to the site comes from the signed
+   **roster** (Installations, ⚑I8); **how the site operates** comes from the manifest.
+
+> **2026-10-14:** `Installations` and `RevokedInstallations` left the manifest: the roster and the revocation bundle of
+> YFex.Installations carry them (built in I1). The manifest cites the roster version it was written against. The coordinator is the
+> roster's `SiteBroker` entry (or a named entry, ⚑O27).
 
 ```csharp
 // (sketch) YFex.Offline — the signed manifest (canonical binary on the wire; shown as a record)
@@ -130,46 +176,69 @@ public sealed record SiteManifest(
     long Version,                                 // monotonic per site
     SiteTopology Topology,
     UpstreamRoute Route,                          // CentralFirst | ThroughSiteBroker
-    ImmutableArray<InstallationEntry> Installations,   // id, role, display name, certificate thumbprint, LAN addresses, Active/Standby/Revoked
+    long RosterVersion,                           // the Installations roster this manifest was written against (members, roles, addresses)
     ImmutableArray<Uri> CentralEndpoints,         // ordered list (farm, region fallback)
-    OfflineLimits Limits,                         // validity windows, caps, pairing switch, store-shared message list (05 §7, 06 §4–§5)
-    ImmutableArray<string> RevokedInstallations); // also delivered as a separate, smaller revocation bundle (05 §2)
+    OfflineLimits Limits,                         // typed limit values that differ from the defaults (05 §7, ⚑O11)
+    ImmutableArray<string> SiteFeed);             // commands switched on for the site feed (06 §5, ⚑O23)
 
 public enum UpstreamRoute : byte { CentralFirst = 1, ThroughSiteBroker = 2 }
 ```
+
+> **2026-10-15 (⚑O11, ⚑O23 confirmed):** `Limits` holds `OfflineLimit<T>` values (built-in `OfflineLimitKeys` and app keys, 05 §7);
+> the manifest signs the **resolved** values, so a terminal never needs central's precedence rules. `SiteFeed` lists the commands an
+> admin switched on for this site; central refuses a command the developer did not mark `.SharedWithSite<TProjection>()` (06 §5). The
+> manifest is signed with Offline's publisher key; installations learn that key from a tenant-signed `offline.publishers` bundle
+> (05 §2.3). Built in Phase 2 — the source in `YFex.Offline` (`SiteManifest`, `SiteManifestCodec`) is normative.
 
 ### 5.1 Developer side
 
 ```csharp
 // ✍ Terminal (checkout) — Program.cs
-services.AddYFexOffline(offline => offline
-    .Terminal()                                   // role; site, central endpoints and broker come from enrollment + manifest
-    .UseWindowsKeyStore());                       // installation keys in CNG/TPM (YFex.Offline.Windows, 03 §2)
+services.AddYFexInstallations(installations => installations     // identity, keys (CNG/TPM), enrollment, friends (YFex.Installations)
+    .Application("farma-pdv", version)
+    .Terminal()
+    .UseWindowsKeyStore()
+    .EnrollAt(new Uri("https://api.farmaviva.com.br/"))
+    .Peers());
 
-services.AddYFexMessagingRpcClient(rpc => rpc.UseOffline());   // replaces WebSocketEndpoint: routes to central / broker / local (04)
+services.AddYFexTime(time => time.UseCentralAnchor().UseSiteAnchor().UsePeerTime());   // YFex.Time + Installations (built)
+
+services.AddYFexOffline(offline => offline
+    .Terminal());                                 // modes, envelopes, custody; central endpoints and coordinator from roster + manifest
+
+services.AddYFexMessagingRpcClient(rpc => rpc
+    .UseInstallationAssertion()                   // YFex.Installations.Rpc (built)
+    .UseOffline());                               // routes to central / broker / local (04)
 ```
 
 ```csharp
-// ✍ Central
+// ✍ Central — the tenant CA, enrollment and roster are AddYFexInstallationsCentral (installations 03 §1)
 services.AddYFexOfflineCentral(central => central
-    .UseSigningKeys(rootKeyProvider)              // Privacy IRootKeyProvider wraps the CA and bundle-signing keys (05 §2.3)
-    .UseSqlStore(connectionFactory));             // manifests, enrollments, delivery receipts, budgets, review queue (YFex.Offline.Data, later)
+    .UseSigningKeys(keyRings)                     // Offline's bundle publisher key (manifest, allowances, verifiers, site authorization), 05 §2.3
+    .Limits(limits => limits                      // ⚑O11: app defaults (precedence: site admin value → this → library default)
+        .Default(OfflineLimitKeys.PermissionSnapshotValidity, TimeSpan.FromHours(48))
+        .Declare(FarmaLimits.MaxOfflineDiscount))  // an app key with its own default and hard bounds
+    .UseSqlStore(connectionFactory));             // manifests, delivery receipts, budgets, review queue (YFex.Offline.Data, later)
 ```
 
 The site broker has **no developer code**. It is the generic host `YFex.Offline.Broker`, installed as a Windows service and
-configured only by enrollment:
+configured only by enrollment. Until the future YFex.Installer exists, the code is a start-up argument:
 
 ```bash
-yfex-install enroll --role site-broker --code 7Q4K-M2XD
+YFex.Offline.Broker.exe --enroll 7Q4K-M2XD --display-name PC-GERENTE
 ```
 
 ```csharp
 // (sketch) what the generic host does inside — shown only to make clear that no app assembly is referenced
-var builder = WebApplication.CreateSlimBuilder(args);
-builder.Services.AddYFexOfflineBroker(broker => broker.Listen(port: 7443));   // Kestrel, TLS 1.3, client certificates required (03 §4)
-var app = builder.Build();
-app.MapYFexOfflineBroker();      // sessions, approvals, permission answers, budgets, claims, custody, feed, time, pairing, relays
-app.Run();
+var builder = Host.CreateApplicationBuilder(args);
+builder.Services.AddYFexInstallations(installations => installations
+    .Application("yfex-site-broker", version).SiteBroker()
+    .Storage(InstallationStorageScope.Machine, directoryPath: null)       // machine-scope state and keys (service account)
+    .UseWindowsKeyStore().EnrollAt(centralUri)
+    .Peers());                                                             // peer endpoint always on for SiteBroker (⚑O25)
+builder.Services.AddYFexOfflineBroker();   // sessions, approvals, permission answers, budgets, claims, custody, feed, site time table
+builder.Build().Run();                     // transport: peer channels (⚑O31, recommended), no Kestrel; time, relay, bundles and
+                                           // pairing (I5) are Installations channels already
 ```
 
 Message code changes only when a message needs offline coordination ([06](06-offline-authority.md) §2).
@@ -182,9 +251,14 @@ await Sites.Commands.ConfigureAsync(new Sites.Commands.Configure(
     Site: "0=farmaviva/1=loja-centro",
     Topology: SiteTopology.SiteBroker,
     Route: UpstreamRoute.CentralFirst,
-    SiteBroker: pcGerenteInstallationId,
-    Limits: OfflineLimits.Default with { PermissionSnapshotValidity = TimeSpan.FromHours(48) }), cancellationToken);
+    PinnedSiteBroker: null,                       // optional: an admin pins a machine; null = central chooses (§4.1)
+    Limits: [OfflineLimitSetting.Of(OfflineLimitKeys.PermissionSnapshotValidity, TimeSpan.FromHours(48))],
+    SiteFeed: ["AlterarPrecoNaLoja"]), cancellationToken);
 ```
+
+An admin value outside the key's bounds, an unknown key, or a site-feed entry for a command the developer did not mark is refused when
+the command is saved (`Error.Validation`), never when a terminal applies the manifest (⚑O11, ⚑O23). `PinnedSiteBroker` arrives with
+Phase 4.
 
 The new manifest version reaches installations like every bundle: pushed while online, pulled at reconnect. An installation never
 applies a manifest older than the one it has ([05](05-protecting-offline-data.md) §6).

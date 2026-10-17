@@ -1,8 +1,8 @@
 # YFex.Authorization — Consolidation of every "who may do/see what" mechanism — Design
 
 > **Status:** APPROVED (2026-10-02). All decisions **⚑Z1–Z19 are confirmed** by the user (table at the end, with the final wording).
-> Implementation follows [09-phases-and-acceptance.md](09-phases-and-acceptance.md) (Phases 0–2b and 3a done; Phase 3 decisions
-> P1–P7 at the end). No NuGet package is
+> Implementation follows [09-phases-and-acceptance.md](09-phases-and-acceptance.md) (Phases 0–2b, 3a, 3b, 4a and 4b done; Phase 3 decisions
+> P1–P7, Phase 3b decisions S1–S6 and Phase 4 decisions A1–A5 at the end). No NuGet package is
 > added: everything uses the BCL (`HMACSHA256`, `ECDsa`, `FrozenDictionary`) and projects that already exist.
 > **Audience:** the sessions that implement the phases. Read this file, then the file your phase needs.
 > **Normative vs sketch:** names in code blocks are normative unless marked `// (sketch)`. Where a decision changed a detail of a
@@ -135,6 +135,20 @@ code that already meets a need may be used; anything else is set apart in 09 ("D
 | **P6** | `ICallPermissions` changes its return type (hard break, like ⚑Z7); proxies regenerated through the golden test. | 08 |
 | **P7** | Snapshot validity uses a plain `TimeProvider` until trusted time exists; the reusable trusted-time library is `../time/README.md` (⚑T1–T7 approved 2026-10-04). | 05 §3, `../time` |
 
+## Phase 3b decisions — CONFIRMED 2026-10-15
+
+Context: YFex.Cryptography (signatures, rings), YFex.Installations (`SignedBundle`, `BundleVerifier`, `BundleStore`, `BundlePublishers`)
+and YFex.Time (`TimeProvider.GetTrustedNow()`) exist, so 3b builds on them. No interim crypto in Authorization (P1).
+
+| # | Decision (final) | Where |
+|---|---|---|
+| **S1** | **Own publisher key.** Snapshots are signed by the ring `authorization/snapshots` (publisher `"authorization"`), never by the tenant's roster key. The ring's public keys reach installations in a tenant-signed `authorization.publishers` bundle. The endorsement code is the generic Installations version (`PublisherKeySet`, `EndorsedPublisherKeys`, central `PublisherEndorsement`), and its payload is byte-identical to Offline's `offline.publishers`. | 05 §2 |
+| **S2** | **Transport = a new plain RPC call**, `IPermissionSnapshotIssuer.IssueAsync()`, which returns the `SignedBundle` wire bytes. The server signs only the snapshot it resolved itself, for the authenticated `CallContext` caller × the asserted installation (audience). The client asks again when the live snapshot changes and when the stored copy is past half its validity. `ICallPermissions` is unchanged. Plain calls carry the bus headers through the new public Messaging.Rpc `CallContextClientHeaders`. | 05 §3 |
+| **S3** | **The time policy is configurable.** `ISnapshotTimePolicy` with the built-ins `SnapshotTimePolicy.Refuse` (default, fail closed: refused when `TrustedInstant.IsUsableForSecurity(10 min)` fails) and `SnapshotTimePolicy.AllowFlagged` (device clock, result flagged `TimeTrusted = false`), or an app implementation. Supersedes P7's "plain TimeProvider". | 05 §3, `../time` ⚑T11 |
+| **S4** | Two projects in the Authorization repo. **`YFex.Authorization.Installations`** (installation side, no central code; the user's offline rule) holds the kinds, the codec, the RPC contract and proxy, `SignedPermissionSnapshots` (store + restore) and the refresh service. **`YFex.Authorization.Installations.Central`** holds `PermissionSnapshotSigner`, the issuer service and the endorsement wiring. | — |
+| **S5** | Envelope fields: kind `authorization.snapshot`, audience = the asserted installation, stream = `authorization.snapshot/` + hex(SHA-256(subject · 0 · scope))[..32] (ASCII, no personal data in stream names), version = issue time in Unix ms (max(previous + 1), so it survives restarts; the permission version stays in the payload). Validity is 72 h by default, configurable from 1 h to 14 d. | 05 §2 |
+| **S6** | Nothing is restored automatically at start (P3). Offline sign-in calls `TryRestoreAsync(subject, scope)`. The result is `Restored` (applied to `SnapshotPrincipalAccessor` by `RestoreAndApplyAsync`), `Missing` or `Refused(reason)`. Storage is the installation's `BundleStore` (floors, re-verified at every load). | 05 §3 |
+
 ## Phase 4 decisions — CONFIRMED 2026-10-04
 
 Context: YFex.Cryptography delivered the library side of approval tokens (crypto 12 §5 "Handoff to Authorization": HMAC key ring
@@ -151,6 +165,12 @@ YFex.Cryptography** (user, 2026-10-04).
 | **A4** | v2 token body = kind, approver **subject** (never the display name), permission id, decision digest (`Hash256`), **approver scope** (a supervisor of store A cannot approve for store B), validity (`ValidityPeriod`), key id. | 06 §1 |
 | **A5** | Wire break (like ⚑Z7/P6): `Error.ApprovalRequired` also carries the digest (RPC wire v5); `Approve(permission, digest)` replaces `ApproveDecision(permission, fingerprint)`. `.RequireApproval(p, bind: c => c.X)` digests the message type + the bound value; bound values are `string`, `Guid`, integers or core types with canonical bytes. | 06 §1.3 |
 
-Still open (needed for 4b, not for 4a): offline device tokens on `ISigningKey` + an app-supplied `IPublicKeyDirectory` with the
-age still measured at replay (F7 waits for offline envelopes + YFex.Time); the v1 cut-off option; `IPermissionDirectory` without a
-default implementation.
+| **A6** | (confirmed 2026-10-15) **Device tokens are signed by the installation's evidence key** (TPM, YFex.Installations) and verified through `IInstallationKeyDirectory`; the v2 body names the `InstallationId` and the evidence `KeyId` (installations 07 §4). **Age is measured against the decision time** of the offline envelope (`Provenance.DecidedAt`, Offline Phase 3; falls back to now until then), not the replay time (fixes F7). The token's installation must be the installation that decided the command (site-broker tokens, `ApprovalTokenKind.Site`, are the Offline Phase 4 exception). `IDeviceKeyStore` stays `[Obsolete]` in Rules until the v1 cut-off. | 06 §1, installations 07 §4 |
+| **A7** | (confirmed 2026-10-15) **Configurable approval policies, in two steps.** 4b builds the mechanism: `IApprovalPolicySource` (the code-declared `.RequireApproval` is the default; a data source may tighten or override it) and **separation of duties** (the approver may not be the requester; on by default, opt-out per policy). A later phase (4c) adds a Rules.Admin approval-policy table (published, cached, signed like rule data). "A category" = a permission held through a role; "a person" = a permission granted to that person only (no new approver concept). | 06 §1.3 |
+
+| **A8** | (confirmed 2026-10-15) **Approver that cannot be re-checked** (device/site tokens), configurable per situation, never a startup exception (a startup warning when device approvals are on and no `IPermissionDirectory` is registered): `WhenNoDirectory` (default `Refuse`), `WhenUnknownApprover` (default `Refuse`), `WhenDirectoryUnavailable` (default `Defer` = review queue, retried; behaves like `Refuse` with the reason kept until Offline Phase 3's queue exists); alternatives `AcceptAndFlag` or a custom `IUnverifiedApproverHandler`. Every non-refused outcome is flagged ("approver not re-checked"). `IPermissionDirectory` has no default implementation; Testing ships `FakePermissionDirectory`. | 06 §1 |
+
+| **A9** | (confirmed 2026-10-15) **v1 is dropped.** No deployment uses the Rules approval tokens, so there is nothing in flight: 4b builds v2 only, deletes `OverrideToken*`/`IDeviceKeyStore`, the v1 golden (`approval-token-v1.tsv`) and its tests, and needs no cut-off option. Supersedes crypto ⚑K12's "v1 verified for one `MaxAge`" and installations 07 §4's `[Obsolete]` period. | 09 Phase 4b |
+
+All Phase 4 decisions are confirmed. **4b DONE 2026-10-16** (A9 re-confirmed by the user that day; files, deviations and counts in the 09
+log). Next: 4c (approval-policy table) and Phase 5.

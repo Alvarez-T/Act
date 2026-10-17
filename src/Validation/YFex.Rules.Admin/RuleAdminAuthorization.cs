@@ -112,6 +112,7 @@ public sealed class RuleAdminRequirements(RuleSetRegistry registry, RuleAdminOpt
 /// <summary>Reading history and definitions: <see cref="RuleAdminOptions.ViewPermission"/> when set, else any authenticated caller.</summary>
 public sealed class RuleAdminViewRequirement(RuleAdminOptions? options = null)
     : IResourcePermissionRequirement<Queries.GetRuleData>,
+      IResourcePermissionRequirement<Queries.GetSignedRuleData>,
       IResourcePermissionRequirement<Queries.GetDataVersions>,
       IResourcePermissionRequirement<Queries.GetDataVersion>,
       IResourcePermissionRequirement<Queries.GetRuleDefinition>,
@@ -122,6 +123,8 @@ public sealed class RuleAdminViewRequirement(RuleAdminOptions? options = null)
 
     Permission? IResourcePermissionRequirement<Queries.GetRuleData>.PermissionFor(Queries.GetRuleData q) => _view;
     PermissionSet IAuthorizationRequirement<Queries.GetRuleData>.VisibleWith => Visible;
+    Permission? IResourcePermissionRequirement<Queries.GetSignedRuleData>.PermissionFor(Queries.GetSignedRuleData q) => _view;
+    PermissionSet IAuthorizationRequirement<Queries.GetSignedRuleData>.VisibleWith => Visible;
     Permission? IResourcePermissionRequirement<Queries.GetDataVersions>.PermissionFor(Queries.GetDataVersions q) => _view;
     PermissionSet IAuthorizationRequirement<Queries.GetDataVersions>.VisibleWith => Visible;
     Permission? IResourcePermissionRequirement<Queries.GetDataVersion>.PermissionFor(Queries.GetDataVersion q) => _view;
@@ -132,21 +135,11 @@ public sealed class RuleAdminViewRequirement(RuleAdminOptions? options = null)
     PermissionSet IAuthorizationRequirement<Queries.GetDataChanges>.VisibleWith => Visible;
 }
 
-/// <summary>
-/// The approver must hold the permission named by the message (D34). The id comes from the client: an id that is not a valid
-/// permission is never held. Replaced by <c>Approvals.Commands.Approve</c> in authorization-consolidation Phase 4b.
-/// </summary>
-public sealed class ApproveDecisionRequirement : IResourcePermissionRequirement<Commands.ApproveDecision>
-{
-    Permission? IResourcePermissionRequirement<Commands.ApproveDecision>.PermissionFor(Commands.ApproveDecision c)
-        => Permission.TryParse(c.Permission, null, out var permission) ? permission : default(Permission);
-}
-
 /// <summary>Registration of the RuleAdmin gate requirements.</summary>
 public static class RuleAdminAuthorization
 {
     /// <summary>
-    /// Registers <see cref="RuleAdminRequirements"/>, <see cref="RuleAdminViewRequirement"/> and <see cref="ApproveDecisionRequirement"/>
+    /// Registers <see cref="RuleAdminRequirements"/> and <see cref="RuleAdminViewRequirement"/>
     /// (idempotent). Called by <c>AddYFexRulesAdmin</c> (server) and <c>AddYFexRuleSetSync</c> (client); any other process that builds
     /// a registry with <see cref="RuleAdminBaseline"/> calls it too (the registry build fails, naming them, when they are missing).
     /// Fails at first resolution when a table names an undeclared permission.
@@ -164,7 +157,6 @@ public static class RuleAdminAuthorization
             return requirements;
         });
         services.TryAddSingleton(sp => new RuleAdminViewRequirement(sp.GetService<RuleAdminOptions>()));
-        services.TryAddSingleton<ApproveDecisionRequirement>();
         return services;
     }
 }

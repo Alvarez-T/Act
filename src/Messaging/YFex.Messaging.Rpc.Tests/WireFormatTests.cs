@@ -49,7 +49,7 @@ public class WireFormatTests
     }
 
     [Fact]
-    public void Approval_required_error_round_trips_approvals_and_fingerprint()
+    public void Approval_required_error_round_trips_approvals_fingerprint_and_digest()
     {
         var reason = new Violation(FieldPath.Of("Discount"), "rules.limit.max", Severity.Warning,
             new RuleArgs(RawValue.From(Percentual.FromPercentage(5)), RawValue.From(Percentual.FromPercentage(8))),
@@ -58,7 +58,7 @@ public class WireFormatTests
         var error = Error.ApprovalRequired(
             YFex.Rules.ApprovalRequestList.From([new YFex.Rules.ApprovalRequest(YFex.Authorization.Public.Permission.Parse("sales.discount.override"), reason,
                 new YFex.Rules.RuleRef("sale.manual-discount", 2, 1, 42, rowId))]),
-            0xDEADBEEFCAFEUL, ViolationList.From([reason]));
+            0xDEADBEEFCAFEUL, Digest, ViolationList.From([reason]));
 
         var back = RoundTrip<QueueableResult<int>>(error);
 
@@ -66,11 +66,34 @@ public class WireFormatTests
         e.Kind.Should().Be(ErrorKind.ApprovalRequired);
         e.TryGetValue(out ApprovalRequired a).Should().BeTrue();
         a.DecisionFingerprint.Should().Be(0xDEADBEEFCAFEUL);
+        a.DecisionDigest.Should().Be(Digest);                                    // wire v5 (authorization-consolidation A5)
         e.Violations.Count.Should().Be(1);
         a.Approvals.Count.Should().Be(1);
         a.Approvals[0].Permission.Value.Should().Be("sales.discount.override");   // the id travels unchanged
         a.Approvals[0].Rule.Should().Be(new YFex.Rules.RuleRef("sale.manual-discount", 2, 1, 42, rowId));
         a.Approvals[0].Reason.Args[1].Should().Be(RawValue.From(Percentual.FromPercentage(8)));
+    }
+
+    private static readonly YFex.Cryptography.Hash256 Digest =
+        YFex.Authorization.Public.ApprovalDigest.Of(typeof(WireFormatTests), "sale-42");
+
+    [Fact]
+    public void Approval_tokens_permissions_and_digests_round_trip()
+    {
+        var token = new YFex.Authorization.Public.ApprovalToken(YFex.Authorization.Public.ApprovalTokenKind.Device, "sup", "0=acme/1=loja7",
+            YFex.Authorization.Public.Permission.Parse("sales.discount.override"), Digest,
+            new ValidityPeriod(new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.Zero), new DateTimeOffset(2026, 10, 16, 12, 15, 0, TimeSpan.Zero)),
+            YFex.Cryptography.KeyId.New(), new YFex.Installations.InstallationId(Guid.NewGuid()), new byte[] { 1, 2, 3, 4 });
+
+        var back = RoundTrip(token)!;
+
+        back.Should().BeEquivalentTo(token, o => o.Excluding(t => t.Signature));
+        back.Signature.ToArray().Should().Equal(1, 2, 3, 4);
+        back.Validity.Should().Be(token.Validity);
+        RoundTrip<YFex.Authorization.Public.ApprovalToken?>(null).Should().BeNull();
+        RoundTrip(token.Permission).Should().Be(token.Permission);
+        RoundTrip(Digest).Should().Be(Digest);
+        RoundTrip<IReadOnlyList<YFex.Authorization.Public.ApprovalToken>>([token]).Single().Approver.Should().Be("sup");
     }
 
     [Fact]

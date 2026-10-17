@@ -1,5 +1,8 @@
 using YFex.Authorization.Public;
 using System.Buffers;
+using System.Buffers.Binary;
+using YFex.Cryptography;
+using YFex.Installations;
 using System.Collections.Immutable;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
@@ -28,7 +31,8 @@ public static class RpcResultFormatters
     //     approvals carry the rule tier depth (same byte as v2's layer: Code 0, Tenant 1, Store 2 ≙ tiers 0, 1, 2).
     // v1/v2 payloads are still read (legacy kinds mapped by RawValueLegacy).
     // v4 (authorization-consolidation Phase 2b): Error = [Union] kind tag + case payload (Forbidden carries the Denial).
-    internal const byte Version = 4;
+    // v5 (authorization-consolidation Phase 4b, decision A5): ApprovalRequired also carries the decision digest (32 bytes).
+    internal const byte Version = 5;
     private static int s_registered;
 
     /// <summary>Registers the non-generic formatters (idempotent; also run by the module initializer).</summary>
@@ -40,6 +44,9 @@ public static class RpcResultFormatters
         MemoryPackFormatterProvider.Register(new ResultFormatter());
         MemoryPackFormatterProvider.Register(new QueueableResultFormatter());
         MemoryPackFormatterProvider.Register(new PermissionSnapshotFormatter());
+        MemoryPackFormatterProvider.Register(new ApprovalTokenFormatter());
+        MemoryPackFormatterProvider.Register(new PermissionFormatter());
+        MemoryPackFormatterProvider.Register(new Hash256Formatter());
         RpcErrorResults<Result>.Factory = static error => error;
         RpcErrorResults<QueueableResult>.Factory = static error => error;
         if (RuntimeFeature.IsDynamicCodeSupported) RegisterOpenGenerics();
@@ -95,6 +102,7 @@ public static class RpcResultFormatters
                 WriteViolations(ref writer, approval.Violations);
                 WriteApprovals(ref writer, approval.Approvals);
                 writer.WriteUnmanaged(approval.DecisionFingerprint);
+                Hash256Formatter.Write(ref writer, approval.DecisionDigest);
                 break;
         }
     }
@@ -125,7 +133,9 @@ public static class RpcResultFormatters
             case ErrorKind.ApprovalRequired:
                 var violations = ReadViolations(ref reader, version);
                 var approvals = ReadApprovals(ref reader, version);
-                error = Error.ApprovalRequired(approvals, reader.ReadUnmanaged<ulong>(), violations);
+                ulong fingerprint = reader.ReadUnmanaged<ulong>();
+                Hash256 digest = version >= 5 ? Hash256Formatter.Read(ref reader) : default;
+                error = Error.ApprovalRequired(approvals, fingerprint, in digest, violations);
                 break;
             default: return default;
         }
@@ -403,6 +413,87 @@ public sealed class QueueableResultFormatter<T> : MemoryPackFormatter<QueueableR
             3 => QueueableResult<T>.Queue(reader.ReadUnmanaged<Guid>()),
             _ => default,
         };
+    }
+}
+
+/// <summary>
+/// <see cref="ApprovalToken"/> over Fusion RPC (commands carry <c>IReadOnlyList&lt;ApprovalToken&gt;</c>; <c>Approve</c> returns one):
+/// YFex.Authorization.Public is a leaf and must not reference MemoryPack. Layout v1: version byte, kind, approver, approver scope,
+/// permission id, digest (32 bytes), validity (from UTC ticks, has-until flag, until UTC ticks), key id, installation id, signature.
+/// </summary>
+public sealed class ApprovalTokenFormatter : MemoryPackFormatter<ApprovalToken>
+{
+    internal const byte Version = 1;
+    private const int MaximumSignatureLength = 512;
+
+    public override void Serialize<TBuffer>(ref MemoryPackWriter<TBuffer> writer, scoped ref ApprovalToken? value)
+    {
+        if (value is null) { writer.WriteNullObjectHeader(); return; }
+        writer.WriteObjectHeader(1);
+        writer.WriteUnmanaged(Version, (byte)value.Kind);
+        writer.WriteString(value.Approver);
+        writer.WriteString(value.ApproverScope);
+        writer.WriteString(value.Permission.Value);
+        Hash256Formatter.Write(ref writer, value.Digest);
+        writer.WriteUnmanaged(value.Validity.From.UtcTicks, value.Validity.Until.HasValue, value.Validity.Until?.UtcTicks ?? 0L);
+        writer.WriteUnmanaged(value.Key.Value, value.Installation.Value);
+        writer.WriteUnmanagedSpan(value.Signature.Span);
+    }
+
+    public override void Deserialize(ref MemoryPackReader reader, scoped ref ApprovalToken? value)
+    {
+        if (!reader.TryReadObjectHeader(out _)) { value = null; return; }
+        reader.ReadUnmanaged(out byte version, out byte kind);
+        if (version != Version)
+            throw new MemoryPackSerializationException($"Unsupported ApprovalToken wire version {version} (expected {Version}).");
+        string approver = reader.ReadString() ?? "";
+        string? approverScope = reader.ReadString();
+        string? permission = reader.ReadString();
+        Hash256 digest = Hash256Formatter.Read(ref reader);
+        reader.ReadUnmanaged(out long from, out bool hasUntil, out long until);
+        reader.ReadUnmanaged(out Guid key, out Guid installation);
+        byte[] signature = reader.ReadUnmanagedArray<byte>() ?? [];
+        if (signature.Length > MaximumSignatureLength) throw new MemoryPackSerializationException("ApprovalToken signature too long.");
+        var validity = new ValidityPeriod(new DateTimeOffset(from, TimeSpan.Zero), hasUntil ? new DateTimeOffset(until, TimeSpan.Zero) : null);
+        value = new ApprovalToken((ApprovalTokenKind)kind, approver, approverScope,
+            Permission.TryParse(permission, null, out var parsed) ? parsed : default, digest, validity, new KeyId(key),
+            new InstallationId(installation), signature);
+    }
+}
+
+/// <summary><see cref="Permission"/> over Fusion RPC: its id text (never the process-local ordinal). An unparsable id reads as default.</summary>
+public sealed class PermissionFormatter : MemoryPackFormatter<Permission>
+{
+    public override void Serialize<TBuffer>(ref MemoryPackWriter<TBuffer> writer, scoped ref Permission value)
+        => writer.WriteString(value.Value);
+
+    public override void Deserialize(ref MemoryPackReader reader, scoped ref Permission value)
+        => value = Permission.TryParse(reader.ReadString(), null, out var parsed) ? parsed : default;
+}
+
+/// <summary><see cref="Hash256"/> over Fusion RPC: 32 raw bytes.</summary>
+public sealed class Hash256Formatter : MemoryPackFormatter<Hash256>
+{
+    public override void Serialize<TBuffer>(ref MemoryPackWriter<TBuffer> writer, scoped ref Hash256 value) => Write(ref writer, value);
+
+    public override void Deserialize(ref MemoryPackReader reader, scoped ref Hash256 value) => value = Read(ref reader);
+
+    internal static void Write<TBuffer>(ref MemoryPackWriter<TBuffer> writer, in Hash256 value) where TBuffer : IBufferWriter<byte>
+    {
+        ReadOnlySpan<byte> bytes = value.AsSpan();
+        writer.WriteUnmanaged(BinaryPrimitives.ReadUInt64LittleEndian(bytes), BinaryPrimitives.ReadUInt64LittleEndian(bytes[8..]),
+            BinaryPrimitives.ReadUInt64LittleEndian(bytes[16..]), BinaryPrimitives.ReadUInt64LittleEndian(bytes[24..]));
+    }
+
+    internal static Hash256 Read(ref MemoryPackReader reader)
+    {
+        reader.ReadUnmanaged(out ulong a, out ulong b, out ulong c, out ulong d);
+        Span<byte> bytes = stackalloc byte[Hash256.Size];
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes, a);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes[8..], b);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes[16..], c);
+        BinaryPrimitives.WriteUInt64LittleEndian(bytes[24..], d);
+        return new Hash256(bytes);
     }
 }
 

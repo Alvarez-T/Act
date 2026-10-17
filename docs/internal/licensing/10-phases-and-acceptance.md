@@ -54,8 +54,8 @@
 | ⚑I23 confirmed | user (installations README §6.2) | pending | all |
 | core `InstallationId`, `InstallationRole`, `BundleKind/Header/Audience`, `LocalInstallation` | Installations I0 | not built | P1 |
 | `SignedBundle`, `IBundleVerifier`, `IBundleStore`, floors, publishers (R1) | Installations I1 | not built | P1 |
-| registry, enrollment, policy (R2–R6), `.Testing` harness | Installations I2 | not built | P3 |
-| `CallContext` installation (⚑I11) | Installations.Rpc | not built | P2 (server mask) |
+| registry, enrollment, policy (R2–R6), `.Testing` harness | Installations I2 | ✅ built (reworked 2026-10-13; `ApplicationName` instead of `AppName`; harness `TestCentral`) | P3 |
+| `CallContext` installation (⚑I11) | Installations.Rpc | ✅ built: `InstallationCallContext.Current/CurrentTenant` next to CallContext (installations 08 §5) | P2 (server mask) |
 | bundle gossip (R7) | Installations I4 | not built | P3 (LAN freshness) |
 | `IPermissionAvailability`, `DenialKind.Unavailable` (A1–A4) | Authorization | not requested yet | P2 |
 | `SignedPayload`, `SigningKeyRing`, `CanonicalWriter`, `Hashing`, `SealedValue` | YFex.Cryptography 0–3 | ✅ built | P1 |

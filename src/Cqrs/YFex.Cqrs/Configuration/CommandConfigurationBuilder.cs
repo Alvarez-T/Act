@@ -19,6 +19,7 @@ public sealed class CommandConfigurationBuilder<TCommand>
 {
     private List<ContextRuleFactory>?           _validators;
     private RulesConfig?                        _rules;
+    private RulesStage?                         _approval;
     private List<Requirement>?         _authorization;
     private List<InvalidationRuleDescriptor>?   _invalidates;
     private Func<object, string>?               _idempotencyKey;
@@ -35,6 +36,7 @@ public sealed class CommandConfigurationBuilder<TCommand>
     private string?                             _description;
     private string[]?                          _keywords;
     private bool                                _irreversible;
+    private List<KeyValuePair<Type, object>>?   _features;
 
     // â”€â”€ Validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
@@ -144,6 +146,40 @@ public sealed class CommandConfigurationBuilder<TCommand>
 
     /// <summary>The caller must hold <paramref name="permission"/> (a catalog property, e.g. <c>SalesPermissions.SaleVoid</c>).</summary>
     public CommandConfigurationBuilder<TCommand> RequirePermission(Permission permission) => AddRequirement(Requirement.Require(permission));
+
+    /// <summary>
+    /// The command also needs an approval of <paramref name="permission"/> bound to the message type + <paramref name="bind"/>'s value
+    /// (authorization-consolidation 06 §1.3, decision A5): without a matching token the dispatcher answers
+    /// <see cref="ErrorKind.ApprovalRequired"/> with the digest; the approver runs <c>Approvals.Commands.Approve(permission, digest)</c> and
+    /// the client resends the command with the token. The command must implement <see cref="IApprovalBound"/>.
+    /// <paramref name="separationOfDuties"/> (default on, decision A7): the approver may not be the requester. An
+    /// <see cref="IApprovalPolicySource"/> may change the policy at run time.
+    /// <code>
+    /// b.Command&lt;VoidSale, Receipt&gt;().RequirePermission(SalesPermissions.SaleVoid)
+    ///     .RequireApproval(SalesPermissions.SaleVoidApprove, bind: command =&gt; command.SaleId);
+    /// </code>
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> RequireApproval(Permission permission, Func<TCommand, string> bind, bool separationOfDuties = true)
+        => SetApproval(permission, ApprovalBindings.Text(bind), separationOfDuties);
+
+    /// <inheritdoc cref="RequireApproval(Permission, Func{TCommand, string}, bool)"/>
+    public CommandConfigurationBuilder<TCommand> RequireApproval(Permission permission, Func<TCommand, Guid> bind, bool separationOfDuties = true)
+        => SetApproval(permission, ApprovalBindings.Guid(bind), separationOfDuties);
+
+    /// <inheritdoc cref="RequireApproval(Permission, Func{TCommand, string}, bool)"/>
+    public CommandConfigurationBuilder<TCommand> RequireApproval(Permission permission, Func<TCommand, long> bind, bool separationOfDuties = true)
+        => SetApproval(permission, ApprovalBindings.Integer(bind), separationOfDuties);
+
+    /// <inheritdoc cref="RequireApproval(Permission, Func{TCommand, string}, bool)"/>
+    public CommandConfigurationBuilder<TCommand> RequireApproval<TValue>(Permission permission, Func<TCommand, TValue> bind, bool separationOfDuties = true)
+        where TValue : global::YFex.Canonical.ICanonicalValue<TValue>
+        => SetApproval(permission, ApprovalBindings.Canonical(bind), separationOfDuties);
+
+    private CommandConfigurationBuilder<TCommand> SetApproval(Permission permission, Func<TCommand, global::YFex.Cryptography.Hash256> digest, bool separationOfDuties)
+    {
+        _approval = ApprovalStages.Create(permission, digest, separationOfDuties);
+        return this;
+    }
 
     /// <summary>The caller must hold at least one of <paramref name="permissions"/>.</summary>
     public CommandConfigurationBuilder<TCommand> RequireAnyPermission(params Permission[] permissions) => AddRequirement(Requirement.RequireAny(permissions));
@@ -366,7 +402,7 @@ public sealed class CommandConfigurationBuilder<TCommand>
         ResultType           = null,
         IsQueueable          = typeof(IQueueable).IsAssignableFrom(typeof(TCommand)),
         Validators           = _validators?.ToArray(),
-        Rules                = _rules?.Build(typeof(TCommand), isQuery: false),
+        Rules                = ApprovalStages.Combine(_rules?.Build(typeof(TCommand), isQuery: false), _approval),
         Authorization          = _authorization?.ToArray(),
         Invalidates          = _invalidates?.ToArray(),
         IdempotencyKey       = _idempotencyKey,
@@ -381,6 +417,7 @@ public sealed class CommandConfigurationBuilder<TCommand>
         Description          = _description,
         Keywords             = _keywords,
         Irreversible         = _irreversible,
+        Features             = _features?.ToArray(),
     };
 }
 
@@ -393,6 +430,7 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
 {
     private List<ContextRuleFactory>?           _validators;
     private RulesConfig?                        _rules;
+    private RulesStage?                         _approval;
     private List<Requirement>?         _authorization;
     private List<InvalidationRuleDescriptor>?   _invalidates;
     private Func<object, string>?               _idempotencyKey;
@@ -409,6 +447,7 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
     private string?                             _description;
     private string[]?                          _keywords;
     private bool                                _irreversible;
+    private List<KeyValuePair<Type, object>>?   _features;
 
     /// <summary>
     /// Shape rules for the message (same semantics as attributes, D14/D23). Constant rules are compiled into the
@@ -514,6 +553,40 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
 
     /// <summary>The caller must hold <paramref name="permission"/> (a catalog property, e.g. <c>SalesPermissions.SaleVoid</c>).</summary>
     public CommandConfigurationBuilder<TCommand, TResult> RequirePermission(Permission permission) => AddRequirement(Requirement.Require(permission));
+
+    /// <summary>
+    /// The command also needs an approval of <paramref name="permission"/> bound to the message type + <paramref name="bind"/>'s value
+    /// (authorization-consolidation 06 §1.3, decision A5): without a matching token the dispatcher answers
+    /// <see cref="ErrorKind.ApprovalRequired"/> with the digest; the approver runs <c>Approvals.Commands.Approve(permission, digest)</c> and
+    /// the client resends the command with the token. The command must implement <see cref="IApprovalBound"/>.
+    /// <paramref name="separationOfDuties"/> (default on, decision A7): the approver may not be the requester. An
+    /// <see cref="IApprovalPolicySource"/> may change the policy at run time.
+    /// <code>
+    /// b.Command&lt;VoidSale, Receipt&gt;().RequirePermission(SalesPermissions.SaleVoid)
+    ///     .RequireApproval(SalesPermissions.SaleVoidApprove, bind: command =&gt; command.SaleId);
+    /// </code>
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand, TResult> RequireApproval(Permission permission, Func<TCommand, string> bind, bool separationOfDuties = true)
+        => SetApproval(permission, ApprovalBindings.Text(bind), separationOfDuties);
+
+    /// <inheritdoc cref="RequireApproval(Permission, Func{TCommand, string}, bool)"/>
+    public CommandConfigurationBuilder<TCommand, TResult> RequireApproval(Permission permission, Func<TCommand, Guid> bind, bool separationOfDuties = true)
+        => SetApproval(permission, ApprovalBindings.Guid(bind), separationOfDuties);
+
+    /// <inheritdoc cref="RequireApproval(Permission, Func{TCommand, string}, bool)"/>
+    public CommandConfigurationBuilder<TCommand, TResult> RequireApproval(Permission permission, Func<TCommand, long> bind, bool separationOfDuties = true)
+        => SetApproval(permission, ApprovalBindings.Integer(bind), separationOfDuties);
+
+    /// <inheritdoc cref="RequireApproval(Permission, Func{TCommand, string}, bool)"/>
+    public CommandConfigurationBuilder<TCommand, TResult> RequireApproval<TValue>(Permission permission, Func<TCommand, TValue> bind, bool separationOfDuties = true)
+        where TValue : global::YFex.Canonical.ICanonicalValue<TValue>
+        => SetApproval(permission, ApprovalBindings.Canonical(bind), separationOfDuties);
+
+    private CommandConfigurationBuilder<TCommand, TResult> SetApproval(Permission permission, Func<TCommand, global::YFex.Cryptography.Hash256> digest, bool separationOfDuties)
+    {
+        _approval = ApprovalStages.Create(permission, digest, separationOfDuties);
+        return this;
+    }
 
     /// <summary>The caller must hold at least one of <paramref name="permissions"/>.</summary>
     public CommandConfigurationBuilder<TCommand, TResult> RequireAnyPermission(params Permission[] permissions) => AddRequirement(Requirement.RequireAny(permissions));
@@ -731,7 +804,7 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
         ResultType           = typeof(TResult),
         IsQueueable          = typeof(IQueueable).IsAssignableFrom(typeof(TCommand)),
         Validators           = _validators?.ToArray(),
-        Rules                = _rules?.Build(typeof(TCommand), isQuery: false),
+        Rules                = ApprovalStages.Combine(_rules?.Build(typeof(TCommand), isQuery: false), _approval),
         Authorization          = _authorization?.ToArray(),
         Invalidates          = _invalidates?.ToArray(),
         IdempotencyKey       = _idempotencyKey,
@@ -746,5 +819,6 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
         Description          = _description,
         Keywords             = _keywords,
         Irreversible         = _irreversible,
+        Features             = _features?.ToArray(),
     };
 }

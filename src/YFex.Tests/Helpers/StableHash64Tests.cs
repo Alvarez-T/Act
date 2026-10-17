@@ -82,4 +82,23 @@ public class StableHash64Tests
         e.Append(string.Empty);
         n.Finish().Should().NotBe(e.Finish());
     }
+
+    [Fact]
+    public void Capture_copies_the_exact_stream_without_changing_the_hash()
+    {
+        var plain = StableHash64.Create(7);
+        var buffer = new System.Buffers.ArrayBufferWriter<byte>();
+        var captured = StableHash64.Create(7, buffer);
+        foreach (var h in new[] { 0, 1 })
+        {
+            ref var target = ref h == 0 ? ref plain : ref captured;
+            target.Append("approval");
+            target.Append(42L);
+            target.Append(new byte[40]);                                       // crosses a 32-byte stripe
+        }
+
+        captured.Finish().Should().Be(plain.Finish());
+        buffer.WrittenCount.Should().Be(4 + 16 + 8 + 40);                     // length prefix + UTF-16 text + long + bytes
+        StableHash64.Hash(buffer.WrittenSpan, 7).Should().Be(plain.Finish());  // same bytes, same hash
+    }
 }

@@ -17,6 +17,10 @@ Validation D29 built three authorization concepts inside the RPC transport. They
 > Version, Permissions, Roles, Relation)` in `.Public`, `From(caller)`, `Has`, `IsInRole`; the client rebuilds the caller with
 > `AuthorizationContext.FromSnapshot` (runtime, unknown ids dropped). `Validity`, `KeyId` and `Signature` below move to the signed
 > envelope (YFex.Offline `SignedBundle`, kind `authorization.snapshot`) in Phase 3b, after YFex.Cryptography Phase 2.
+> **Phase 3b (2026-10-15, decisions S1–S6):** built. The envelope is the YFex.Installations `SignedBundle` (audience = the installation,
+> stream = subject + scope hash, version = issue ms, 72 h); payload = `PermissionSnapshotCodec`; signed by Authorization's ring
+> `authorization/snapshots`, whose keys installations get in the tenant-signed `authorization.publishers` bundle. The sketch below is
+> historical; the source in `YFex.Authorization.Installations(.Central)` is normative.
 
 ```csharp
 // (sketch) YFex.Authorization.Public — ids on the wire, never ordinals (03 §2)
@@ -52,6 +56,10 @@ separate **`docs/internal/offline/`** design; this design only fixes the format 
 > **Phase 3a (2026-10-04):** online only. `UseServerPermissions()` registers `SnapshotPrincipalAccessor` + the hosted
 > `ServerPermissionsFeed` (live `ICallPermissions` computed). Nothing is persisted yet; the offline paragraph below is Phase 3b, and
 > a persisted snapshot is used only after an offline sign-in established the subject (decision P3).
+> **Phase 3b (2026-10-15):** `AddYFexSignedPermissionSnapshots()` keeps a signed copy per user on the installation (central signs
+> through `IPermissionSnapshotIssuer`, refreshed on change, reconnect and half-life); offline sign-in calls
+> `SignedPermissionSnapshots.RestoreAndApplyAsync(subject, scope, accessor)`. Time: `ISnapshotTimePolicy` (default refuse when
+> `IsUsableForSecurity(10 min)` fails; `AllowFlagged`; custom), decision S3.
 
 ```csharp
 // ✍ Dev writes (client composition root) — one line

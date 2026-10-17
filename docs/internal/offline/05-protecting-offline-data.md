@@ -28,9 +28,18 @@ A device can always lie while it is offline. The design keeps the lie **small** 
 
 ## 2. Signed bundles: one format for everything central sends for offline use (⚑O8)
 
-> **2026-10-05 (⚑I9, proposal):** the format below, the verifier and the version floors move to YFex.Installations (core
+> **2026-10-05 (⚑I9, confirmed 2026-10-07):** the format below, the verifier and the version floors move to YFex.Installations (core
 > `BundleKind`/`BundleHeader`/`BundleAudience` in namespace `YFex.Installations`; `KeyId` becomes the core type). Offline keeps
 > its kinds (manifest, allowances, verifiers, site authorization) and payloads (installations 05 §3).
+> **2026-10-14: built** (Installations I1): `SignedBundle` (signature = core `DetachedSignature`), `BundleVerifier`, `BundleStore` (floors,
+> re-verified at every load), `BundlePublishers` (each kind verifies only against its publisher's keys), `InstallationBundleKinds`
+> (roster, revocations). The code blocks below are the original proposal; the source is normative. Offline adds `OfflineBundleKinds`
+> (Phase 1) and publishes through central's `PullableBundles(...)` (Phase 2).
+> **2026-10-15 (⚑O11, ⚑O14, ⚑O18 confirmed):** Offline's kinds verify only against **Offline's publisher keys** (a `SigningKeyRing` at
+> central), bound with `BundlePublishers.Kind(...)`. Installations learn those public keys from the tenant-signed `offline.publishers`
+> bundle (§2.3). Rule data (`rules.data`) is signed once per published version in the Rules.Admin publish pipeline through the
+> `IRuleDataSigner` hook, which `YFex.Offline.Rules` implements; `RuleSetSync` and `KeyValueRuleDataCache` verify through
+> `IRuleDataVerifier` (§2.1). Terminals sign **delivery receipts** for the versions they accepted (06 §8, ⚑O18).
 
 ```csharp
 // YFex core, namespace YFex.Offline (contract) — canonical binary encoding, never JSON (same rule as audit)
@@ -100,6 +109,11 @@ YFex.Cryptography `IRootKeyProvider` (cryptography 06 §3), and an HSM/KMS seam 
 YFex.Cryptography `SignedPayload` (domain `yfex.bundle.v1`). Public keys reach installations at enrollment and in every manifest. An installation
 accepts a new signing key only if a bundle signed by a key it already trusts announces it. Rotation is therefore a chain, and a
 stolen file cannot introduce a key.
+
+> **2026-10-15 (Phase 2):** the chain is concrete. The tenant's bundle key (from enrollment, Installations) signs one
+> **`offline.publishers`** bundle per tenant listing Offline's publisher public keys (current and previous ring keys). Installations
+> verify it like a roster, keep it with floors, and read Offline's keys from it (`OfflinePublisherKeys`); manifests, allowances and
+> rule data then verify only against those keys. Rotating Offline's ring = publishing a new `offline.publishers` version.
 
 ## 3. Device-bound encryption at rest (fixes F1, F2; ⚑O9) — on YFex.Cryptography since 2026-10-04
 
@@ -180,9 +194,14 @@ check       = every 10 s: wall clock behind our clock by > 2 min → RollbackDet
 
 ### 4.1 Site time: the broker serves and compares time (⚑T12)
 
-> **2026-10-05 (⚑I19, ⚑T13, proposal):** `UseSiteAnchor()` and a new `UsePeerTime()` ride YFex.Installations' peer
+> **2026-10-05 (⚑I19, ⚑T13, confirmed 2026-10-07):** `UseSiteAnchor()` and a new `UsePeerTime()` ride YFex.Installations' peer
 > channel and live there; the site time table and its findings stay here. T13 lets anchored friends be an unauthenticated fill-in
 > source (installations 06 §2.3).
+> **2026-10-14: built** (Installations I4): the `time` channel carries `TimeReply` between friends (not `Sites.Queries.Health`);
+> `UseSiteAnchor()` and `UsePeerTime()` are in YFex.Installations; T13 is in YFex.Time `TimeSelection`. So two bullets below changed:
+> the broker's reply travels on the `time` channel, and with the broker down **anchored peers do fill in** (flagged
+> `Unauthenticated`, never `IsUsableForSecurity`) instead of being evidence only. Still Offline's (Phase 4): the site time table, its
+> findings and resync requests. Still open in YFex.Time: peer-raised `RollbackDetected` and "peers strictly after NTP".
 
 - The **broker** runs YFex.Time anchored to central (+ NTP) and answers `TimeReply` inside `Sites.Queries.Health` (04 §4) through
   `TrustedTimeProvider.CreateReply(...)`: its trusted time, its own uncertainty, flags and stratum + 1. No new port or protocol.
@@ -260,7 +279,7 @@ public sealed record OfflineProvenance(
     OfflineFlags Flags);               // ClockRollback, ProvisionalInstallation, StaleRuleData, CertificateGrace, DeviceApproval, SiteApproval, OfflineProfile…
 ```
 
-## 7. Validity defaults (⚑O11, per site in the manifest's `OfflineLimits`)
+## 7. Validity defaults (⚑O11 ✅ 2026-10-15, per site in the manifest's `OfflineLimits`)
 
 | Data | Default | After it |
 |---|---|---|
@@ -271,3 +290,38 @@ public sealed record OfflineProvenance(
 | Rule data | **no hard expiry** (a pharmacy must keep selling with yesterday's prices); `StaleRuleData` flag after 7 days; per rule set `MaxOfflineAge` can block. Example: a price table capped by the regulated maximum consumer price (PMC) published by CMED | flag, or block that rule set when `MaxOfflineAge` is set |
 | Manifest, revocations | no expiry; staleness flag after 7 days | flag |
 | Installation certificate on the LAN | its validity + 7-day grace | standalone only |
+
+**Confirmed 2026-10-15 (⚑O11, amended by the user): one mechanism for built-in and custom limits.**
+
+```csharp
+// YFex.Offline — built-in keys (default · hard bounds); the source is normative
+public static class OfflineLimitKeys
+{
+    public static OfflineLimit<TimeSpan> PermissionSnapshotValidity { get; }  // "offline.snapshot.validity"     72 h · 1 h–14 d
+    public static OfflineLimit<TimeSpan> SiteAuthorizationValidity { get; }   // "offline.site-authorization.validity" 72 h · 1 h–14 d
+    public static OfflineLimit<TimeSpan> CredentialVerifierValidity { get; }  // "offline.verifiers.validity"      7 d · 1 h–30 d
+    public static OfflineLimit<TimeSpan> AllowanceValidity { get; }           // "offline.allowance.validity"     24 h · 1 h–7 d
+    public static OfflineLimit<TimeSpan> MaxOfflineAge { get; }               // "offline.rules.max-age"           7 d · 1 h–90 d (flag)
+    public static OfflineLimit<TimeSpan> CertificateGrace { get; }            // "offline.certificate.grace"       7 d · 0–30 d
+}
+
+// ✍ App — its own key, same mechanism (values: TimeSpan, int, long, decimal, bool, text)
+public static class FarmaLimits
+{
+    public static readonly OfflineLimit<decimal> MaxOfflineDiscount =
+        OfflineLimit.Decimal("farma.desconto.offline.maximo", defaultValue: 50m, minimum: 0m, maximum: 500m);
+}
+```
+
+| Source (first one that has a value wins) | Where it is set | Checked |
+|---|---|---|
+| 1. per-site admin value | `Sites.Commands.Configure` at central (`sites.configure`), signed into the manifest | bounds checked **when saved**; out of bounds → `Error.Validation`, nothing published |
+| 2. app default | `AddYFexOfflineCentral(c => c.Limits(l => l.Default(key, value)))` | bounds checked at start-up |
+| 3. library default | the key's declaration | — |
+
+The manifest carries the **resolved** values, so terminals read `manifest.Limits.Get(OfflineLimitKeys.MaxOfflineAge)` and never apply
+precedence themselves. A key the terminal does not know is kept and ignored (an older app version). Limits that depend on the
+situation (hours offline, mode, snapshot age) are **rules**, not limits: the optional package `YFex.Offline.Rules` fills an
+`OfflineFacts` situation field via `[SituationSource]`, admins edit the rule's parameters and tables in Rules.Admin, and they reach
+terminals as signed `rules.data` bundles. Central may also derive a built-in value per bundle from a rule set
+(`IOfflineLimitProvider`, consulted between the admin value and the app default). YFex.Offline never references YFex.Rules.

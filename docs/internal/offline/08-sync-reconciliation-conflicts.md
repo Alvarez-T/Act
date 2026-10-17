@@ -106,9 +106,19 @@ batches of ≤ 256 envelopes / 1 MiB. Target ≥ 200 envelopes/s reconciled per 
 | Store price override (06 §5) rejected at central, e.g. the manager had lost the permission before the change | Fact (the override and the sales) | the sales stay; one grouped High item; terminals return to central's price when the rejection reaches them |
 | Same product's price changed at central during the outage | Fact | rule tiers decide: the store override wins in the store unless central sealed the price; sealed → terminals switch, sales get a Low finding |
 
-**Identifiers:** offline-creatable entities use client-generated `Guid.CreateVersion7()` (BCL), so there is no id remapping (⚑O21).
-Human-facing numbers (sale number, NFC-e number) come from per-installation series. Today's design does not need a temporary-id → server-id
-table.
+**Identifiers:** offline-creatable entities use client-generated `Guid.CreateVersion7()` (BCL), so there is no id remapping (⚑O21,
+confirmed 2026-10-14). Human-facing numbers (sale number, NFC-e number) come from per-installation series. Today's design does not need a
+temporary-id → server-id table, which signed envelopes would not allow anyway (central cannot rewrite an id inside signed bytes).
+
+Security rules for these ids (user question, 2026-10-14):
+
+| Concern | Rule |
+|---|---|
+| A compromised terminal picks an id that already exists (another sale, another tenant's customer) to overwrite it | a **create** whose id already exists is a duplicate only when type, scope and content match (idempotency, Phase 0); anything else is refused with a High finding, **never** an overwrite. Ids are checked against the envelope's scope like every other field (06 §9) |
+| The 48-bit timestamp in a v7 id comes from the device clock and can be forged | an id is **not a clock**: nothing orders, expires or trusts by the id's time. Order = installation/site sequence, time = the envelope's `TrustedInstant` |
+| Guessing ids (IDOR) | an id is **not a secret** (74 random bits make guessing impractical, but no check may rely on that): every read and write is authorized as usual |
+| The id reveals when a record was created (millisecond precision) | ids of personal data (customer, prescription) are not printed on receipts, QR codes or public URLs; a public reference uses its own token (Privacy) |
+| Per-installation number series reveal volume and gaps | expected and required by fiscal rules (one NFC-e series per point of sale); voided numbers are Fiscal's concern |
 
 **Causality across installations:** a customer registered on CAIXA-01 and sold to on CAIXA-02 during site mode is ordered by the **site
 sequence**, because both went through the site journal. Central processes a site's envelopes in site-sequence order and a standalone

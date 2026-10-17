@@ -15,7 +15,7 @@
 | Queuing events offline | events are notifications. Facts must be commands (07 §1) |
 | Letting discovery imply trust | discovery gives addresses. Only certificates give trust (04 §2) |
 | One review item per envelope | group per (site, outage, kind, actor) (08 §7) |
-| Automatic election between two site brokers | not offered. One active site broker; manual promotion (02 §3) |
+| Automatic election between two site brokers | not offered. One active site broker, chosen by central only while online and saved in the roster; nothing changes during an outage (02 §4.1) |
 | App code creeping into the site broker | the broker runs only generic YFex.Offline services (sessions, approvals, budgets, claims, custody, feed, time, relays). App decisions run on terminals (`OnOffline<T>`), app projections of shared changes run on terminals (`ISiteFeedProjection<T>`) (⚑O20) |
 | Generic data replication creeping into YFex.Offline | the site feed distributes only envelopes declared `SharedWithSite`; terminals keep their own `ICacheable` caches. A replica framework is a separate design |
 
@@ -35,8 +35,15 @@
 
 ## 3. Testing strategy
 
+> **2026-10-14:** YFex.Installations already ships `InstallationHarness` on YFex.Networking's `InMemoryNetwork` (enrolled
+> installations, mTLS peer channels, partitions on one simulated LAN), and YFex.Time ships its fake clock. `YFex.Offline.Testing` builds
+> on both instead of a harness of its own; I5 adds the chaos parts (partitions, restarts, disk-image restore). The TLS tests below
+> already exist in Installations (I3: forged/replayed beacons, rogue host, wrong scope, revoked, untrusted root); Offline re-runs only the
+> cases that touch its own channels.
+
 - **`YFex.Offline.Testing`:** an in-memory **multi-installation harness**. Central, site broker and terminals are real DI containers in one
-  process, connected by the in-memory Fusion bridge already used by `YFex.Messaging.Rpc.Tests`. It offers:
+  process, connected by the in-memory Fusion bridge already used by `YFex.Messaging.Rpc.Tests` and by `InstallationHarness` peer
+  channels. It offers:
   - `harness.Partition(installation, from: central)` / `.Heal()`, `harness.Kill(siteBroker)`, `harness.Restart(installation, keepDisk: true)`;
   - `FakeTrustedClock` per installation (`SetWallClock`, `AdvanceMonotonic`, `PowerOff(duration)`);
   - `harness.RestoreDiskImage(installation, snapshot)` for rollback tests;
@@ -48,10 +55,10 @@
 - **Crypto golden tests:** canonical encodings of `BundleHeader`, `OfflineEnvelope`, receipts and site approval tokens are pinned by
   byte-for-byte golden files (same practice as the approval-token golden test in ⚑Z12).
 - **Two-process test for F1:** write with the OS-key provider, restart the process, read back. This is Phase 0's first test.
-- **TLS tests:** a real Kestrel on loopback with generated test CA/certificates: wrong site, wrong role, revoked, expired + grace,
-  provisional with pairing off, untrusted root.
-- **AOT smoke:** `YFex.Offline.AotSmoke` publishes native with 0 warnings: bundle verify, envelope sign/verify, trusted clock,
-  validator, in-memory harness subset.
+- **TLS tests:** on the Installations peer endpoint over loopback with test CAs (unique names, see installations ⚑I25 notes): wrong
+  site, wrong role, revoked, expired + grace, provisional with pairing off, untrusted root — against the `offline.*` channels.
+- **AOT smoke:** `YFex.Offline.AotSmoke` publishes native with 0 warnings: Offline bundle kinds through the Installations verifier,
+  envelope sign/verify, trusted clock, in-memory harness subset.
 
 ## 4. Performance budgets (benchmarks gate Phase 3)
 

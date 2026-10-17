@@ -21,7 +21,7 @@
 | `CanonicalWriter` spec (02 §9) | Audit ⚑A31 | the audit engine built its own entry codec (audit format, stays). The shared writer is built in the library (⚑K2/K11 confirmed 2026-10-04); the audit codec may adopt it later |
 | `ValidityPeriod` | core (⚑Z13) | **done** (`YFex/src/YFex/ValidityPeriod.cs`) |
 | `[Sensitive]`, `DataSensitivity` | core Privacy Tier 1 | **done** |
-| approval token move | Authorization ⚑Z12 | approved; **the library side is ready (2026-10-04)**: signing slice of Phase 2 + `MessageAuthentication` + the v1 golden (§5 "Handoff to Authorization") |
+| approval token move | Authorization ⚑Z12 | **done (Authorization 4b, 2026-10-16)**: v2 tokens on `MessageAuthentication` (ring `approvals/server`) and `SignedPayload` (evidence key); v1 dropped by the user (Authorization A9), so the v1 golden and `MessageDomain.Raw` verification are not used |
 | `TrustedTimeProvider` | Offline ⚑O10 | pending; the library takes any `TimeProvider` |
 
 | Other designs need from this one | Their phase | This phase |
@@ -713,6 +713,31 @@ The user asked for instructions the Offline session can act on. The library side
 - 11 §2: mark the cryptography rows done (Phases 0–3 ✅).
 - 11 §3: Phase 1 uses `CngSigningKeyStore` directly (no own CNG code); Phase 2 uses `CertificateAuthority`/`CertificateTrust`/`SigningKeyRing`.
 - README: status line.
+
+### 2026-10-14 — `ICertificateKeyStore` (additive; by the YFex.Installations I3 session, no cryptography session was running)
+
+Installations' peer endpoint must attach an installation's transport key to its certificate for TLS **through the key store** on every
+OS, and nothing outside this library may create ECDsa keys (architecture test). Added, additive only:
+- `ICertificateKeyStore : ISigningKeyStore` (`Signing/SigningContracts.cs`): `ValueTask<X509Certificate2> CopyWithPrivateKeyAsync(certificate,
+  keyName, cancellationToken)` — the async shape crypto 14 §2.1 designed for `FileSigningKeyStore`, which should implement it when built.
+- `CngSigningKeyStore` implements it (wraps the existing synchronous `CopyWithPrivateKey`).
+- `InMemorySigningKey.CopyWithPrivateKey(certificate)` and `InMemorySigningKeyStore : ICertificateKeyStore` (.Testing): on Windows the
+  PKCS#12 round trip of 14 §2.5 (Schannel refuses ephemeral keys); elsewhere the direct `CopyWithPrivateKey`.
+- Test `CertificateKeyStoreTests` (mutual TLS over loopback with two in-memory stores; wrong certificate → `ArgumentException`; missing key
+  → `InvalidOperationException`). Cryptography tests 139 (+1) / Windows 10 / Xml 16 green; `ArchitectureTests` unchanged and green, no
+  allow-list entry. Backups: `C:\Temp\installations-backup\I3\YFex.Cryptography`.
+- **Finding for 14 §2.5 / §6 (measured 2026-10-14, Windows 11, TPM 2.0):** a user-scope **TPM** key (Platform Crypto Provider) works as a TLS
+  **client** credential but Schannel refuses it as a **server** credential (`SEC_E_UNKNOWN_CREDENTIALS`, TLS 1.3 and 1.2). The earlier
+  "mutual TLS with CNG keys" test used software KSP keys (`preferHardware: false`). Machine-scope TPM keys are not verified (needs an
+  elevated run). Details: installations 09 §4 R6, ⚑I25.
+- **Finding (Windows):** `SslStreamCertificateContext.Create(certificate, additionalCertificates)` adds the intermediates to the user's CA
+  store. Tests that mint a new same-named CA per run filled `CurrentUser\CA` until `X509Chain.Build` threw "unknown chain building error" for
+  every certificate with that issuer name. Installations no longer passes intermediates; test CAs here and in Installations should carry a
+  unique name.
+- **Measured cost:** `CertificateTrust.Validate` of one installation certificate ≈ 20 ms on Windows (`X509Chain` with a custom root,
+  BenchmarkDotNet in-process; unchanged after removing same-named stale CAs from the lookup), the largest part of the peer handshake
+  (≈ 31 ms for both sides + a request). A validated-chain cache keyed by the leaf is a
+  possible optimization for this library (not done: security-sensitive, not needed for the I3 budget).
 
 ### 2026-10-07 — Platform signing-key stores: evaluation and design (14) — nothing coded
 

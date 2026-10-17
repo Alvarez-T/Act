@@ -142,8 +142,7 @@ public sealed class FusionMessageBus : IDispatcher
     private readonly IEventBus _eventBus;
     private readonly IServiceProvider _sp;
     private readonly CallPrincipalSource _principal;
-    private readonly CallContextClientBuilder? _callContext;
-    private readonly IScopeContext? _scope;
+    private readonly CallContextClientHeaders _headers;
 
     internal FusionMessageBus(
         FrozenDictionary<Type, QueryDispatchEntry> queries,
@@ -166,8 +165,7 @@ public sealed class FusionMessageBus : IDispatcher
         _eventBus = eventBus;
         _sp = sp;
         _principal = new CallPrincipalSource(sp, registry);
-        _callContext = sp.GetService<CallContextClientBuilder>();
-        _scope = _callContext?.Tenant == true ? sp.GetService<IScopeContext>() : null;
+        _headers = new CallContextClientHeaders(sp);
     }
 
     // ── Call context (D29): per-call headers ─────────────────────────────────
@@ -176,24 +174,8 @@ public sealed class FusionMessageBus : IDispatcher
     // queued with (OutboxReplayContext), so a replay after a lost reply is executed once by the server.
     private static Guid CommandIdempotencyKey() => OutboxReplayContext.Current?.IdempotencyKey ?? Guid.CreateVersion7();
 
-    private async ValueTask<RpcHeader[]?> HeadersAsync(CancellationToken ct, Guid? idempotencyKey = null)
-    {
-        RpcHeader[]? headers = null;
-        if (idempotencyKey is { } key)
-            headers = headers.With(new RpcHeader(IdempotencyHeaders.Key, key.ToString("N")));
-        if (_callContext is null) return headers;
-        if (_callContext.TokenProvider is { } provider
-            && await provider(_sp, ct).ConfigureAwait(false) is { Length: > 0 } token)
-            headers = headers.With(new RpcHeader(_callContext.TokenHeader, _callContext.TokenScheme + " " + token));
-        if (_callContext.Tenant)
-        {
-            // Offline design F4: a replay sends the scope captured when the command was queued, not the scope active now.
-            var scope = OutboxReplayContext.Current?.Scope
-                ?? (_scope.EffectiveIdentity() is { IsEmpty: false } current ? current.ToString() : null);
-            if (scope is { Length: > 0 }) headers = headers.With(new RpcHeader(CallContextHeaders.Scope, scope));
-        }
-        return headers;
-    }
+    private ValueTask<RpcHeader[]?> HeadersAsync(CancellationToken ct, Guid? idempotencyKey = null)
+        => _headers.GetAsync(ct, idempotencyKey);
 
     // The proxy call is made synchronously inside the setup scope: Fusion's RpcInterceptor consumes it for the outbound
     // call (regular calls; Fusion compute-client calls create their own setup and carry no custom headers).

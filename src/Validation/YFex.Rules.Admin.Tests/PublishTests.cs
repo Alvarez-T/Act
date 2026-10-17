@@ -112,23 +112,6 @@ public class PublishTests
     }
 
     [Fact]
-    public async Task ApproveDecision_issues_a_token_only_to_holders_of_the_permission()
-    {
-        var f = new AdminFixture();
-        var denied = await f.Dispatcher.CommandAsync<Commands.ApproveDecision, ApprovalToken>(new("sales.discount.override", 42));
-        denied.TryGetError(out var e).Should().BeTrue();
-        e.Kind.Should().Be(ErrorKind.Forbidden);
-
-        f.User.Name = "mgr42";
-        f.User.Permissions.Add("sales.discount.override");
-        var ok = await f.Dispatcher.CommandAsync<Commands.ApproveDecision, ApprovalToken>(new("sales.discount.override", 42));
-        ok.TryGetValue(out ApprovalToken? token).Should().BeTrue();
-        token!.ApproverId.Should().Be("mgr42");
-        var request = new ApprovalRequest(PricingPermissions.DiscountOverride, default, default);
-        f.Tokens.Verify(token.ToToken(), in request, 42, token.IssuedAt).IsValid.Should().BeTrue();
-    }
-
-    [Fact]
     public async Task History_and_rule_definition_as_applied()
     {
         var f = new AdminFixture();

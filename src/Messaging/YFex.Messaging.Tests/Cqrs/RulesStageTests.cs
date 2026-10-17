@@ -1,4 +1,8 @@
-﻿using YFex.Cqrs;
+﻿using YFex.Authorization;
+using YFex.Authorization.Public;
+using Microsoft.Extensions.DependencyInjection;
+using YFex.Cqrs;
+using YFex.Cqrs.Runtime;
 using YFex.Messaging.Tests.Fixtures;
 using YFex.Rules;
 using CloseCheckout = YFex.Messaging.Tests.Fixtures.CheckoutAggregate.Commands.CloseCheckout;
@@ -57,9 +61,10 @@ public class RulesStageTests
         error.TryGetValue(out ApprovalRequired approval).Should().BeTrue();
         approval.Approvals.Requires(CheckoutPermissions.DiscountOverride).Should().BeTrue();
         approval.DecisionFingerprint.Should().NotBe(0UL);
+        approval.DecisionDigest.IsZero.Should().BeFalse();
 
-        // Manager approves THIS outcome (server-issued HMAC token), the client resends with the token.
-        var token = f.Tokens.Issue("mgr42", "sales.discount.override", approval.DecisionFingerprint, DateTimeOffset.UtcNow);
+        // Manager approves THIS outcome (server-issued HMAC token over the digest), the client resends with the token.
+        var token = await f.Tokens.IssueAsync(new ApprovalGrant("mgr42", null, CheckoutPermissions.DiscountOverride, approval.DecisionDigest));
         var approved = await f.Dispatcher.CommandAsync<CloseCheckout, Money>(Card(discount: 8) with
         {
             DecisionFingerprint = approval.DecisionFingerprint, Approvals = [token],
@@ -71,6 +76,74 @@ public class RulesStageTests
         var abused = await f.Dispatcher.CommandAsync<CloseCheckout, Money>(Card(discount: 12) with { Approvals = [token] });
         abused.TryGetError(out var again).Should().BeTrue();
         again.Kind.Should().Be(ErrorKind.ApprovalRequired);
+    }
+
+    [Fact]
+    public async Task Offline_device_approval_of_a_rule_limit_is_capped_and_flagged()
+    {
+        var audit = new FlagRecorder();
+        var pos = new YFex.Installations.InstallationId(Guid.Parse("0199e3a0-0000-7000-8000-000000000007"));
+        var f = new CheckoutFixture(
+            caps: [new OfflineApprovalCap(CheckoutPermissions.DiscountOverride, RawValue.From(Percentual.FromPercentage(10)))],
+            approvals: a => a.AllowOffline(CheckoutPermissions.DiscountOverride, TimeSpan.FromHours(48)),
+            configure: s =>
+            {
+                s.AddSingleton<IApprovalSignatureVerifier, AcceptingDeviceSignatures>();
+                s.AddSingleton<IApprovalOriginAccessor>(new FixedOrigin(new ApprovalOrigin(pos)));
+                s.AddSingleton<IPermissionDirectory>(new YFex.Authorization.Testing.FakePermissionDirectory().Grant("mgr42", CheckoutPermissions.DiscountOverride));
+                s.AddSingleton<IDecisionAuditSink>(audit);
+            });
+
+        var within = await RequiredAsync(f, Card(discount: 8));
+        var approved = await f.Dispatcher.CommandAsync<CloseCheckout, Money>(Card(discount: 8) with
+        {
+            DecisionFingerprint = within.DecisionFingerprint, Approvals = [Device(pos, within.DecisionDigest)],
+        });
+        approved.TryGetValue(out Money final).Should().BeTrue();
+        final.Should().Be(new Money(920));
+        audit.Count.Should().Be(1);                                                     // offline approvals are always reviewed (D34)
+
+        var over = await RequiredAsync(f, Card(discount: 12));                          // above the 10 % offline cap
+        var refused = await f.Dispatcher.CommandAsync<CloseCheckout, Money>(Card(discount: 12) with
+        {
+            DecisionFingerprint = over.DecisionFingerprint, Approvals = [Device(pos, over.DecisionDigest)],
+        });
+        refused.TryGetError(out var error).Should().BeTrue();
+        error.Kind.Should().Be(ErrorKind.ApprovalRequired);
+    }
+
+    private static async Task<ApprovalRequired> RequiredAsync(CheckoutFixture f, CloseCheckout command)
+    {
+        (await f.Dispatcher.CommandAsync<CloseCheckout, Money>(command)).TryGetError(out var error).Should().BeTrue();
+        error.TryGetValue(out ApprovalRequired approval).Should().BeTrue();
+        return approval;
+    }
+
+    private static ApprovalToken Device(YFex.Installations.InstallationId pos, YFex.Cryptography.Hash256 digest)
+        => new(ApprovalTokenKind.Device, "mgr42", null, CheckoutPermissions.DiscountOverride, digest,
+            ValidityPeriod.For(DateTimeOffset.UtcNow.AddMinutes(-1), TimeSpan.FromMinutes(15)), YFex.Cryptography.KeyId.New(), pos, "ok"u8.ToArray());
+
+    /// <summary>Stand-in for the device signature check (real one: YFex.Authorization.Installations.Central).</summary>
+    private sealed class AcceptingDeviceSignatures : IApprovalSignatureVerifier
+    {
+        public ApprovalTokenKind Kind => ApprovalTokenKind.Device;
+        public ValueTask<ApprovalCheck> VerifySignatureAsync(ApprovalToken token, ReadOnlyMemory<byte> body, CancellationToken cancellationToken = default)
+            => ValueTask.FromResult(token.Signature.Span.SequenceEqual("ok"u8) ? ApprovalCheck.Valid : ApprovalCheck.InvalidSignature);
+    }
+
+    private sealed class FixedOrigin(ApprovalOrigin origin) : IApprovalOriginAccessor
+    {
+        public ApprovalOrigin Current => origin;
+    }
+
+    private sealed class FlagRecorder : IDecisionAuditSink
+    {
+        public int Count;
+        public ValueTask OnFlaggedAsync(object message, object decision, ulong clientFingerprint, CancellationToken ct)
+        {
+            Interlocked.Increment(ref Count);
+            return ValueTask.CompletedTask;
+        }
     }
 
     [Fact]

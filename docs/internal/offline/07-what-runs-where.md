@@ -19,9 +19,9 @@ Columns: **C** = central. **B** = site broker while central is unreachable. **T�
 | **Site feed** | — | orders and relays `SharedWithSite` envelopes (doesn't interpret them) | — | sends its shared changes; runs `ISiteFeedProjection<T>` for others' | applies its own; shares later |
 | **Offline queue** | idempotency store (Phase 0, F3) + reconciliation pipeline | **site journal**: custody of terminal envelopes, forwards to C | outbox empty (normally) | outbox → custody to B on receipt | outbox (custody until B or C receipt) |
 | **Client caches** (`ICacheable`) | — (source of truth) | ✘ none | local cache | local cache | local cache (stale flags shown) |
-| **Trusted clock** | source of anchors | anchor for the LAN (signed time) | anchored by C | anchored by B | high-water + monotonic only |
-| **Logging** (YFex.Logging) | ingest server | **relay** (`AddYFexLoggingRelay`, logging 05 §6) | spool → C | spool → B relay | spool on disk |
-| **Audit** (YFex.Audit) | inbox + sequencer | **relay** (forwards signed batches unchanged, audit 05 §6) + its own journal | journal → C | journal → B | journal (installation chain, device-signed heads) |
+| **Trusted clock** | source of anchors | anchor for the LAN (`time` channel, Installations) | anchored by C | anchored by B (`UseSiteAnchor`) | high-water + monotonic; anchored peers fill in, flagged `Unauthenticated` (⚑T13) |
+| **Logging** (YFex.Logging) | ingest server | a friend on the Installations **`relay`** channel, like any other (⚑O26) | spool → C | spool → any friend that reaches C | spool on disk |
+| **Audit** (YFex.Audit) | inbox + sequencer | a friend on the **`relay`** channel (forwards signed batches unchanged) + its own journal | journal → C | journal → any friend that reaches C | journal (installation chain, device-signed heads) |
 | **Tenancy scope** | any scope (by caller) | pinned to its site | pinned to its site | pinned | pinned |
 | **Events / live state** | Fusion compute + server-pushed events | pushes broker events to terminals (approval issued, budget changed, feed entry) | live | feed + broker events | local only. Events are notifications, not facts: they are **not** queued. Facts travel as commands |
 | **Jobs** (YFex.Jobs) | hub | ✘ (no app jobs on the broker) | runs its own `FailOpen` jobs | same | same; `FailClosed` jobs wait |
@@ -31,23 +31,24 @@ Columns: **C** = central. **B** = site broker while central is unreachable. **T�
 ## 2. What the site broker process hosts
 
 ```
- PC-GERENTE — Windows service "YFex Site Broker" (generic YFex.Offline.Broker host; Kestrel :7443, TLS 1.3, client certificates required)
+ PC-GERENTE — Windows service "YFex Site Broker" (generic YFex.Offline.Broker host; Installations peer endpoint :7443, mTLS, ⚑O31)
  ├─ Sessions: verify code + PIN/password (site verifier bundle), issue terminal-bound session tokens
  ├─ Permission answers: site authorization bundle evaluated by the YFex.Authorization library
  ├─ Approvals: site-signed tokens, daily caps
  ├─ Coordination: budget reservations + terminal slices, unique claims
  ├─ Custody: site journal of signed envelopes, receipts, forwarding to central in site-sequence order
  ├─ Site feed: orders and pushes SharedWithSite envelopes to terminals (opaque relay)
- ├─ Bundle distribution: manifest, revocations, rule data, snapshots for terminals (re-served signed bytes, never re-signed)
- ├─ Relays: logging spool relay, audit batch relay (end-to-end signed: the relay needs no trust)
- ├─ Time anchor, LAN beacon, pairing endpoint (when enabled)
+ ├─ Site time table + findings (from the TimeReply friends exchange on the `time` channel)
+ ├─ From YFex.Installations (built, not Offline code): bundle gossip (re-served signed bytes, never re-signed), `relay` channel
+ │  for logging/audit/envelopes, `time` channel, signed beacon, pairing (I5, when enabled)
  └─ Client of central (same RPC client stack as a terminal, role SiteBroker)
  No app assembly is referenced (architecture test). The manager's desktop app on the same PC is an ordinary terminal.
 ```
 
 **Hosting (⚑O20):** a Windows service, so the store keeps working when the manager logs off or closes the app. The service runs under
-its own low-privilege account, and its installation keys are machine keys in the TPM. Because the host is generic, it is installed
-once per site and updated only when the YFex.Offline protocol changes, not with every app release.
+its own low-privilege account, and its installation keys are machine keys in the TPM. Because the host is generic, it is updated only
+when the YFex.Offline protocol changes, not with every app release. **Since ⚑O2 (2026-10-15)** it is installed on every eligible PC of the
+site, dormant except on the one central marked `Active` in the roster (02 §4.1).
 
 ## 3. Central unreachable, internet up (situation 2b)
 

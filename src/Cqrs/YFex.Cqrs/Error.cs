@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using YFex.Authorization.Public;
+using YFex.Cryptography;
 using YFex.Rules;
 using YFex.Validation;
 
@@ -33,8 +34,12 @@ public readonly record struct Forbidden(Denial Denial);
 public readonly record struct ValidationProblem(ViolationList Violations);
 /// <summary>Error case: a conflict (stale version, changed decision); may carry violations explaining it.</summary>
 public readonly record struct Conflict(string Message, ViolationList Violations = default);
-/// <summary>Error case: approvals needed, bound to the decision fingerprint (request an approval token for it).</summary>
-public readonly record struct ApprovalRequired(ApprovalRequestList Approvals, ulong DecisionFingerprint, ViolationList Violations = default);
+/// <summary>
+/// Error case: approvals needed. Each approval token binds <see cref="DecisionDigest"/> (SHA-256, authorization-consolidation decision
+/// A5); <see cref="DecisionFingerprint"/> stays for equality and UI.
+/// </summary>
+public readonly record struct ApprovalRequired(ApprovalRequestList Approvals, ulong DecisionFingerprint, ViolationList Violations = default,
+    Hash256 DecisionDigest = default);
 
 /// <summary>
 /// Failure payload of <see cref="Result"/>, <see cref="QueueableResult"/> and <see cref="CacheableQueryResult{T}"/> — a
@@ -51,7 +56,7 @@ public readonly record struct ApprovalRequired(ApprovalRequestList Approvals, ul
 /// {
 ///     case ErrorKind.Unauthenticated: await session.LoginAgainAsync(); break;
 ///     case ErrorKind.Forbidden when error.TryGetValue(out Forbidden f): toast($"Requer: {catalogs.DisplayText(f.Denial.Missing)}"); break;
-///     case ErrorKind.ApprovalRequired when error.TryGetValue(out ApprovalRequired a): await approvals.ShowAsync(a.Approvals, a.DecisionFingerprint); break;
+///     case ErrorKind.ApprovalRequired when error.TryGetValue(out ApprovalRequired a): await approvals.ShowAsync(a.Approvals, a.DecisionDigest); break;
 /// }
 /// </code>
 /// </remarks>
@@ -63,7 +68,7 @@ public readonly struct Error : IUnion
     private readonly object? _payload;                    // Forbidden: boxed Denial; ApprovalRequired: ApprovalPayload
     private readonly ErrorKind _kind;
 
-    private sealed record ApprovalPayload(ApprovalRequestList Approvals, ulong DecisionFingerprint);
+    private sealed record ApprovalPayload(ApprovalRequestList Approvals, ulong DecisionFingerprint, Hash256 DecisionDigest);
 
     private Error(ErrorKind kind, string? message, in ViolationList violations, object? payload)
     {
@@ -82,7 +87,7 @@ public readonly struct Error : IUnion
     public Error(global::YFex.Cqrs.ApprovalRequired value)
         : this(ErrorKind.ApprovalRequired,
             value.Approvals.IsEmpty ? "Approval required." : "Approval required: " + value.Approvals[0].Permission,
-            value.Violations, new ApprovalPayload(value.Approvals, value.DecisionFingerprint)) { }
+            value.Violations, new ApprovalPayload(value.Approvals, value.DecisionFingerprint, value.DecisionDigest)) { }
 
     public ErrorKind Kind => _kind;
     public bool HasValue => _kind != ErrorKind.None;
@@ -123,7 +128,7 @@ public readonly struct Error : IUnion
     private global::YFex.Cqrs.ApprovalRequired ApprovalCase()
     {
         var payload = (ApprovalPayload)_payload!;
-        return new(payload.Approvals, payload.DecisionFingerprint, _violations);
+        return new(payload.Approvals, payload.DecisionFingerprint, _violations, payload.DecisionDigest);
     }
 
     public static implicit operator Error(NotFound value) => new(value);
@@ -151,6 +156,13 @@ public readonly struct Error : IUnion
     /// </summary>
     public static Error ApprovalRequired(in ApprovalRequestList approvals, ulong fingerprint, in ViolationList violations = default)
         => new(new global::YFex.Cqrs.ApprovalRequired(approvals, fingerprint, violations));
+
+    /// <summary>
+    /// <see cref="ErrorKind.ApprovalRequired"/> with the digest the approval tokens must bind: the client asks the approvers
+    /// (<c>Approvals.Commands.Approve(permission, digest)</c>), then resends the command with one token per permission.
+    /// </summary>
+    public static Error ApprovalRequired(in ApprovalRequestList approvals, ulong fingerprint, in Hash256 digest, in ViolationList violations = default)
+        => new(new global::YFex.Cqrs.ApprovalRequired(approvals, fingerprint, violations, digest));
 
     /// <summary>
     /// The error of a denied authorization verdict: <see cref="ErrorKind.Unauthenticated"/> or

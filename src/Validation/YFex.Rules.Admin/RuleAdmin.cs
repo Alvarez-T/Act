@@ -5,7 +5,7 @@ namespace YFex.Rules.Admin;
 
 /// <summary>
 /// Runtime rule editing (05 §4, D11/D12/D33): publish table versions, parameter values and overrides; read history and
-/// "how was the rule when it was applied" (06 §6); issue approval tokens (09 §6, D34). Tier paths travel as
+/// "how was the rule when it was applied" (06 §6). Approval tokens moved to <c>YFex.Cqrs.Approvals</c> (authorization-consolidation 4b). Tier paths travel as
 /// <see cref="RuleTierPaths"/> text, payloads as the JSON documents of <see cref="RuleDataCodec"/> / <c>RowsJson</c>.
 /// Handlers live in this module; apps register them with <c>AddYFexRulesAdmin()</c>.
 /// </summary>
@@ -39,13 +39,6 @@ public partial class RuleAdmin
         [MemoryPackable]
         public sealed partial record PublishRule(string RuleSet, string RuleCode, string TierPath, long BaseVersion, DateOnly EffectiveFrom,
             byte[] Spec, string? Note) : ICommand<long>;
-
-        /// <summary>
-        /// A manager approves ONE decision outcome (its fingerprint) for a permission; executed with the APPROVER's
-        /// credentials, who must hold <see cref="Permission"/> (D34, online HMAC).
-        /// </summary>
-        [MemoryPackable]
-        public sealed partial record ApproveDecision(string Permission, ulong Fingerprint) : ICommand<ApprovalToken>;
     }
 
     public static partial class Queries
@@ -56,6 +49,13 @@ public partial class RuleAdmin
         /// </summary>
         [MemoryPackable]
         public sealed partial record GetRuleData(string RuleSet, long AfterVersion = 0) : IQuery<RuleDataPayload[]>, ICacheable;
+
+        /// <summary>
+        /// <see cref="GetRuleData"/> with each version's signed form (offline 05 §2.1, fixes F6): devices with an
+        /// <see cref="IRuleDataVerifier"/> sync through it. Needs an <see cref="IRuleDataSigner"/> at the server.
+        /// </summary>
+        [MemoryPackable]
+        public sealed partial record GetSignedRuleData(string RuleSet, long AfterVersion = 0) : IQuery<SignedRuleDataPayload[]>, ICacheable;
 
         /// <summary>
         /// What changed in <see cref="Version"/> of a stream compared with the version before it (or the code rows for a
@@ -175,17 +175,6 @@ public sealed partial record SimulationResult(int Evaluated, int Changed, int Ve
         return new(r.Evaluated, r.Changed, r.VerdictChanged, r.NewlyDenied, r.NewlyNeedingApproval,
             r.FinalDelta.TryGet(out decimal d) ? d : null, r.FinalDelta.Type?.Key, r.Unreadable, examples);
     }
-}
-
-/// <summary>Wire form of an <see cref="OverrideToken"/> (the client puts <see cref="ToToken"/> into its <c>IDecisionBound</c> command).</summary>
-[MemoryPackable]
-public sealed partial record ApprovalToken(OverrideTokenKind Kind, string ApproverId, string Permission, ulong Fingerprint,
-    DateTimeOffset IssuedAt, DateTimeOffset ExpiresAt, string KeyId, byte[] Signature)
-{
-    public static ApprovalToken From(in OverrideToken t)
-        => new(t.Kind, t.ApproverId, t.Permission, t.Fingerprint, t.IssuedAt, t.ExpiresAt, t.KeyId, t.Signature.ToArray());
-
-    public OverrideToken ToToken() => new(Kind, ApproverId, Permission, Fingerprint, IssuedAt, ExpiresAt, KeyId, Signature);
 }
 
 /// <summary>

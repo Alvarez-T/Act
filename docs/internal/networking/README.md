@@ -4,7 +4,10 @@
 > ⚑N8–N27 confirmed 2026-10-07 as recommended (N8 = **Survey**, N9 = packet capture stays in YFex.Security). Implementation log in
 > [06](06-phases-and-acceptance.md). **Phases 0 (core types), 1 (`IServerConnection`) and 2 (repo + conditions/probes/endpoints) DONE
 > 2026-10-07**; **phase 3 (`.Windows`, `.Vendors`, neighbours, Wake-on-LAN, proxy/VPN, multi-homing, fingerprint evidence) DONE
-> 2026-10-07**; next phase 4 (DNS client, traceroute, TLS check, diagnosis). Open: ⚑N29 (macOS).
+> 2026-10-07**; **phase 4 (DNS wire client + DoH opt-in, traceroute, TLS endpoint check with clock hints, diagnosis report, opt-in
+> public IP) DONE 2026-10-13**; **phase 5 (beacons with signer/verifier hook, mDNS/DNS-SD, SSDP, WS-Discovery, `InMemoryNetwork` +
+> `ChaosStream`) DONE 2026-10-13**; **phase 6 (Telnet moved from Devices + `TelnetSession`, SNMP v2c/v3 client with a bounded walk,
+> `SnmpTestAgent`) DONE 2026-10-14**; next phase 7 (survey package), the last one. Open: ⚑N29 (macOS).
 > **Repo:** `C:\Dev\YFex\YFex.Networking` (sibling, like YFex.Time and YFex.Cryptography). **Core types:** namespace `YFex.Networking`
 > in YFex core (`YFex/src/YFex/Networking`, types only, like ⚑K2).
 

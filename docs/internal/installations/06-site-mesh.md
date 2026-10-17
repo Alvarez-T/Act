@@ -27,6 +27,11 @@ and can sharing be scoped by tenancy level? The answer given in chat, now writte
 | **scarce resources** | — | — | partitioned slices (⚑O14) + coordinator; without it **accept and flag** at reconciliation | Offline | Offline 3–4 |
 | **query caches** | — | — | not offered (⚑O28) | — | — |
 
+> **As built (I4, 2026-10-14; 08 §5):** `time` = `PeerTimeChannelHandler` + `SiteAnchorTimeSource` / `PeerTimeSource` slots
+> (`UseSiteAnchor()`, `UsePeerTime()`); `relay` = `InstallationRelay` (both ends) + `.Central` `CentralRelayIngress` + `.Rpc`
+> `IInstallationCentralLink`; `bundles` = `BundleGossip` (beacon-triggered pulls, announcements, audience check before offering, `Carry`
+> for site members) + central pulls over RPC. Consumers (Logging, Audit, Offline) are their sessions' work.
+
 ### 2.1 Relay in detail (why "any friend" is safe)
 
 ```
@@ -77,7 +82,9 @@ backward is refused with `SourcesDisagree`), and they never make security usable
   answers with `TimeProvider.CreateTimeReply(receivedTimestamp)`. On the `time` channel the wire is an explicit versioned form like
   `CentralTimeWire` (version byte + `TimeReply.TryWriteBytes`), never MemoryPack (it copies unmanaged structs as raw memory). Tests
   use `YFex.Time.Testing` (`FakeDeviceClock`, `FakeTimeSource`) and the pattern in `YFex.Time.Tests/SiteTimeTests.cs`.
-- The time session updates time README §5 and §8.1/§8.3 and the code after approval.
+- The time session updates time README §5 and §8.1/§8.3 and the code after approval. **Done in I4 (2026-10-14)** for the rule itself (no
+  Time session was running): `TimeSelection.ToCandidate` and time README §5 (T13 row) and §10; §8.1/§8.3 prose still describes the earlier
+  plan (broker health probe, peers evidence only) and is marked there.
 
 ## 3. What stays in YFex.Offline (and what it gets from here)
 
@@ -100,6 +107,11 @@ both sides of a flaky switch would both win, and both would hand out the same ag
 protocol's failure modes. The roster names the coordinator (normally the broker; optionally a standby that a manager promotes with a
 signed site action); without a coordinator, terminals spend **their own pre-cut slices** and exclusive claims are **accepted and
 flagged** at reconciliation. The mesh changes only *how messages travel*, never *who decides*.
+
+> **2026-10-15 (Offline ⚑O2, confirmed by the user):** the coordinator is chosen **automatically by central while online** and saved in
+> the roster: every eligible PC runs a dormant `SiteBroker` installation, central ranks them and marks one `Active`, the others
+> `Standby`; an admin may pin one; nothing changes during an outage (offline 02 §4.1). Asks of this library (for Offline Phase 4):
+> terminals report friend reachability to central, firewall-rule presence in diagnostics (I5), and ⚑I25 for every listening candidate.
 
 ## 5. Scenarios at Loja Centro (mesh = `AllInstallations`)
 

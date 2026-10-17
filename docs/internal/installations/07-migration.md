@@ -60,6 +60,10 @@ new ConsentEntry(…, Installation: LocalInstallation.Current!.Id, …, Signatur
 
 ## 4. Rules `IDeviceKeyStore` → Authorization 4b
 
+> **Done 2026-10-16** (authorization-consolidation 09, Phase 4b): `DeviceApprovalTokenIssuer` (YFex.Authorization.Installations) signs
+> with the evidence key; `DeviceApprovalSignatures` + `AddYFexDeviceApprovalVerification()` (….Installations.Central) verify through
+> `IInstallationKeyDirectory`. v1 was dropped (Authorization A9), so the `[Obsolete]` period below did not happen: `IDeviceKeyStore` is deleted.
+
 Authorization 4b already moves the token family (⚑Z12, `09-phases-and-acceptance.md:113-122`) and still needs "an app-supplied
 `IPublicKeyDirectory`" (`README.md:154`). That directory is this library's:
 

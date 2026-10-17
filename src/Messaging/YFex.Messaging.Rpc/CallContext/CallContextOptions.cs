@@ -138,6 +138,29 @@ public sealed class CallContextClientBuilder
         Tenant = true;
         return this;
     }
+
+    internal List<(string Name, Func<IServiceProvider, CancellationToken, ValueTask<string?>> Provider)> ExtraHeaders { get; } = [];
+
+    /// <summary>
+    /// Sends an additional per-call header (e.g. the installation assertion of YFex.Installations.Rpc) next to the token and the
+    /// tenant, with every call made through <see cref="FusionMessageBus"/>. The provider is called per call (cache inside); null or
+    /// empty = header omitted. Independent of <see cref="SendToken"/>, so libraries can add headers without taking the token slot.
+    /// </summary>
+    /// <exception cref="ArgumentException">A reserved header (token, scope, idempotency) or a header added twice.</exception>
+    public CallContextClientBuilder SendHeader(string headerName, Func<IServiceProvider, CancellationToken, ValueTask<string?>> valueProvider)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(headerName);
+        ArgumentNullException.ThrowIfNull(valueProvider);
+        if (string.Equals(headerName, TokenHeader, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(headerName, CallContextHeaders.Scope, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(headerName, IdempotencyHeaders.Key, StringComparison.OrdinalIgnoreCase))
+            throw new ArgumentException($"'{headerName}' is reserved by the call context.", nameof(headerName));
+        foreach ((string name, _) in ExtraHeaders)
+            if (string.Equals(name, headerName, StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException($"Header '{headerName}' is already sent.", nameof(headerName));
+        ExtraHeaders.Add((headerName, valueProvider));
+        return this;
+    }
 }
 
 /// <summary>Header names used by the per-call option.</summary>

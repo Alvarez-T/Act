@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using YFex.Cryptography;
 using YFex.Localization;
 using YFex.Validation;
 
@@ -23,10 +24,17 @@ public sealed class Decision<TSituation> : IEquatable<Decision<TSituation>> wher
     private readonly RawValue[] _derived;
     private readonly RuleSetDefinition<TSituation> _definition;
     private readonly RuleDescriptor<TSituation>[] _rules;
+    private readonly Extras? _extras;   // trace and digest share one slot: null for the common decision (no trace, no approvals)
+
+    private sealed class Extras(DecisionTrace? trace, Hash256 digest)
+    {
+        public DecisionTrace? Trace { get; } = trace;
+        public Hash256 Digest { get; } = digest;
+    }
 
     internal Decision(RuleSetDefinition<TSituation> definition, RuleDescriptor<TSituation>[] rules, in TSituation situation, Verdict verdict, ViolationList violations,
         ApprovalRequestList approvals, DecisionTotals totals, AdjustmentList adjustments, RulesetVersion version, ulong fingerprint,
-        DecisionTrace? trace, FieldLimit[] limits, RawValue[] derived)
+        Hash256 digest, DecisionTrace? trace, FieldLimit[] limits, RawValue[] derived)
     {
         _definition = definition;
         _rules = rules;
@@ -38,7 +46,7 @@ public sealed class Decision<TSituation> : IEquatable<Decision<TSituation>> wher
         Adjustments = adjustments;
         RulesetVersion = version;
         Fingerprint = fingerprint;
-        Trace = trace;
+        _extras = trace is null && digest.IsZero ? null : new Extras(trace, digest);
         _limits = limits;
         _derived = derived;
     }
@@ -56,8 +64,13 @@ public sealed class Decision<TSituation> : IEquatable<Decision<TSituation>> wher
     public RulesetVersion RulesetVersion { get; }
     /// <summary>Hash of the OUTCOME (04 §8) — not of the trace, not of the version.</summary>
     public ulong Fingerprint { get; }
+    /// <summary>
+    /// SHA-256 of the canonical outcome (rule set name + the fingerprint's input), filled when <see cref="Approvals"/> is not empty
+    /// (<see cref="Hash256.Zero"/> otherwise). Approval tokens bind this value, never the 64-bit <see cref="Fingerprint"/> (cryptography ⚑K12).
+    /// </summary>
+    public Hash256 Digest => _extras?.Digest ?? default;
     /// <summary>Null unless <see cref="EvaluateOptions.Trace"/> &gt; Off.</summary>
-    public DecisionTrace? Trace { get; }
+    public DecisionTrace? Trace => _extras?.Trace;
     public string RuleSet => _definition.Name;
     public RuleSetDefinition<TSituation> Definition => _definition;
     /// <summary>The rules that were in force: code rules, then runtime rules (05 §8) — condition ids index into this.</summary>

@@ -1122,3 +1122,23 @@ Tests (all green): Rules 64, Rules.Generator 27 (+6 functions), Rules.Admin 22 (
 (new: spec → evaluation, trace/explanation, line rules, arithmetic + functions + aggregates, cap clamping, publish checks with
 paths, tiers + overrides, effective dates, contracts, compile-once + canonical JSON, text, null-safe division, generated
 functions ×3, AI schemas ×4), Validation 62 (+4 JSON Schema), Validation.Generator 50, Capabilities 28 + Cqrs 7 (+2) + Generator 5.
+
+## Signed rule data hooks (offline Phase 2, F6 — 2026-10-15, additive)
+
+Done by the YFex.Offline Phase 2 session (no Rules session was running; additive only, offline 11 §1). Purpose: rule data a device
+loads offline must be what central published (offline 05 §2.1, scenario 09 S4). Rules.Admin gains hooks only; the signing and the
+verification with version floors live in `YFex.Offline.Rules` (signed bundles of kind `rules.data`), so Rules references no
+Installations/Offline code.
+
+| Change | Where |
+|---|---|
+| `IRuleDataSigner` (central, signs a version once), `IRuleDataVerifier` (device, batch, `received` vs cached), `RuleDataCheck`, `SignedRuleData` — in **YFex.Rules** so an implementation needs no RPC/MemoryPack (AOT-clean) | new `YFex.Rules/Hosting/RuleDataSigning.cs` |
+| `ISignedRuleDataCache`, wire `SignedRuleDataPayload` | new `YFex.Rules.Admin/RuleDataSigning.cs` |
+| Query `RuleAdmin.Queries.GetSignedRuleData(RuleSet, AfterVersion)` + `GetSignedRuleDataHandler` (NotFound without a signer), baseline (view requirement, cacheable, invalidated by every publish), local invoker | `RuleAdmin.cs`, `RuleAdminHandlers.cs`, `RuleAdminSetup.cs`, `RuleAdminAuthorization.cs` |
+| `RulePublisher(..., IRuleDataSigner? signer = null)` signs each new version after the store append | `RuleAdminHandlers.cs` |
+| `RuleSetSync(..., IRuleDataVerifier? verifier = null)`: with a verifier it fetches `GetSignedRuleData`, applies/caches only `Valid` versions, lists the rest in `Refused` | `RuleAdminSetup.cs` |
+| `KeyValueRuleDataCache(..., IRuleDataVerifier? verifier = null)` implements `ISignedRuleDataCache`: signed forms under `yfex.rules.signed/{set}/{version:D19}`, re-verified at every `LoadAsync` (refused → `Refused`), pruned together; `AddYFexRuleSetSync` passes a registered verifier | `RuleAdminSetup.cs` |
+
+Without a signer/verifier nothing changes (same queries, same cache keys). Tests: Rules.Admin.Tests 27 → **30** (`SignedRuleDataTests`:
+sign once + serve, sync refuses a bad version, cache re-verifies after an on-disk edit); `AdminFixture` takes an optional signer.
+

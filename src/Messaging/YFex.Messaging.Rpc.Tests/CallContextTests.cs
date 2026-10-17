@@ -186,6 +186,28 @@ public class PerCallHeaderTests(AnonymousConnectionFixture fx) : IClassFixture<A
         who.Should().Be("bob@globex");
         (await bus.CommandAsync<CreateCustomer, int>(As.ValidCustomer)).OkValue.Should().Be(42);
     }
+
+    [Fact]
+    public async Task FusionMessageBus_sends_extra_headers_without_taking_the_token_slot()
+    {
+        int calls = 0;
+        var callContext = new CallContextClientBuilder()
+            .SendToken((_, _) => new ValueTask<string?>(Users.Token("bob")))
+            .SendTenant()
+            .SendHeader("yfex-installation", (_, _) => { Interlocked.Increment(ref calls); return new ValueTask<string?>("YFex-Installation abc"); })
+            .SendHeader("yfex-empty", (_, _) => new ValueTask<string?>((string?)null));
+        var services = new ServiceOverlay(fx.ClientServices, (typeof(CallContextClientBuilder), callContext),
+            (typeof(IScopeContext), new UpgradeRequestServices(Users.Globex)));
+        var bus = fx.CreateClientBus(services: services);
+
+        (await bus.QueryAsync<WhoAmI, string>(new WhoAmI(14))).TryGetValue(out string? who).Should().BeTrue();
+
+        who.Should().Be("bob@globex", "the token and the tenant still flow");
+        calls.Should().Be(1, "the provider is called per call");
+        FluentActions.Invoking(() => new CallContextClientBuilder().SendHeader(CallContextHeaders.Authorization, (_, _) => default))
+            .Should().Throw<ArgumentException>("reserved");
+        FluentActions.Invoking(() => callContext.SendHeader("YFEX-INSTALLATION", (_, _) => default)).Should().Throw<ArgumentException>("twice");
+    }
 }
 
 /// <summary>D29 — permission changes: versioned reload on the server + client refresh through the ICallPermissions compute method.</summary>

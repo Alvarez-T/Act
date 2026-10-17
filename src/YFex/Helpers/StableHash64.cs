@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Buffers.Binary;
 using System.Numerics;
 using System.Runtime.CompilerServices;
@@ -38,10 +39,12 @@ public struct StableHash64
     private ulong _length;
     private Stripe _pending;
     private int _pendingCount;
+    private readonly IBufferWriter<byte>? _capture;
 
-    private StableHash64(ulong seed)
+    private StableHash64(ulong seed, IBufferWriter<byte>? capture = null)
     {
         _seed = seed;
+        _capture = capture;
         _v1 = seed + P1 + P2;
         _v2 = seed + P2;
         _v3 = seed;
@@ -53,6 +56,17 @@ public struct StableHash64
 
     /// <summary>Starts a new hash.</summary>
     public static StableHash64 Create(ulong seed = 0) => new(seed);
+
+    /// <summary>
+    /// Starts a new hash that also copies every appended byte to <paramref name="capture"/>: the exact canonical stream, for a caller
+    /// that needs a cryptographic digest of the same input (YFex.Rules decision digest, cryptography ⚑K12). The 64-bit result is
+    /// unchanged by capturing.
+    /// </summary>
+    public static StableHash64 Create(ulong seed, IBufferWriter<byte> capture)
+    {
+        ArgumentNullException.ThrowIfNull(capture);
+        return new(seed, capture);
+    }
 
     /// <summary>One-shot hash of <paramref name="data"/>.</summary>
     public static ulong Hash(ReadOnlySpan<byte> data, ulong seed = 0)
@@ -76,6 +90,7 @@ public struct StableHash64
     public void Append(scoped ReadOnlySpan<byte> data)
     {
         _length += (ulong)data.Length;
+        _capture?.Write(data);
 
         if (_pendingCount > 0)
         {

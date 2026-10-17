@@ -11,6 +11,12 @@ Four related ideas, kept separate on purpose:
 
 ## 1. Approvals (generalizes Rules override tokens, fixes D9/D10, ⚑Z12)
 
+> **Implemented in Phase 4b (2026-10-16)** with the README's decisions A1–A9, which override this section where they differ: tokens are
+> v2 only (A9: no byte-identical v1, no cut-off), bind a SHA-256 **digest** instead of the 64-bit fingerprint (A4/A5, crypto ⚑K12),
+> name the approver's scope and, for device tokens, the installation and its evidence key (A6). The Approve command lives in
+> `YFex.Cqrs.Approvals` (A2); the age policy `OfflineApprovalPolicy` is Authorization's, the amount cap `OfflineApprovalCap` stays in
+> Rules. Where each type lives and what deviated: 09, "Phase 4b — DONE".
+
 ### 1.1 Split of responsibilities
 
 | Stays in YFex.Rules | Moves to YFex.Authorization | Moves to YFex.Cqrs |

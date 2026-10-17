@@ -114,15 +114,15 @@ public sealed class TestPrincipal : IPrincipalAccessor, IAuthorizationContext
 
 public sealed class AdminFixture
 {
-    public AdminFixture(IRuleAuditSink? audit = null, Action<RuleAdminOptions>? options = null)
+    public AdminFixture(IRuleAuditSink? audit = null, Action<RuleAdminOptions>? options = null, IRuleDataSigner? signer = null)
     {
         var services = new ServiceCollection();
         if (audit is not null) services.AddSingleton(audit);
+        if (signer is not null) services.AddSingleton(signer);
         services.AddSingleton<ISituationSamples>(Samples);
         services.AddSingleton<IPrincipalAccessor>(User);
         services.AddSingleton<IRuleStore>(Store);
         services.AddSingleton<IEventBus>(Events);
-        services.AddSingleton<IOverrideTokenIssuer>(Tokens);
         services.AddYFexRuleSet(Host);
         services.AddYFexRulesAdmin(options);
         // The one message gate (authorization-consolidation 04 §2): RuleAdmin's requirements are enforced through it.
@@ -141,7 +141,6 @@ public sealed class AdminFixture
     public TestSamples Samples { get; } = new();
     public InMemoryRuleStore Store { get; } = new();
     public DefaultEventBus Events { get; } = new();
-    public HmacOverrideTokens Tokens { get; } = new(new Dictionary<string, byte[]> { ["k1"] = new byte[32] }, "k1", TimeSpan.FromMinutes(10));
     public RuleSetHost<PricingSituation> Host { get; } = PricingRules.CreateHost().UseRuntimeRules(new YFex.Rules.Dynamic.DynamicRules<PricingSituation>());
     public IServiceProvider Services { get; }
     public LocalDispatcher Dispatcher { get; }

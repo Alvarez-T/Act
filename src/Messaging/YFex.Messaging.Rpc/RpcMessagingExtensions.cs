@@ -138,9 +138,10 @@ public static class RpcMessagingExtensions
 
         // The central anchor of every client's trusted clock (time T2). Answers with the registered TimeProvider: central registers
         // AddYFexTime(time => time.TrustDeviceClock()); without it the reply is "unsynchronized" and no client anchors to it.
+        // Signed replies (time T4) need AddCentralTimeSigning(); without it GetSignedTimeAsync answers "not signed".
         if (!services.Any(static d => d.ServiceType == typeof(CentralTimeService)))
         {
-            services.AddSingleton(sp => new CentralTimeService(sp.GetService<TimeProvider>()));
+            services.AddSingleton(sp => new CentralTimeService(sp.GetService<TimeProvider>(), sp.GetService<CentralTimeSigner>()));
             fusion.Rpc.AddServer<ICentralTime, CentralTimeService>();
         }
 

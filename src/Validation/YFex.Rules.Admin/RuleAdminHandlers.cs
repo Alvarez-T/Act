@@ -77,10 +77,11 @@ public interface IRuleAuditSink
 /// <see cref="IRuleAuditSink"/>.
 /// </summary>
 public sealed class RulePublisher(RuleSetRegistry registry, IRuleStore store, IPrincipalAccessor principal,
-    IEventBus? events = null, IRuleTierGuard? tierGuard = null, IRuleAuditSink? audit = null)
+    IEventBus? events = null, IRuleTierGuard? tierGuard = null, IRuleAuditSink? audit = null, IRuleDataSigner? signer = null)
 {
     internal RuleSetRegistry Registry => registry;
     internal IRuleStore Store => store;
+    internal IRuleDataSigner? Signer => signer;
 
     public async Task<long> PublishAsync(string ruleSet, RuleDataKind kind, string code, string tierPathText, long baseVersion, DateOnly effectiveFrom,
         byte[] payload, string? note, Func<IRuleSetHost, RuleTierPath, ValidationResult> validate, CancellationToken ct)
@@ -126,7 +127,9 @@ public sealed class RulePublisher(RuleSetRegistry registry, IRuleStore store, IP
                 .ConfigureAwait(false);
         }
 
-        host.Apply(new RuleDataRecord(info, payload));
+        var record = new RuleDataRecord(info, payload);
+        if (signer is not null) await signer.SignAsync(record, ct).ConfigureAwait(false);   // once per version (offline 05 §2.1)
+        host.Apply(record);
         if (events is not null)
             await events.PublishAsync(new Events.RulesetPublished(ruleSet, kind, code, tierPathText, info.Version, effectiveFrom), ct: ct).ConfigureAwait(false);
         return info.Version;
@@ -189,21 +192,6 @@ public sealed class SetRuleOverrideHandler(RulePublisher publisher) : ICommandHa
     }
 }
 
-public sealed class ApproveDecisionHandler(IOverrideTokenIssuer issuer, IPrincipalAccessor principal, TimeProvider? clock = null)
-    : ICommandHandler<Commands.ApproveDecision, ApprovalToken>
-{
-    public Task<ApprovalToken> HandleAsync(Commands.ApproveDecision c, CancellationToken ct)
-    {
-        // The gate already checked that the APPROVER holds the permission (ApproveDecisionRequirement).
-        var user = principal.Current;
-        string approver = RulePublisher.ActorOf(user)                          // the subject, never the display name
-            ?? throw new ErrorResultException(new Unauthenticated("Approver identity unknown."));
-        var permission = Permission.Parse(c.Permission).Value;                 // canonical id (the token binds it)
-        var token = issuer.Issue(approver, permission, c.Fingerprint, (clock ?? TimeProvider.System).GetUtcNow());
-        return Task.FromResult(ApprovalToken.From(token));
-    }
-}
-
 public sealed class GetRuleDataHandler(RulePublisher publisher) : IQueryHandler<Queries.GetRuleData, RuleDataPayload[]>
 {
     public async Task<RuleDataPayload[]> HandleAsync(Queries.GetRuleData q, CancellationToken ct)
@@ -212,6 +200,22 @@ public sealed class GetRuleDataHandler(RulePublisher publisher) : IQueryHandler<
         var records = await publisher.Store.LoadAsync(q.RuleSet, q.AfterVersion, ct).ConfigureAwait(false);
         var result = new RuleDataPayload[records.Length];
         for (int i = 0; i < result.Length; i++) result[i] = RuleDataPayload.From(records[i]);
+        return result;
+    }
+}
+
+/// <summary><see cref="GetRuleDataHandler"/> with each version's signed form (offline 05 §2.1); needs an <see cref="IRuleDataSigner"/>.</summary>
+public sealed class GetSignedRuleDataHandler(RulePublisher publisher) : IQueryHandler<Queries.GetSignedRuleData, SignedRuleDataPayload[]>
+{
+    public async Task<SignedRuleDataPayload[]> HandleAsync(Queries.GetSignedRuleData q, CancellationToken ct)
+    {
+        publisher.Registry.Get(q.RuleSet);
+        var signer = publisher.Signer
+            ?? throw new ErrorResultException(new NotFound("Rule data is not signed here: register an IRuleDataSigner at the server."));
+        var records = await publisher.Store.LoadAsync(q.RuleSet, q.AfterVersion, ct).ConfigureAwait(false);
+        var result = new SignedRuleDataPayload[records.Length];
+        for (int i = 0; i < result.Length; i++)
+            result[i] = new SignedRuleDataPayload(RuleDataPayload.From(records[i]), await signer.SignAsync(records[i], ct).ConfigureAwait(false));
         return result;
     }
 }
