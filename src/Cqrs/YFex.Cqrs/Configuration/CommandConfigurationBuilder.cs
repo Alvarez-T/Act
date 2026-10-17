@@ -394,6 +394,21 @@ public sealed class CommandConfigurationBuilder<TCommand>
     public CommandConfigurationBuilder<TCommand> Telemetry(Action<TelemetryConfigurationBuilder> configure)
         => this;
 
+    // ── Features of other libraries (MessageFeatures) ─────────────────────────
+
+    /// <summary>
+    /// Attaches a typed setting of another library (e.g. YFex.Offline's <c>.Offline(...)</c>) to this command; one value per
+    /// <typeparamref name="TFeature"/>, the last write wins. Read back from <see cref="CommandPolicy.Features"/>.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> Feature<TFeature>(TFeature feature) where TFeature : class
+    {
+        MessageFeatureSlots.Set(ref _features, feature);
+        return this;
+    }
+
+    /// <summary>The <typeparamref name="TFeature"/> attached so far, or <see langword="null"/> (for verbs that refine a feature).</summary>
+    public TFeature? GetFeature<TFeature>() where TFeature : class => MessageFeatureSlots.Get<TFeature>(_features);
+
     // â”€â”€ Metadata production â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
     CommandRegistrationMetadata ICommandConfigurationSource.BuildMetadata() => new()
@@ -797,6 +812,16 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
 
     public CommandConfigurationBuilder<TCommand, TResult> Telemetry(Action<TelemetryConfigurationBuilder> configure)
         => this;
+
+    /// <inheritdoc cref="CommandConfigurationBuilder{TCommand}.Feature{TFeature}(TFeature)"/>
+    public CommandConfigurationBuilder<TCommand, TResult> Feature<TFeature>(TFeature feature) where TFeature : class
+    {
+        MessageFeatureSlots.Set(ref _features, feature);
+        return this;
+    }
+
+    /// <inheritdoc cref="CommandConfigurationBuilder{TCommand}.GetFeature{TFeature}"/>
+    public TFeature? GetFeature<TFeature>() where TFeature : class => MessageFeatureSlots.Get<TFeature>(_features);
 
     CommandRegistrationMetadata ICommandConfigurationSource.BuildMetadata() => new()
     {

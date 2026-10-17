@@ -68,7 +68,10 @@ public sealed record CommandPolicy(
     global::YFex.Resilience.ResilienceSpec? Resilience = null,
 
     /// <summary>Stages 3–4 (<c>.UseSituation().Enforce()</c>): gather the situation, evaluate the rule set. Null when not configured.</summary>
-    RulesStage? Rules = null);
+    RulesStage? Rules = null,
+
+    /// <summary>Typed settings of other libraries (e.g. YFex.Offline's <c>.Offline(...)</c>). Null when none are attached.</summary>
+    MessageFeatures? Features = null);
 
 /// <summary>
 /// Pre-compiled reverse (compensation) plan for one command type. Either a typed map to a

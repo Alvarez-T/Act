@@ -315,7 +315,8 @@ public sealed class CompiledMessagingRegistry
             acc.Reverse.HasValue ? CompileReverse(acc.Reverse.Value) : null,
             acc.OfflineHandler?.Invoke,
             acc.Resilience,
-            acc.Rules);
+            acc.Rules,
+            MessageFeatures.From(acc.Features));
 
     private static QueryPolicy CompileQueryPolicy(QueryAccumulator acc)
         => new(
@@ -458,9 +459,12 @@ public sealed class CompiledMessagingRegistry
         public string?                           Description;
         public string[]?                         Keywords;
         public bool                              Irreversible;
+        public Dictionary<Type, object>?         Features;
 
         public void Merge(CommandRegistrationMetadata m)
         {
+            if (m.Features is { } features)
+                foreach (var feature in features) (Features ??= [])[feature.Key] = feature.Value;   // later configuration wins
             if (m.Validators  is { } v) (Validators  ??= []).AddRange(v);
             if (m.Rules       is not null) Rules = m.Rules;
             if (m.Authorization is { } a) (Authorization ??= []).AddRange(a);

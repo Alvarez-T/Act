@@ -54,4 +54,7 @@ internal sealed record CommandRegistrationMetadata
     /// Declaration only — execution lives in YFex.Cqrs.Compensation.
     /// </summary>
     public ReverseRuleDescriptor? Reverse { get; init; }
+
+    /// <summary>Typed settings of other libraries (<see cref="MessageFeatures"/>), one per feature type.</summary>
+    public KeyValuePair<Type, object>[]? Features { get; init; }
 }
