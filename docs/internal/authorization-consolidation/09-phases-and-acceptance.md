@@ -641,3 +641,10 @@ Additive hook in Messaging.Rpc for YFex.Installations.Rpc, made while no Authori
   (`Unauthenticated`, or `Forbidden(Denial(ResourceDenied, "installation.scope"))`).
 - **Backup:** `C:\Temp\installations-backup\I2-review-2026-10-09\messaging-rpc`. Details in installations 08 §5.
 
+### 2026-10-30 — Site approval tokens accepted (additive, for Offline Phase 4d)
+
+`ApprovalTokenVerifier` no longer drops `ApprovalTokenKind.Site` at construction. A site token is checked like a device token (offline policy,
+age at the decision, approver re-check, `ApprovalFlags.Offline`), except the installation test: the signer is the site broker, so the kind's
+registered `IApprovalSignatureVerifier` must also implement the new `IApprovalIssuerCheck` and accept that broker for the deciding installation;
+otherwise `OtherInstallation`. No verifier of the kind = `UnsupportedKind`, as before. The implementation is Offline's `SiteApprovalSignatures`
+(YFex.Offline.Central.Rpc). Tests: YFex.Authorization.Tests 104 → 105.
