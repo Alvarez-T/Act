@@ -100,6 +100,12 @@ backward is refused with `SourcesDisagree`), and they never make security usable
 | site time table + findings (time §8.2) | `TimeReply` from every friend's probe on the `time` channel |
 | broker services and the generic broker host (⚑O20) | peer endpoint, TLS helpers, enrollment (`IInstallationEnrollment`; the installer comes later as YFex.Installer) |
 
+**What Offline took (Phases 1–3, as of 2026-10-19):** `IInstallationFriends` for `Reachability` (`OfflineConnectivity`), the roster and
+`BundleStore` with floors for its manifest, allowances and publisher endorsement (`OfflineBundles()`, `PullableOfflineBundles()`), the
+evidence key for envelopes, sessions and delivery receipts, the `relay` channel for `offline.session` / `offline.envelope` /
+`offline.delivery` items (central `IRelayItemConsumer`s) and `BundleStore.Accepted` for automatic delivery receipts. Phase 4 adds the four
+`offline.*` peer channels (⚑O31) and the diagnostics summary for the broker ranking.
+
 ## 4. Why no automatic election (⚑O2, ⚑O27 restated for the mesh)
 
 With every terminal able to talk to every other, "elect a coordinator when the broker is off" looks free. It is not: two checkouts on
@@ -112,6 +118,9 @@ flagged** at reconciliation. The mesh changes only *how messages travel*, never 
 > the roster: every eligible PC runs a dormant `SiteBroker` installation, central ranks them and marks one `Active`, the others
 > `Standby`; an admin may pin one; nothing changes during an outage (offline 02 §4.1). Asks of this library (for Offline Phase 4):
 > terminals report friend reachability to central, firewall-rule presence in diagnostics (I5), and ⚑I25 for every listening candidate.
+> **✅ Built 2026-10-19** (08 §5): diagnostics reports (`ReportDiagnostics()`, signed relay item `installations.diagnostics`, central
+> `CollectDiagnostics()` + `SummarizeAsync`), the Windows firewall check of the rule "YFex Installations peer" (`CheckWindowsFirewall()`),
+> and ⚑I25 decided as a software transport key for listeners with a hardware evidence key.
 
 ## 5. Scenarios at Loja Centro (mesh = `AllInstallations`)
 

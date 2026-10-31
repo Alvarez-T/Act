@@ -154,8 +154,8 @@ SslClientAuthenticationOptions client = installationTls.CreateClientOptions(Inst
 // ClientWebSocketOptions: options.ClientCertificates + RemoteCertificateValidationCallback from the same object
 ```
 
-**Recommendation to Offline (its decision, Phase 4):** move the broker services onto peer channels (`offline.session`,
-`offline.coordination`, `offline.custody`) instead of a second Fusion peer. Reason: one port, one framing, no ASP.NET Core on the
+**Recommendation to Offline (its decision, Phase 4) — ✅ taken 2026-10-19 (offline ⚑O31):** move the broker services onto peer channels
+(`offline.session`, `offline.coordination`, `offline.custody`, `offline.feed`) instead of a second Fusion peer. Reason: one port, one framing, no ASP.NET Core on the
 broker, the same code path for terminal-to-terminal mesh traffic. Offline keeps the message contracts and handlers either way.
 **Constraint (Offline session, 2026-10-05):** whatever carries custody, the envelope's idempotency key must reach central
 **unchanged**. Central deduplicates through the `yfex-idempotency` header and `IdempotentExecution` inside `ValidatingHandlerInvoker`

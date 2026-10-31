@@ -18,8 +18,9 @@
 | Needs | From | Status | Phase here |
 |---|---|---|---|
 | `ISigningKeyStore`, `CngSigningKeyStore`, `SignedPayload`, `SignatureVerifier`, `IPublicKeyDirectory`, `CertificateAuthority`, `CertificateTrust`, `MessageAuthentication`, `SealedValue`, `Hashing` | YFex.Cryptography Phases 0–3 | ✅ built | I1–I3 |
-| CNG-held `IRecipientKey` (key-agreement key) | YFex.Cryptography (crypto 13 §6, not built) | open | I5 |
-| `FileSigningKeyStore` (Linux/macOS v1) and an Apple Keychain/Secure Enclave store (09 §5) | YFex.Cryptography | designed 2026-10-07 (crypto 14): file store approved, not coded; Apple store = spike on a Mac | I1 (Linux/macOS) |
+| CNG-held `IRecipientKey` (key-agreement key) | YFex.Cryptography (crypto 13 §6) | **done 2026-10-27** (crypto 14 §10: `IRecipientKeyStore`, `StoreRecipientKeysInCng()` / `StoreRecipientKeysInFiles(…)`, key `"installation/key-agreement"`) | I5 |
+| `FileSigningKeyStore` (Linux/macOS v1) and an Apple Keychain/Secure Enclave store (09 §5) | YFex.Cryptography | `FileSigningKeyStore` **built 2026-10-18** (crypto 14 §2); `YFex.Cryptography.Apple` and the Linux TPM store **written, not run** on their OS (crypto 14 §8, opt-in) | I1 (Linux/macOS) |
+| `YFex.Cryptography.Android` (⚑K19): Keystore `ISigningKeyStore` + attestation, Keystore root key, `AndroidKeyPaths` | YFex.Cryptography | **built 2026-10-27** (crypto 14 §9): 11/11 on the Android 15/16 emulators, trim 0 warnings; **real handheld pending** (StrongBox/TEE timing, StrongBox with `DIGEST_NONE`, Google attestation root) | I6 |
 | ⚑I21–I23 | user | ✅ 2026-10-07 (user wrote L21–L23; approved recommendations and implementation) | I1 |
 | `IAnnouncementSigner/Verifier`, beacons, `InMemoryNetwork`, `Hysteresis`, `NetworkFingerprint` | YFex.Networking Phases 2/5 | ✅ built (Networking Phase 5, 2026-10-13; API confirmed by that session for I3) | I3 ✅ |
 | core `YFex.Time` types, `TimeBuilder` | YFex.Time T0–T2 | ✅ built; ⚑T13 rule added to `TimeSelection` in I4 (no Time session was running; logged in time README §10) | I4 ✅ |
@@ -90,12 +91,47 @@
   that drops it causes a retry through another friend, central sees it once; gossip: revocation reaches every friend within one beacon
   interval + one request with central unreachable; a snapshot addressed to CAIXA-02 is never offered to CAIXA-01.
 
-### Phase I5 — Pairing, hardening, key agreement
+### Phase I5 — Pairing, hardening, key agreement — BUILT 2026-10-27 (pairing, key agreement, admin approval, rotation drills, chaos suite; open items in §5)
 
-- SAS pairing + site issuing CA + provisional status; hardware-key policy; key-agreement key (after crypto); rotation drills (issuing
-  CA yearly, root overlap); chaos suite (partitions, restarts, disk-image restore) in the harness; firewall-rule presence reported by `IInstallationFriends`/diagnostics (creating it = future YFex.Installer).
+- SAS pairing + site issuing CA + provisional status; hardware-key policy (`HardwareKeyEnrollmentPolicy`, built 2026-10-19); key-agreement
+  key `installation/key-agreement` over `IRecipientKeyStore` (crypto built it 2026-10-27, 04 §1: `CngRecipientKeyStore` on Windows, files
+  elsewhere), its public key in the enrollment request and the registry; rotation drills (issuing
+  CA yearly, root overlap); chaos suite (partitions, restarts, disk-image restore) in the harness; firewall-rule presence reported by `IInstallationFriends`/diagnostics (creating it = future YFex.Installer) — **✅ built early, 2026-10-19** (diagnostics reports + Windows rule check, §5).
 - **Acceptance:** offline S7 (spare PC paired with SAS during an outage, confirmed later) passes; a MITM during pairing produces
   different digits; provisional installation cannot issue approvals; all scenario tests green; AOT 0 warnings.
+
+### Phase I6 — Mobile handhelds (after I5 and `YFex.Cryptography.Android`; design [11](11-mobile-handhelds.md), ⚑I26–I32)
+
+- ~~Spike first~~: 09 §4 R7 is **answered on emulators** (2026-10-27, crypto 14 §9.5): a Keystore key is a TLS 1.3 client credential,
+  so both handheld keys stay in the Keystore. Still to run on **one real handheld** (`androidKit test … --serial`): StrongBox/TEE
+  signature cost, StrongBox with `DIGEST_NONE` (a refusal other than `StrongBoxUnavailableException` needs a crypto fix), Google attestation root.
+- **I6a — not blocked by I5** (crypto Android is built) — **BUILT 2026-10-27** (§5 entry "I6a"; real handheld still pending):
+  - `YFex.Installations.Android` (`net11.0-android`, own `installations.android.slnx` so the main solution builds without the Android
+    workload; device-test project run with androidKit): `UseAndroidKeyStore()` (both keys in the Keystore, never a software transport key:
+    handhelds never listen), the state directory under `NoBackupFilesDir` (`InstallationStorageOptions` has no Android default and
+    throws `PlatformNotSupportedException`), an Android hint source, the key-agreement key in `StoreRecipientKeysInFiles` under the same folder.
+  - **Attestation at enrollment:** `IInstallationKeyStore` passes central's challenge when a key is created (the Keystore attests only at
+    creation; `EnrollmentClient` already creates the keys after the challenge, but keys left by a failed earlier attempt keep their old
+    attestation); the enrollment request carries the chains (wire version bump); central records them and `EnrollmentCandidate` exposes them
+    to `IEnrollmentPolicy`.
+  - **Lost Keystore keys:** `AndroidKeystoreKeyLostException` (uninstall/clear data/restore onto another device) must become an
+    `InstallationStateUnreadable` reason (today it escapes from the ring load `_rings.GetAsync` in `InstallationStateStore` as an exception;
+    `InstallationStateFailure` has only `InvalidLength`/`CannotOpen`/`InvalidContent`), so the app wipes and shows "scan a new QR".
+  - `EnrollmentLink` v1 codec + golden vectors; sponsor + pending + SAS confirmation at central (online path).
+- **I6b — after I5:** the rest below (broker path, presence, revocation). **Step 1 built 2026-10-28** (§5 entry "I6b step 1"): revocation from a site
+  terminal through central and self-revocation; the offline site revocation (⚑I42) built 2026-10-29. **Step 2 built 2026-10-29** (§5 entry
+  "I6b step 2"): presence (`SitePresence`, channel `installations.presence`, `SponsoredBy` / `PresenceWitness` in the roster, presence on the
+  assertion). **Step 3 built 2026-10-31** (§5 entry "I6b step 3"): the broker path and the sponsor push. Left: the real-handheld run.
+- `YFex.Installations.Android` (`UseAndroidKeyStore()`, state directory, hint); `EnrollmentLink` v1 codec + golden vectors; sponsor and
+  pending/confirm at central (`EnrollmentCodeRequest` sponsor + confirmation, push to the sponsor) and at the broker (reuses I5 SAS
+  and provisional certificates); `SponsoredBy` and `PresenceWitness` in the roster; `SitePresence` + channel `installations.presence`;
+  presence in the installation assertion (`InstallationCallContext.Current.Presence`); revocation from any trusted terminal and
+  self-revocation.
+- **Acceptance (harness + one real Android device):** QR → pending → SAS confirm → enrolled; the same QR offline → provisional via
+  the broker → confirmed by central later; a second device using the same QR is refused or rejected; a QR with an unknown central host,
+  a wrong root hash or a wrong broker key is refused; presence from the broker and from the sponsor verifies at central, and a
+  statement for another handheld, another site, an old challenge or a non-witness is refused; revocation from a site terminal while
+  offline takes effect on the site at once; the trim/AOT gate of the Android build at 0 warnings.
 
 ## 4. Docs to update when phases land
 
@@ -650,3 +686,616 @@ The user confirmed Offline ⚑O2: the site coordinator is chosen **automatically
 may pin one; nothing changes during an outage (offline 02 §4.1). Note added to 06 §4. Asks of this library, needed by Offline Phase 4:
 terminals report friend reachability to central; firewall-rule presence in diagnostics (already an I5 item); ⚑I25 solved for any
 installation that may become `Active` (or software keys allowed for that role). No code changed.
+
+### 2026-10-19 — HTTP form of installation assertions (from authentication AN-P4, additive)
+
+Authentication binds refresh tokens to an installation (⚑AN16) on its HTTP endpoints too, and asked for an HTTP header form of the
+assertion (⚑I11). It did not exist (RPC only), so it was added:
+- core `InstallationAssertionHeaders` (`yfex-installation: YFex-Installation {base64}`, shared with RPC; Installations.Rpc's constants and
+  decoder now point at it), `HttpInstallationAssertionChallengeSource` (`POST {central}/installations/assertion/challenge`) and
+  `InstallationAssertionHandler` (a `DelegatingHandler` adding the header; a 401 with `WWW-Authenticate: YFex-Installation` drops the
+  cached assertion);
+- Central.AspNetCore `AddYFexInstallationAssertionHttp()`, `UseYFexInstallationAssertion()` (verifies the header; no header = unproven;
+  a bad header = 401 with `error="…"`, never treated as "no installation"; sets the `InstallationAssertionAccepted` and core
+  `InstallationIdentity` features, `HttpContext.GetInstallation()`) and `MapYFexInstallationAssertionChallenge()`.
+Test `AssertionHttpTests` (enrolled machine proves itself, forged header refused, revoked installation refused). Installations 170
+tests green, AOT smoke passed. Scope pinning over HTTP (the RPC `InstallationScopeMiddleware`) is not mirrored: HTTP endpoints that need
+it read `GetInstallation()`.
+
+### 2026-10-19 — Offline Phase 4 asks: ⚑I25, diagnostics reports, firewall rule (Claude, task from the offline planning session; decisions by the user)
+
+**Decisions (user, 2026-10-19):** ⚑I25 = a **software transport key** for installations that listen, evidence key in hardware; the
+firewall-rule presence (an I5 item) = **measure + the named rule**; diagnostics = **signed relay item**.
+
+**Built (additive):**
+
+| Item | Where |
+|---|---|
+| `InstallationKeyStore(store, transportStore)`: new transport keys in the transport store; a transport key that already exists in the evidence store is used until a renewal moves the certificate to the next slot; `TransportStore`; `TransportKeyPlacement { Automatic, WithEvidenceKey, Software }` | `Keys/InstallationKeyStore.cs` |
+| `WindowsInstallationKeys.Create(…, softwareTransport)`, `UseWindowsKeyStore(preferHardware, transport)` (Automatic = software for `SiteBroker`) | `YFex.Installations.Windows` |
+| `HardwareKeyRequirement { BothKeys, EvidenceKey }`, `HardwareKeyEnrollmentPolicy(requirement, roles)`, `RequireHardwareEvidenceKeys(roles)` | `YFex.Installations.Central` |
+| `FriendObservation`, `InstallationFriends.TakeObservations()` (dials, dial failures, inbound per friend since the last call), `PeerStatistics.InboundAccepted` | `Peers/` |
+| `InstallationDiagnosticsContent`/`Report`/`Codec` (strict, relay item `installations.diagnostics`, domain `yfex.installation.diagnostics.v1`), `InstallationDiagnosticsReporter`, `peers.ReportDiagnostics(interval)` (off unless called; default every 15 min), `IFirewallRuleProbe`, `FirewallRuleState`, `FirewallRules.PeerRuleName` = "YFex Installations peer" | `Diagnostics/` |
+| `WindowsFirewallRuleProbe` (`HNetCfg.FwPolicy2` through `[GeneratedComInterface]`, read-only, no elevation; Present / Missing / Disabled / FirewallOff / Unknown), `peers.CheckWindowsFirewall()` | `YFex.Installations.Windows` |
+| Central: `InstallationDiagnosticsConsumer` (evidence key as of the report time, refused after a revocation), `IInstallationDiagnosticsStore` + in-memory (30 days), `SummarizeAsync(candidate, since)` → `ReachabilitySummary` (reporters, dials, failures, inbound, latest report), `CollectDiagnostics()` | `YFex.Installations.Central/InstallationDiagnosticsCollection.cs` |
+
+**Verified on the dev PC (Windows 11, TPM 2.0):** a broker with its evidence key in the TPM (`Hardware`) and a software KSP transport key
+(`OperatingSystem`) serves mutual TLS 1.3 to a terminal whose keys are in the TPM; the firewall probe answers `Missing` for an unknown rule
+without elevation, also under NativeAOT.
+
+**Tests:** Installations.Tests 125 → **127**, Central.Tests 26 → **28**, Rpc.Tests 13, Windows.Tests 6 → **9**; AOT smoke **0** IL warnings,
+exit 0 (diagnostics, separate transport store, firewall probe). `MeshAcceptanceTests.Bundles_from_a_friend_are_verified_like_bundles_from_central`
+is timing-sensitive (pulls before the friend is reachable; failed twice, then passed 3/3, and passes on the unchanged code): follow-up.
+
+**Open:** the machine-scope TPM measurement stays optional; Linux/macOS firewall probes report `Unknown` (the measured inbound connections
+decide); a durable diagnostics store and the ranking policy are Offline Phase 4; Offline's terminals and brokers turn `ReportDiagnostics()` on
+in Phase 4.
+
+### 2026-10-27 — Docs synced with the crypto deliveries (docs only, no code)
+
+YFex.Cryptography built two things this library waited for (crypto 12 §5, 14 §9–§10):
+- **Key-agreement key store** `IRecipientKeyStore`: `CngRecipientKeyStore` (`.Windows`, TPM first, measured ≈ 47 ms per agreement) and
+  `SealedRecipientKeyStore` (files, every OS). **The I5 key-agreement item is no longer blocked.**
+- **`YFex.Cryptography.Android`**: R7 answered on emulators (Keystore key = TLS 1.3 client credential), so handhelds keep both keys in the
+  Keystore. The real-handheld run is still pending.
+
+Updated: README status + ⚑I4; 04 §1 (Android row, key-agreement stores, the closed Linux/macOS gap); 08 §2 (dependency rows), §3 I5 and
+I6 (I6 split into **I6a**, not blocked: Android package, attestation at enrollment, lost-key handling, online QR path; and **I6b**, after
+I5); 09 §2 (state under `NoBackupFilesDir`, not `FilesDir`; key-agreement row; key-store gap closed), §5 status; 11 status, §1, §6, §9.
+Found while checking the code for I6a: `InstallationStorageOptions` has no Android default; `IInstallationKeyStore` and the enrollment
+request have no attestation challenge or chain; `AndroidKeystoreKeyLostException` would escape from `InstallationStateStore`'s ring load.
+Backup: `C:\Temp\installations-backup\docs-sync-2026-10-27\`.
+
+**Next:** I5 (SAS pairing, site issuing CA, provisional certificates + central confirmation, key-agreement key, rotation drills, chaos
+suite); I6a can run alongside it; one real-handheld run of the crypto device tests settles StrongBox.
+
+### 2026-10-27 — I5: offline pairing (SAS), site issuing CA, central confirmation, key-agreement key (Claude)
+
+User: "Start Phase I5: SAS pairing, site issuing CA, provisional certificates with central confirmation, and the key-agreement key."
+Backup: `C:\Temp\installations-backup\I5\`. The repo's earlier uncommitted work was kept; nothing committed.
+
+**Built (main package `Pairing/`, `Keys/`; Central; Central.AspNetCore; Windows; Testing):**
+
+| Item | Where |
+|---|---|
+| Key-agreement key: `InstallationKeyStore(…, keyAgreementStore)`, `IInstallationKeyStore.GetKeyAgreementKeyAsync`, `InstallationSealing.Seal/OpenAsync` (installation id + purpose bound) | `Keys/` |
+| Enrollment/renewal payload tag 2 with the key-agreement public key (tag 1 bytes unchanged); registry `KeyAgreementKey`; a renewal adds it for older installations | `Enrollment/`, Central |
+| `WindowsInstallationKeys.Create(…, keyAgreement: true)` → `CngRecipientKeyStore` (TPM first) | `.Windows` |
+| Pairing exchange `PairingProtocol` (Hello → Commit → Nonce → Reveal → Proof → Result; SAS = 6 digits of the transcript, which includes the broker TLS certificate), `PairingClient`, `PairingValidation` | `Pairing/` |
+| Broker: `InstallationPairingHost` + `IPairingApprover` (the app's screen; `installations.pair` is the app's check), on the peer port selected by SNI `pairing.yfex.invalid` / ALPN `yfex-pairing/1` (`InstallationFriends.AcceptPairing`); `peers.AcceptPairing(sp => approver)` in DI | `Pairing/`, `Peers/`, DI |
+| Site issuing CA: key `installation/site-authority`; central `IssueSiteAuthorityAsync` (`POST …/site-ca`, only while `RosterSettings.PairingEnabled`), 30 days, path length 0, broker URNs; registry keeps them forever, rosters list each broker's two newest valid ones; the broker renews at ⅓ life left (`EnsureSiteAuthorityAsync`, every 6 h in DI) | Central, `Pairing/` |
+| Provisional state: `InstallationProvisioning.Pairing` (`SignedPairingReceipt`), provisioning response case 4, state format 3; `LocalInstallation` publishes `InstallationProvisional`; the peers service starts friends for it | `Enrollment/`, state |
+| Confirmation: `EnrollmentClient.RenewAsync` of a provisional installation → `POST …/confirm` (receipt + proof by both keys) → central checks broker signature, site CA held at pairing time, 30-day window, policies → normal certificate for the same transport key (`PairedBy`), or the installation is registered **revoked** (`PolicyRefused`, then `PairingRejected` on retry) | Central, `Enrollment/` |
+| New refusals `PairingDisabled`, `PairingRejected`; domains `site-authority`, `pairing`, `pairing-receipt`, `pairing-confirmation`, `sealed` | contracts |
+
+**Deviations from 04 §5 (recorded there):**
+1. The SAS sketch had no commitment. Without one, a man in the middle can search about 2^20 nonces for matching digits. The broker
+   now commits to its nonce before it sees the spare's. The broker certificate is also in the transcript, so a relay fails at the
+   proof.
+2. Pairing uses the same port, selected by SNI, so no second firewall rule is needed.
+3. Central confirms automatically through the enrollment policies, or with an administrator's approval: both, per scope (user,
+   2026-10-27; see the entry below).
+
+**Acceptance:**
+- **S7 (spare PC paired during an outage, confirmed later)** passes:
+  - the same code shows on both screens;
+  - the spare is a provisional `SameSite` friend;
+  - central does not know the installation before confirmation;
+  - a lost answer is retried idempotently;
+  - the confirmed certificate comes from the installation issuing CA.
+- **MITM.** A relay that presents its own certificate claiming the broker's id is refused with `InvalidProof`, and the approver is
+  never called.
+- **Provisional installations cannot issue approvals at central:** they have no key there until confirmed.
+
+**Tests:**
+- Installations.Tests 127 (unchanged).
+- Central.Tests 28 → **38** (`PairingTests`: S7, MITM relay, pairing disabled, rejected by the person, policy rejection revokes on the
+  site, revoked broker, forged receipt, codec round trips, sealing, renewal adds the key-agreement key).
+- Rpc.Tests 13, Windows.Tests 9: green.
+- NativeAOT smoke: published with 0 IL warnings, exit 0. The new I5 segment runs over real TCP/TLS: site CA from central, pairing,
+  confirmation through the wire codecs, sealing.
+- `PeerAcceptanceTests.Forged_and_replayed_beacons_are_rejected_and_counted` is timing-flaky **before** I5 too: it failed in 2 of
+  3 baseline runs.
+
+**Not built (I5 leftovers):**
+- rotation drills (issuing CA yearly, root overlap);
+- the chaos suite (partitions, restarts, disk-image restore);
+- site revocation signed by the broker (04 §4);
+- forwarding the receipt to central through the relay (`InstallationPairingHost.Paired` is the hook);
+- an HTTP end-to-end test of `site-ca` / `confirm` (the codecs are exercised by the AOT smoke's wire transport);
+- Linux and macOS runs.
+
+### 2026-10-27 — I5: admin approval of offline pairings (user: "both")
+
+The user wanted **both** confirmation modes.
+- `CentralInstallationOptions.PairingConfirmationFor(scope)`: `Automatic` (the default) or `AdminApproval`.
+- **With approval:** the confirmation request is kept pending (new refusal `PairingPending` = 19; the provisional installation keeps
+  working and its renewal loop retries). An administrator then calls one of these (the host checks `installations.enroll`):
+  - `CentralEnrollmentService.ApprovePairingAsync(id, decidedBy)`: the next confirmation goes through the policies and is enrolled.
+  - `RejectPairingAsync(id, decidedBy)`: the installation is registered **revoked** at once and the revocation list is published, so
+    the site stops accepting it.
+- `ListPendingPairingsAsync(scopePrefix)` lists what waits.
+- Registry: `PendingPairingRecord`, `PairingDecision`, `ListPendingPairingsAsync`, `DecidePairingAsync`, and
+  `ConfirmPairingAsync(…, requireApproval)`.
+
+**Tests:**
+- Central.Tests 38 → **40**, three runs green: waits → approved → confirmed; rejected → revoked on the site.
+- Rpc 13 and Windows 9 green.
+- The AOT smoke was not re-run: the change is on central's admin path only, and a parallel session ("I5 rotation drills and chaos
+  suite") owns the smoke right now.
+
+### 2026-10-27 — I5: rotation drills and chaos suite (Claude)
+
+Task from the I5 session, run alongside the admin-approval work above (that session's files were not touched; nothing committed).
+Backup: `C:\Temp\installations-backup\I5-drills\`.
+
+**Built:**
+
+| Item | Where |
+|---|---|
+| Roster `TenantRootCertificates`: during a root rotation, the other root and the cross-certificates. Written as roster **format 2** only when present, so format 1 bytes and the goldens are unchanged. | `Roster/InstallationRoster.cs` |
+| `TenantRootOverlap` (internal): a listed root counts only with a cross-certificate for its subject and key, issued **directly by a pinned root**. It counts while that certificate and its issuer are valid; a cross-certificate revoked by serial ends it. `InstallationTrust.InRootOverlap(now)`. | `Trust/` |
+| Renewal re-pin: `ProvisioningValidation` accepts another `TenantRoot` only when the answer's verified roster carries a cross-certificate from the pinned root, valid now. | `Enrollment/ProvisioningValidation.cs` |
+| `InstallationAuthority(…, retiringIssuing, tenantRootOverlap)`, `IssuingCertificatesAt(now)`, `TenantRootOverlap`. Rosters list the current CA, the retiring CAs until they expire, and the overlap. `CentralInstallationBundlePublisher` issues a new roster version by itself when the roster's CAs differ from the authority's. | Central |
+| `InstallationTrustSource.RestoreAsync(provisioning, store, …)` and `ApplyStoredAsync(store)`: one restart path for DI and the harness. | `Peers/`, DI |
+| Duplicate identity: `InstallationFriends.DuplicateIdentitySuspected` (the sender's address), `PeerStatistics.DuplicateIdentityBeacons` and `BeaconAddressConflicts`. | `Peers/` |
+| `TestTenantAuthority`: `RotateIssuingAuthority()`, `RotateRoot(crossValidity)`, `EndRootOverlap()`, `RetiringIssuingAuthorities`, `IssuingAuthoritiesForRoster`, `TenantRootOverlap`, `PreviousRoot`. Also `TestInstallation.Root` (the pinned anchor), and `TestCentral` passes the rotation state. | `.Testing` |
+| Harness chaos support: `HarnessDisk` (sealed state through the real `InstallationStateStore`, `HarnessBundleStorage`, `Image()` / `Restore()`), `HarnessInstallation.StopAsync` / `RestartAsync` / `IsRunning` / `Disk` / `ProvisioningFor`, `InstallationHarness.AddCopy` (a disk image booted on a second PC), `HarnessSite.IssuingAuthorities`. Every harness installation now starts from its sealed state file. | `.Testing` |
+
+**Defects the drills exposed (fixed):**
+1. **Rosters listed only the current issuing CA.** Installations enrolled after a rotation pin only the new CA, so they refused every
+   installation still certified by the old one. Rosters now list retiring CAs until they expire.
+2. **Central kept serving the old roster after a rotation**, because the registry saw no change. The publisher now re-issues when the
+   roster's CAs (or a retiring CA that expired) differ from the authority's.
+3. **A root rotation was impossible.** Renewal compared the root byte for byte, and rosters had no way to carry a second anchor. Now:
+   endorsed re-pin at renewal, plus the overlap material in the roster.
+4. **`InstallationTrustSource.Apply` re-verified the other current bundle.** Once the revocation list expired, no newer roster could be
+   applied, and the reverse. After an outage of more than 30 days both expire, and nothing could ever be applied again. Only the
+   incoming bundle is verified now.
+5. **A restart started from the enrollment receipt.** `FromProvisioning` threw when the receipt's bundles had expired since the last
+   renewal, even with newer valid bundles in the store, so the DI peers service failed to start. `RestoreAsync` starts from the newest
+   ones.
+6. **`BundleStore.GetLatestAsync` ignored the floor.** An older bundle copy put back came back `Valid`: gossip offered it to friends, and
+   other kinds (licenses, snapshots) used it. It now answers `OlderThanFloor` (or `ConflictingSameVersion`).
+7. **Re-delivering the floor's own version did not repair a restored older copy** in storage. It is now rewritten.
+8. **Bundles applied straight to the trust got no floor.** This covers central's site-CA answer in `EnsureSiteAuthorityAsync`, a host's
+   `ApplyBundle`, and harness pushes; a restart then fell back below them. `BundleGossip` now floors every trust change.
+9. **A cloned disk image was invisible.** A beacon carrying the installation's own id was dropped without a trace. It is now counted and
+   raised when this process did not write it (the issue times of its last 32 beacons are kept).
+10. Harness: a copy signed its goodbye beacons with keys that were already disposed (teardown order).
+
+**Acceptance:**
+
+| I5 item | Result |
+|---|---|
+| Issuing CA, yearly | Real central, enrollment at day 290 of the old CA. After the rotation, the roster is re-issued listing both CAs. A new enrollment and a forced renewal get the new CA. Installations that pinned either CA accept each other. After the old CA expires, central drops it by itself; on the mesh, a roster that forgets the retiring CA strands its installations (`Untrusted`) |
+| Root overlap | A renewal re-pins the new root (stored receipt). Installations pinned to either root accept each other over real TLS on the LAN, both directions. When the overlap ends, a new root without endorsement is `Untrusted`. A changed root without a cross-certificate is refused at renewal (`InvalidProvisioning`, nothing stored). These cannot add an anchor: the bundle key alone, another tenant's CA, or this tenant's own issuing CA. The overlap ends when the cross-certificate expires or is revoked by serial |
+| Site issuing CA of a broker | At day 20.5 the broker renews (less than ⅓ of its life left), and the roster lists its two newest CAs. A provisional certificate of the older CA keeps working (provisional, on the broker and on a terminal) and ends with its own validity plus grace. At day ~41, the third CA brings the roster to the second and third CAs, and the second CA's provisional certificates still work |
+| Partitions and heals | A terminal cut off from everyone misses a revocation the broker spread. After the heal, its friends' beacons bring the new list; the revoked spare is dropped and the floor is raised. A 30 % lossy, slow link still converges, and requests get through |
+| Restarts | The identity and receipt come from the sealed state file, and the store's newer roster wins. The floor refuses v2 and the receipt's v1 again. The installation reaches the broker and the broker reaches it, with no false duplicate-identity alarm. A broker restarted during a partition comes back at its stored version and catches up after the heal |
+| Disk-image restore | **Older state file:** the store's floor and list win, and the revoked spare stays refused while partitioned. **Older bundle copy:** flagged `OlderThanFloor`; the trust uses the newest copy left (v2, newer than the receipt's), the floor stays at v3, nothing below it is accepted, and after the heal the friends' v3 repairs the copy. **Whole image** (state and floors): nothing on the machine can tell. Its friends refuse its older versions, and the first friend it reaches gives it the newer list |
+| Duplicate identity | A copy booted on a second PC (same id, same software keys) is accepted by trust, as expected. **Both copies** raise `DuplicateIdentitySuspected` with the other's address, and the broker counts `BeaconAddressConflicts` |
+| Long outages | A fresh roster applies while the current revocation list is expired, and the reverse. A restart after the receipt's bundles expired starts from the store's newer ones |
+
+Mutation checks: with gossip flooring, the floor-copy repair and the automatic roster re-issue disabled, 6 drills fail (both central
+rotation drills and four chaos tests).
+
+**Tests:**
+
+| Project | Before | After |
+|---|---|---|
+| Installations.Tests | 127 | **141** (`RotationDrillTests` 4, `ChaosTests` 10) |
+| Central.Tests | 40 | **44** (`RotationDrillTests` 4) |
+| Rpc.Tests | 13 | 13 |
+| Windows.Tests | 9 | 9 |
+
+All four projects green in **three consecutive full runs** (projects one by one; the known flaky
+`PeerAcceptanceTests.Forged_and_replayed_beacons_are_rejected_and_counted` passed all three times). NativeAOT smoke (not edited, but its
+libraries changed): old exe deleted, published with 0 IL warnings (publish exit 0), run exit 0.
+
+**Deviations and decisions (with reason):**
+1. **The root overlap travels in the roster, but only the pinned root's key can add an anchor** (through a cross-certificate). A bundle
+   key or an online issuing CA that leaks cannot add roots. The enrollment contracts are unchanged (no second anchor in provisioning).
+2. **Cross-certificates are never in a chain.** Their path length is 1, because `CertificateAuthority` requires a CA below a root with path
+   length 2 to have less. They only endorse the other self-signed root, which becomes a second anchor.
+3. **One overlap window per trust:** the intersection of the endorsements (a rotation adds one root at a time).
+4. **After a bundle-copy restore, the trust uses the newest copy left,** even below its floor (it is still newer than the receipt's). The
+   floor itself never moves down.
+5. **A duplicate identity is detected, not acted on.** Central revokes the id and the machines are re-enrolled. The diagnostics report
+   does not carry it yet.
+6. **Deployed installations must run this code before a root rotation:** older code refuses roster format 2.
+
+**Open (for the user):**
+- **Everything expired at restart.** → **decided 2026-10-28 (⚑I38): stale mode, bundles only; built.** If both the receipt and the store are older than their 30-day validity (no central or friend for a
+  month), `RestoreAsync` throws and peers do not start, so the installation cannot even receive gossip. Choose: start with expired
+  bundles flagged stale, or wait for central.
+- **Grace for provisional certificates.** → **decided 2026-10-28 (⚑I39): configurable, built.** Provisional certificates get the 7-day LAN grace like normal ones (72 h + 7 days). Is that
+  intended?
+- **Duplicate identity at central.** → **decided 2026-10-28 (⚑I40): yes; built.** Add it to the diagnostics report (codec change) so central sees it.
+- **No scheduled rotation (user asked whether the periods are configurable: yes).** → **decided 2026-10-28 (⚑I37): option + hosted service + optional Jobs package; not built.** A rotation is an operator action: build the authority
+  with the new CA plus `retiringIssuing`, or with the new root plus `tenantRootOverlap`. "Yearly" and "10 years" are the certificates'
+  lifetimes chosen when they are created, and the overlap lasts as long as the retiring CA or the cross-certificates. A scheduled
+  issuing-CA rotation at central (an option such as `IssuingAuthorityLifetime` plus a job that mints the next CA before the end) is not
+  built. Already options: `CertificateLifetime` (90 d), `SiteAuthorityLifetime` (30 d), `PairingOptions.SiteAuthorityRenewBefore` (⅓).
+- Nothing in the admin-approval session's files was needed for the drills.
+
+### 2026-10-27 — I6a: Android package, attestation at enrollment, lost Keystore keys, QR link with sponsor confirmation (Claude)
+
+Task from the I5 session (I6a only; I6b — broker path, presence, revocation — later). Backup: `C:\Temp\installations-backup\I6a\`.
+Nothing committed; the I5 work in the folder was kept. No new NuGet package.
+
+**Built:**
+
+| Item | Where |
+|---|---|
+| `YFex.Installations.Android` (`net11.0-android`, API 26+, trimmable), own `installations.android.slnx`: `AndroidInstallationKeyStore` (both keys in the Keystore through `AndroidKeystoreSigningKeyStore`, alias prefix `yfex.installations.{app}.`, never a software transport key), `AndroidInstallationKeys.Create / StateDirectory / IsKeyLost / WipeAsync`, `AndroidHardwareHintSource` (`ANDROID_ID`), `UseAndroidKeyStore()` | `src/YFex.Installations.Android/` |
+| State under **`NoBackupFilesDir/yfex/installations/{app}`**. The portable default still refuses Android (`PlatformNotSupportedException`, now naming the Android package), because .NET maps its folders to `FilesDir`, which Auto Backup copies. New builder hooks for platform packages: `PlatformStorage(…)` (default directory; `Storage(…, path)` still wins) and `DetectLostKeys(…)` | main package, DI |
+| **Attestation at key creation:** `IInstallationKeyStore.GetAttestedTransportKeyAsync / GetAttestedEvidenceKeyAsync / ReadAttestationChain` (default methods: no attestation). `EnrollmentClient` derives the challenge `EnrollmentProtocol.AttestationChallenge(token)` = SHA-256(label ‖ central's challenge token), 32 bytes (the Keystore limit is 128) | `Keys/`, `Enrollment/` |
+| **Wire:** enrollment payload **tag 3** = the v1 fields · [key-agreement key] · two attestation chains (≤ 8 × 8 KiB) · [confirmation commitment] · nonce. Only written when it carries attestation or a commitment: tag 1 / 2 bytes and goldens unchanged. Response **case 6** = `EnrollmentPending(IssuerNonce, ExpiresAt)` (new case of the `ProvisioningResponse` union) | `EnrollmentProtocol` |
+| Central records `KeyAttestations` + the expected challenge on `InstallationRegistryRecord` (`Attestation`, `AttestationChallenge`, `SponsoredBy`) and passes them to `IEnrollmentPolicy` (`EnrollmentCandidate.Attestation / AttestationChallenge / Sponsor`). Record only: no Google-root check | Central |
+| **Lost Keystore keys:** `InstallationStateFailure.KeysLost = 4`. `InstallationStateStore(options, rings, isKeyLost)` maps a ring-load failure the classifier recognizes (Android: `AndroidKeystoreKeyLostException` anywhere in the inner chain) to `InstallationStateUnreadable(KeysLost)` in `InitializeAsync` / `LoadAsync` (and the reload path); without a classifier it still throws. `InstallationStateStore.DeleteAsync()`; `AndroidInstallationKeys.WipeAsync(app, keyDirectories)` deletes the Keystore keys, the state folder, the key-agreement key and the app's ring folders (restart the app after it) | state store, Android |
+| **`EnrollmentLink` v1** codec: tag 1 · root hash (16 B) · expires · [central URL · code] · [broker id · transport key id · 1–3 endpoints · pairing code] · sponsor id · evidence key id · [endpoint]; text `YFEX:` + RFC 4648 base32 (QR alphanumeric mode). Canonical decode, codes must have 4 groups, ≤ 512 bytes. A full link is 198 bytes / 322 characters; an online-only link 112 bytes / 172 characters | `Enrollment/EnrollmentLink.cs` |
+| **Online sponsor path:** `EnrollmentCodeRequest(…, Sponsor, Confirm)`; a sponsored code has 4 groups, lives 5 min (max 5 min); the sponsor must be an unrevoked installation of the tenant allowed by `CentralInstallationOptions.MaySponsor` (default: **same scope only**); `MaximumPendingPerSponsor` = 3 (checked at code creation → `TooManyPending`). `EnrollmentClient.EnrollAsync(link, name, showCode)` refuses a central not in `EnrollmentClientOptions.LinkCentrals` (`UntrustedLink`, nothing sent; DI `EnrollAt` adds its address, `AcceptLinksFrom(uri)` adds more), refuses an expired link, and refuses an answer whose root does not match the link's hash (`InvalidProvisioning`, nothing stored) | client, Central |
+| **Pending + SAS:** the registry holds the first request (`PendingEnrollmentRecord`, `RegistryEnrollmentPending`), another device gets `CodeUsed`, policies run at hold time and again at confirmation. `CentralEnrollmentService.EnrollmentAwaitingConfirmation` (event, the push hook), `ListPendingEnrollmentsAsync(sponsor)`, `ConfirmEnrollmentAsync(sponsor, installation, shownCode, by)` (issues the certificate at once; the device's next poll gets it through the existing idempotent-retry path; the roster is re-published), `RejectEnrollmentAsync`, `CancelCodeAsync`. New refusals 20–24: `SponsorUnavailable`, `ConfirmationRequired`, `EnrollmentRejected`, `UntrustedLink`, `TooManyPending` | Central, contracts |
+| Testing: `TestAttestingKeyStore` (attests only at creation, like the Keystore), `TestCentral.CreateSponsoredCodeAsync`, `LinkFor`, `LinkAddress` | `.Testing` |
+
+**Deviations from 11 §4.1 (with reason):**
+1. **Commit/reveal, as in I5.** The 11 §4.1 formula is kept, SHA-256(domain ‖ evidence SPKI ‖ transport SPKI ‖ id ‖ issuer nonce ‖
+   handheld nonce) → `PairingProtocol.CodeOf`, so I5 and I6 share the 6-digit derivation (`EnrollmentConfirmation`). But the handheld
+   first sends only a commitment to its nonce. Central then picks its nonce, and the handheld reveals its own on the next request. Without
+   this, an attacker who can sit between the handheld and central (TLS broken) chooses the nonce the handheld sees after it knows its own
+   digits, and can search 10^6 values until both screens agree. The sponsor's screen shows the code only after the reveal.
+2. **Pending is a response case**, not a refusal like `PairingPending`, because it carries central's nonce. `EnrollmentResult` is
+   unchanged: `EnrollAsync(link, …, showCode)` polls (`ConfirmationPollInterval`, 2 s) until enrolled, rejected or expired.
+3. **The certificate is issued at confirmation** (inside the registry transaction), not at the device's next request.
+4. **"Push to the sponsor"** is an event on the service; the host's transport to the sponsor's screen (RPC) is the app's.
+5. A typed code that needs confirmation is refused with `ConfirmationRequired`: only the link path commits to a nonce.
+
+**Acceptance (I6a part of 08 Phase I6):**
+
+| Item | Result |
+|---|---|
+| QR → pending → SAS confirm → enrolled | Windows harness (`HandheldEnrollmentTests`, real `EnrollmentClient`) **and** both emulators (Keystore keys, sealed state under the Keystore root key in `NoBackupFilesDir`, `ANDROID_ID` hint): same digits on both screens; no registry record before confirmation; receipt pins the QR's root; roster lists the handheld |
+| A second device using the same QR | refused `CodeUsed`; never reaches the sponsor's list; a rejection reaches the first device (`EnrollmentRejected`) |
+| A QR with an unknown central host, a wrong root hash | `UntrustedLink` with zero requests sent (other host, other port); `InvalidProvisioning`, nothing stored. Wrong broker key = I6b |
+| Wrong digits / another sponsor / reveal tricks | confirming other digits → `InvalidProof`, nothing enrolled; another sponsor → null; a reveal before central's nonce, or one that does not open the commitment → `InvalidProof` |
+| Attestation | emulators: 3-certificate chain, the leaf's KeyDescription carries central's challenge for **both** keys; an existing key keeps its first attestation; harness: a failed attempt's keys keep their old challenge and central records it as is |
+| Lost Keystore keys | emulators: deleting the root key alias → `KeysLost`; `WipeAsync` → a new identity. Windows: the same with a test root provider; without a classifier the error still propagates |
+| Keystore transport key as TLS client credential | emulators: `LocalPeer.CreateAsync(receipt, androidKeys)` + TLS 1.3 to a site broker, which reads the handheld's installation id, role and scope from the certificate |
+| Trim gate of the Android build | `installations.android.slnx` Release: 0 warnings, 0 errors |
+
+**Tests:**
+
+| Project | Before | After |
+|---|---|---|
+| Installations.Tests | 141 | **151** (`HandheldTests` 10: link goldens bytes + text, invalid links, root pin, payload tag 3, pending case, SAS, attestation challenge, `KeysLost` + wipe, platform storage default) |
+| Central.Tests | 44 | **53** (`HandheldEnrollmentTests` 9) |
+| Rpc.Tests | 13 | 13 |
+| Windows.Tests | 9 | 9 |
+| Android.DeviceTests (new) | — | **6/6** on Android 16 ATD (`20261027-232241-emulator-5586`) and Android 15 (`20261027-233638-emulator-5584`) |
+
+- Central, Rpc and Windows were green in every run.
+- In Installations.Tests two timing tests failed in the full suite tonight:
+  - `PeerTcpTests.Handshake_and_first_request_take_at_most_50_ms_with_software_keys` (median 75–85 ms; it passes alone);
+  - `ChaosTests.A_partitioned_terminal_misses_a_revocation_…` (2 of 4 runs).
+- **The pre-I6a code fails the same way on this machine tonight.** It was rebuilt from the backup in `C:\Temp` and run twice: handshake
+  79 / 87 ms, plus the chaos test once. So these failures are environmental, not caused by I6a. They need a look on a quiet machine.
+- Every new test and every other test passed.
+- NativeAOT smoke (not edited; its libraries changed): old exe deleted, publish exit 0 with 0 IL warnings, run exit 0.
+- The first Android 15 attempt crashed with a start-up ANR under memory pressure, while a Release build ran in parallel. The re-run alone
+  passed.
+
+**Not built / open (I6b or user):**
+- broker path + sponsor push over RPC;
+- `SponsoredBy` / `PresenceWitness` in the roster, `SitePresence`;
+- revocation from a site terminal and self-revocation;
+- an attestation-checking policy (Google roots) — **deferred 2026-10-28 (⚑I34)**: after the real-handheld run, opt-in, central-only;
+- the audit entry `Installations.EnrollmentRejected` (no audit integration yet);
+- a readable enrolled state whose Keystore *signing* keys alone are gone (`GetEvidenceKeyAsync` would create a new key, and central then
+  refuses the renewal with `InvalidProof`): it should read as `KeysLost` too — **built 2026-10-28 (⚑I35)**;
+- the real-handheld run (StrongBox).
+
+### 2026-10-28 — I6a follow-ups: sponsor rules, decisions ⚑I33–I36 (Claude)
+
+User decisions on the I6a open items (README §6.5): sponsor scope → options (⚑I33, built); attestation check → deferred with a reminder
+(⚑I34); signing keys lost → `KeysLost` (⚑I35, not built); enrollment without a QR or an administrator's code → open (⚑I36).
+
+| Built | Where |
+|---|---|
+| `SponsorRules.SameScope` (default of `CentralInstallationOptions.MaySponsor`, behaviour unchanged), `SameSite(siteRank)` (the sponsor's rung of that rank and below; rank 0 refused; a sponsor without that rank sponsors nothing), `SameScopeOrBelow` (documented risk: a sponsor above sites) | `Central/SponsorRules.cs` |
+
+Tests: Central.Tests 53 → **54** (`HandheldEnrollmentTests.Sponsor_rules_same_scope_same_site_or_below`: an end-to-end sponsored code for
+`…/2=deposito` with `SameSite(1)`, plus each rule on store, deposit, region and a text-prefix sibling). AOT smoke: 0 IL warnings, passed.
+Backup: `C:\Temp\installations-backup\i6a-decisions-2026-10-28\`.
+
+**⚑I35 built (same day):**
+
+| Item | Where |
+|---|---|
+| `IInstallationKeyStore.TryGetEvidenceKeyAsync` / `TryGetTransportKeyAsync(keyName)`: never create. Default methods call the `Get…` methods (a store that cannot tell counts its keys as present); `InstallationKeyStore`, `AndroidInstallationKeyStore` and `TestAttestingKeyStore` ask their stores | `Keys/`, Android, Testing |
+| `InstallationStateStore(options, rings, isKeyLost, keys)`: when the file is read (not on cached reads) and holds a receipt, the evidence key must exist and the receipt's transport key must exist **and** match the certificate's public key; otherwise `KeysLost`. A lost platform key while asking (the `isKeyLost` classifier) counts as missing. DI passes `IInstallationKeyStore` | state store, DI |
+
+Limits: the receipt has no evidence public key, so an evidence key **already recreated** by older code cannot be told apart locally (central still
+refuses it); keys deleted while the process runs are seen at the next read of the file (restart, or the next save).
+Tests: Central.Tests 54 → **55** (`An_enrolled_state_whose_signing_keys_are_gone_reads_as_KeysLost`: not enrolled → no check; missing evidence
+key → `KeysLost` from `LoadAsync` and `InitializeAsync`, no key created, file kept, wipe → new identity; missing transport key and a new key
+under the old name → `KeysLost`). `TestMachine` now passes its keys, so every central enrollment/renewal test runs the check, and the renewal
+test asserts a reopened state still loads after two rotations. Mutation: with the check off, the new test fails.
+Backup: `C:\Temp\installations-backup\i35-2026-10-28\`.
+
+**User decisions, round 2 (README §6.5):** ⚑I24 keep as built; ⚑I38 stale-mode restart; ⚑I39 provisional grace configurable (built,
+below); ⚑I40 duplicate identity in the diagnostics report; ⚑I37 scheduled CA rotation placed per ⚑H1 (hosted service + optional `.Jobs`
+package; root-key signer is a sub-question); ⚑I41 visitors added at central only.
+
+**⚑I39 built:**
+
+| Item | Where |
+|---|---|
+| `CertificateGrace(Enrolled, Provisional)` (default 7 days each, behaviour unchanged). `InstallationTrust` accepts an expired chain within the longer of the two, then applies the grace of its kind once the issuer says whether it is provisional (refusal `Expired`). The `certificateGrace` parameters of `InstallationTrust` / `InstallationTrustSource` (`FromProvisioning`, `RestoreAsync`) now take it (they took a single `TimeSpan?`, never passed by any caller). `InstallationPeersBuilder.CertificateGrace` sets it for the DI peers service; negative values are refused | `Trust/`, `Peers/`, DI |
+
+Tests: Installations.Tests 151 → **152** (`TrustTests.Enrolled_and_provisional_certificates_have_their_own_grace`: default 7 days for a provisional
+certificate; a 12 h provisional grace refuses at +13 h while enrolled keep 7 days; the reverse; a negative grace refused). Mutation: without
+the per-kind check the test fails. Central 55, Rpc 13, Windows 9; AOT smoke 0 IL warnings, passed; Android package compiles.
+Backup: `C:\Temp\installations-backup\grace-2026-10-28\`.
+
+**⚑I38 and ⚑I40 built (same day):**
+
+| Item | Where |
+|---|---|
+| **Stale start (⚑I38).** `InstallationTrustSource(…, allowStale)`, `FromProvisioning(…, allowStale)`, `RestoreAsync(…, allowStale, …)`: when the roster or revocation list fails **only** because it expired (signature, publisher key and audience still verify), the source starts `IsStale` instead of throwing; `RestoreAsync` then also starts from expired stored copies newer than the receipt's. `InstallationTrust.Stale` shares only `bundles`: `Check` on another channel → new refusal `PeerRefusal.TrustStale = 10`, `Shares` → false, and beacons offer only `bundles`. `Apply` clears it once the other list is valid too (`Changed` fires); a source that started fresh never becomes stale (running behaviour unchanged). The DI peers service and the harness pass `allowStale: true`; the public default stays false | `Trust/`, `Peers/`, DI, Testing |
+| **Duplicate identity at central (⚑I40).** `InstallationDiagnosticsContent` gains `TrustStale`, `DuplicateIdentityBeacons` (since the previous report) and `DuplicateIdentityAddresses` (≤ 8, from `InstallationFriends.TakeDuplicateIdentitySources()`). Content **tag 2** = the tag 1 fields · stale · beacons · count · (address bytes · port)*, written only when one is set, so tag 1 bytes are unchanged; a tag 2 with all three empty is refused as non-canonical. Central: `IInstallationDiagnosticsStore.ListDuplicateIdentitiesAsync(since)` → `DuplicateIdentityFinding(installation, beacons, addresses, first, last)` (a new interface member: other store implementations must add it) | `Diagnostics/`, `Peers/`, Central |
+
+Limits: a stale installation accepts bundles only from peers in its **old** roster (a broker enrolled during its outage cannot serve it);
+its own certificate must still be within grace, else only central can help. Offline Phase 4 reads the same report: the new fields are
+additive.
+Tests: Installations.Tests 152 → **156** (`ChaosTests`: stale start + only `bundles` + recovery + forged list still refused; harness: a
+terminal restarted 35 days later (shifted clock) starts stale, its report says so, the broker's beacons bring both lists and `time` works
+again. `DiagnosticsTests`: a disk copy reaches central as one finding naming both addresses; tag 1 bytes unchanged, tag 2 round trip with
+IPv4/IPv6, limits, non-canonical tag 2 refused). Harness `SignRoster(site, issuedAt)`. Mutations: stale enforcement off → the stale test
+fails; tag 2 never written → both diagnostics tests fail. Central 55, Rpc 13, Windows 9; AOT smoke 0 IL warnings, passed; Android compiles.
+Backup: `C:\Temp\installations-backup\i38-i40-2026-10-28\`.
+
+### 2026-10-28 — I6b step 1: revocation from a site terminal and self-revocation (Claude)
+
+Task from the I6a session (11 §7 rows 2–4, ⚑I31). Backup: `C:\Temp\installations-backup\i6b-revocation\`. Nothing committed.
+
+**Built:**
+
+| Item | Where |
+|---|---|
+| **Site terminal → central (row 2).** `CentralEnrollmentService.RevokeFromSiteAsync(caller, installation)` → `InstallationRevocationResult` = `InstallationRevocationAccepted(record, AlreadyRevoked)` \| `InstallationRevocationRefused(reason)`. The host checks the person's `installations.revoke` and passes the installation its assertion authenticated (`InstallationCallContext.Current`, `HttpContext.GetInstallation()`); only its id is used, the registry decides. Refusals (`InstallationRevocationRefusal`): `CallerNotTrusted` (unknown to this tenant, revoked, not enrolled — a provisional installation is unknown until confirmed), `SelfRevocation` (the caller named itself), `UnknownInstallation`, `OutsideSite` (renamed `NotAllowed` 2026-10-29, ⚑I44). The effect is `RevokeAsync`'s (registry, revocation list published and pushed at once). `CentralInstallationOptions.MayRevokeFromSite(caller, target)`, default **same scope, any role** (⚑I44; since 2026-10-29 never the `SiteBroker`); a `SponsorRules` value fits through `(c, t) => rule(c, t.Scope)`. Metric `installations.central.requests`, operations `revoke-from-site` / `revoke-self` | Central |
+| **Self-revocation (row 4).** `SelfRevocationRequest(installation, requestedAt: TrustedInstant, signature)`, domain `yfex.installation.self-revocation.v1`, `SelfRevocationCodec` (content tag 1 = installation · bytes(instant); request tag 1 = bytes(content) · signature; strict decoding; relay kind `installations.self-revocation`; item id = SHA-256 of the bytes; `Verify(request, InstallationKeyRecord)`). `InstallationSelfRevocation(keys, relay, state, wipe, time, identity).RevokeAsync()` → `SelfRevocationOutcome` (`Revoked`, `NotEnrolled`, `KeysLost`, `HeldByFriend`, `CentralUnreachable`, `Refused`): signs with the evidence key (never creates one), sends through `IInstallationRelay` (directly when the device reaches central, through a friend otherwise), and **only on central's acknowledgement** deletes the state (`InstallationStateStore.DeleteAsync`) and runs the app's wipe (Android: `AndroidInstallationKeys.WipeAsync`). DI: `peers.AllowSelfRevocation(sp => wipe)` | main package `Enrollment/SelfRevocation.cs`, `InstallationDomains` |
+| Central: `RevokeSelfAsync(request)` against the registry's evidence keys. A request dated more than `PublicKeyBackdate` ahead of central's clock is refused. A key revoked **together with** the installation still verifies, so a repeat after the revocation is answered `AlreadyRevoked` and the device can still wipe; a key replaced earlier does not. `SelfRevocationConsumer` (relay ingress; the producer named by mutual TLS must be the installation in the request) and `central.AcceptSelfRevocations()` | Central `InstallationRevocationRequests.cs` |
+| Harness: `HarnessCentral.AcceptSelfRevocations(publishAtOnce)` → `HarnessSelfRevocations` (the production `Verify`; `Revoked`; `Publish()` = central's push of the new list) | `.Testing` |
+
+**Decisions taken here (small, reversible):**
+1. **Central unreachable → refuse to wipe and tell the app** (`CentralUnreachable` / `HeldByFriend`), instead of queueing and wiping. A friend's "held" is a claim kept in memory only (24 h, lost on restart); a wiped device that central never hears of stays listed as active. The friend still delivers what it holds, and central answers a repeat idempotently.
+2. **No new `InstallationRevokedBy` value.** Both paths record `Central` (central decided). `InstallationRevocations.TryDecode` refuses an unknown `By` byte, so a new value would make every older installation refuse the whole revocation list. Who asked (terminal, person) is the host's audit (no audit integration yet).
+3. Self-revocation needs no challenge: it can only ask for what the signer can already end, and an id is never re-used (re-enrollment mints a new one).
+
+**Not built — needs a decision (README §6.5):**
+- **Store offline (row 3), ⚑I42** (built 2026-10-29, entry below). At the time nothing of the broker-signed site revocation existed (only `InstallationRevokedBy.SiteBroker` and the list format). It needs a new bundle kind or a second signer for the tenant list, i.e. a trust decision. Options A/B/C in README §6.5; recommended A: `installations.site-revocations`, signed by the broker's evidence key, adds only, adopted by central.
+- **⚑I43 — central's push overtakes the relay's answer** (fixed 2026-10-29, entry below). Found by the harness: when central's new list reaches the broker before the broker's answer, `InstallationFriends` closes the device's connection on the trust change, so the device never hears "delivered". It is revoked at central and on the site but keeps its state, and no friend accepts it any more. `SelfRevocationTests.When_the_push_overtakes_the_relay_answer_…` pins this. Recommended fix: let in-flight requests finish before closing (a Peers change, not made here).
+- **⚑I44** — whether a terminal may revoke the site broker (built: any role in the same scope; decided and changed 2026-10-29, entry below).
+- An HTTP/RPC endpoint for the site path (the host's admin API calls the service, like `ConfirmEnrollmentAsync`); the "Revoke handheld" screens (app).
+
+**Acceptance (11 §7):**
+
+| Row | Result |
+|---|---|
+| Site terminal, central reachable | CAIXA-01's real installation assertion (provider → validator against the registry) → `RevokeFromSiteAsync` revokes COLETOR-03: one push, the published list carries it, central refuses the handheld's assertion (`Revoked`) and its renewal (`InstallationRevoked`); a repeat answers `AlreadyRevoked`. Refused: a terminal of another store, the caller itself, an unknown id, a claimed identity unknown to the registry, a revoked caller, another tenant's central. A device of `…/2=deposito` is outside the default rule and inside `SameSite(1)` |
+| Store offline | built 2026-10-29 (⚑I42, entry below) |
+| The device itself | Central.Tests: unreachable and held by a friend → nothing wiped, state still loads, not revoked; delivered → revoked, list published, state file gone, the app's wipe called, the next start mints a new identity. Forged key, another installation's key, a future date, an unknown id → refused; a request relayed by a terminal but naming the handheld → refused; repeat after revocation → `AlreadyRevoked`; strict codec. Not enrolled / evidence key gone → nothing sent. **Harness:** a Wi-Fi-only handheld with central down → `CentralUnreachable`, state kept; central back → `Revoked` through the broker's relay over mutual TLS, state gone, the site applies the list and the broker drops the handheld |
+
+**Tests:**
+
+| Project | Before | After |
+|---|---|---|
+| Installations.Tests | 156 | **158** (`SelfRevocationTests` 2) |
+| Central.Tests | 55 | **61** (`RevocationTests` 6) |
+| Rpc.Tests | 13 | 13 |
+| Windows.Tests | 9 | 9 |
+
+All four green in one full run (projects one by one); the new harness tests passed 3 runs in a row. Mutation: `SelfRevocationCodec.Verify` accepting any signature → `Central_checks_a_self_revocation_…` fails. AOT smoke: new I6b segment (the site path refuses the caller itself; self-revocation through the relay ingress; wipe; registry revoked; exit codes 36–39): old exe deleted, publish exit 0 with 0 IL warnings, run exit 0. Android package: `dotnet build src/YFex.Installations.Android` succeeded, 0 warnings (not run on an emulator: no Android code changed; the wipe hook is the existing `AndroidInstallationKeys.WipeAsync`).
+
+### 2026-10-29 — ⚑I43 drain before close, ⚑I44 broker not revocable from the site (Claude; decisions by the user)
+
+The user chose **A** for ⚑I42 (not built: its sub-questions — signing key, request channel, offline permission check — are open),
+**A** for ⚑I43 and the recommendation for ⚑I44.
+
+**Built:**
+
+| Item | Where |
+|---|---|
+| **⚑I43.** `PeerConnection.DrainAndCloseAsync()`: a friend the new roster or revocations refuse is no longer trusted at once — new requests and channel openings are answered `ChannelNotShared`, its pushes dropped, this side's pending requests to it fail `Disconnected`, and `IsUsable` is false (`InstallationFriends` no longer picks it, `FriendConnection.IsOpen` is false) — but the requests it already sent finish and their answers are written; then the connection closes (at most `PeerEndpointOptions.RequestTimeout`). `InstallationFriends.OnTrustChanged` drains instead of closing | `.Installations` `Peers/PeerConnection.cs`, `InstallationFriends.cs`, `FriendSet.cs` |
+| **⚑I44.** `CentralInstallationOptions.MayRevokeFromSite` default: same scope **and** the target is not a `SiteBroker`. `InstallationRevocationRefusal.OutsideSite` → `NotAllowed` (code `not-allowed`; unreleased, value 4 unchanged) | `.Central` |
+
+**Tests:** `SelfRevocationTests.When_the_push_overtakes_the_relay_answer_the_handheld_still_hears_it_and_wipes` (was the pin of the
+limit: now `Revoked`, state file gone, then the broker drops it); `RevocationTests.A_site_terminal_cannot_revoke_its_broker_by_default_but_central_and_a_wider_rule_can`.
+`ChaosTests.A_partitioned_terminal_misses_a_revocation_…` was flaky before this change (2 of 12 runs, measured with the old peer files):
+it read the friend set right after the trust version changed, before `Publish`; it now waits for the friend set. 12 runs of the
+self-revocation, gossip, friends and chaos tests in a row green.
+
+| Project | Before | After |
+|---|---|---|
+| Installations.Tests | 158 | 158 |
+| Central.Tests | 61 | **62** |
+| Rpc.Tests | 13 | 13 |
+| Windows.Tests | 9 | 9 |
+
+AOT smoke (win-x64 publish, no IL warnings) passes.
+
+### 2026-10-29 — ⚑I42 offline revocation by the site broker (Claude; decisions by the user)
+
+The user chose A for ⚑I42, then the broker's **evidence key** (not the site CA key), a **new peer channel** and an **approver seam**
+whose default proof is the person's credentials re-verified at the broker (like Site approvals, offline 06 §6).
+
+**Built:**
+
+| Item | Where |
+|---|---|
+| **The list.** `SiteRevocations`: `Sign(evidenceKey, broker, list, issuedAt)`, `Verify(bundle, roster, tenantRevocations, now, out list)` (members), `Verify(bundle, broker, brokerKey, now, out list)` (central), `Add`, `None`, `IsAdditive`, `StreamFor(broker)`, `RelayKind`. Kind `installations.site-revocations`, stream = the broker id, audience = Scope(site), `ValidUntil = MaxValue`, payload = `InstallationRevocations` (entries `By = SiteBroker`, never the broker itself, dated ≤ the signature, no serials). Domain `InstallationDomains.SiteRevocations` = `yfex.installation.site-revocations.v1` (`SignedBundle.Create` gained an internal domain overload). `BundleCheck.NotAdditive = 11` | `.Installations` `Roster/SiteRevocations.cs` |
+| **Trust.** `InstallationTrust(…, siteRevocations)`: `Revocations` = tenant list + site entries for **non-broker members** of the roster, only while the roster shares `PeerChannel.SiteRevocation` (two brokers naming one device: the earlier time); `TenantRevocations`, `SiteRevocations`. `InstallationTrustSource.Apply` takes the kind (verified with the roster's broker key; older → `OlderThanFloor`, same version other content → `ConflictingSameVersion`, dropping an entry → `NotAdditive`); `SiteRevocationBundles`, `SiteRevocationsOf(broker)`; a broker central revoked later keeps what it signed before; `ApplyStoredAsync` restores each roster broker's list from the store. `BundleStore.AcceptVerifiedAsync` / `GetLatestAsync(verify: false)` (internal: floors for bundles the trust source verifies) | `Peers/InstallationTrustSource.cs`, `Trust/InstallationTrust.cs`, `Bundles/BundleStore.cs` |
+| **Gossip and beacons.** `BundleGossip` routes the kind to the trust, floors it, announces it, and pulls when a member's beacon advertises a newer list. Beacon **v2** (`LengthV2` = 100 bytes) appends `SiteRevocationsVersion`; written only when the announcer holds its own list, so sites without offline revocations keep v1 (92 bytes); a v2 with version 0 is refused | `Mesh/BundleGossip.cs`, `Peers/InstallationBeacons.cs` |
+| **Channel.** `PeerChannel.SiteRevocation` = `installations.site-revocation`, `ChannelSharing.SiteRevocation` (SameSite); central's `RosterSettings.Default` adds it (`ChannelSharing.Defaults` and the golden roster are unchanged). Wire `SiteRevocationWire` (request = tag 1 · installation · bytes(proof ≤ 16 KiB); response = tag 1 · outcome · version) | `Roster/InstallationRoster.cs`, `Mesh/SiteRevocation.cs` |
+| **Broker.** `SiteRevocationHost` (`peers.AcceptSiteRevocations(sp => approver)`, `InstallationPeersService.SiteRevocations`): requester must be a same-site, non-provisional member and not the target; target a non-broker member not yet revoked; `ISiteRevocationApprover.ApproveAsync(SiteRevocationApprovalRequest(requester, entry, proof))` → `SiteRevocationApproval` (timeout `SiteRevocationOptions.ApprovalTimeout`, 2 min); signs version + 1, applies it (connections to the device drain and close, ⚑I43), raises `Revoked` (`SiteRevocationRecord`: who asked, who approved), relays the list to central and retries every `ForwardRetryInterval` (1 min) until delivered (`ForwardedVersion`). `RevokeAsync(installation, approvedBy)` for the broker's own screen. Metric `installations.site-revocations` by outcome | `Mesh/SiteRevocation.cs`, DI |
+| **Terminal.** `SiteRevocationClient.RevokeAsync(installation, proof)` (`peers.RequestSiteRevocations()`): asks the Active broker first, then Standby ones; `SiteRevocationOutcome` = `Revoked`, `AlreadyRevoked`, `NotApproved`, `NotAllowed`, `RequesterNotTrusted`, `NotEnabled`, `BrokerUnreachable`, `Failed`. Online the host still calls central's `RevokeFromSiteAsync` | `Mesh/SiteRevocation.cs` |
+| **Central.** `AdoptSiteRevocationsAsync(broker, list)` → `SiteRevocationAdoption(Check, Adopted, Ignored)`: signed by one of the broker's registry evidence keys; entries of the broker's scope that are not brokers are revoked `By = SiteBroker` **at the broker's time** (clamped to now), others ignored (never refused); one publication. `SiteRevocationsConsumer` (the producer must be the stream's broker), `central.AcceptSiteRevocations()`. `IInstallationRegistry.RevokeAsync(…, revokedAt)` | `.Central` |
+| **Harness.** `HarnessInstallation.AcceptSiteRevocations(approver, options)`, `.SiteRevocations`, `.SiteRevocationClient`; `HarnessCentral.AcceptSiteRevocations()` → `HarnessSiteRevocations` (`Adopted`, `Publish()`); `RevokeAtCentral(…, by, at)` | `.Testing` |
+
+**Decisions taken here (small, reversible):** one list **per broker** (stream = its id), so a site with two brokers works; entries for anyone but the
+site's non-broker members are **ignored, not refused**, so a stale entry never blocks the broker's later lists; the roster channel is the site's
+switch for both serving and accepting (central's default: on, since it only narrows); lists never expire (they only grow; central adopts them);
+a broker revoked by central keeps what it signed before its revocation.
+
+**Not built:** the YFex.Offline adapter for `ISiteRevocationApprover` (re-verify the typed credentials against `SiteCredentials`, the broker's
+lockout, `installations.revoke` in the signed snapshot); the apps' "Revoke handheld" screens; pruning entries central has adopted.
+
+**Tests:** `SiteRevocationTests` (6, harness): store offline → terminal revokes COLETOR-03 through the broker → broker and CAIXA-02 drop it,
+its handshake is refused, the floor is stored → central back → the broker's retry delivers, central adopts at the broker's time; refusals (wrong
+PIN, the broker, another broker, the requester itself, unknown, already revoked); a roster without the channel; forged signer, another
+store's broker, the bundle domain, conflicting/dropping/older versions, a non-member entry ignored; restart keeps the list; beacon v1/v2.
+`RevocationTests` +2 (central adoption and refusals; default roster settings). AOT smoke segment I42 (exit codes 40–43).
+`WindowsPeerTests`: the roster entry no longer pins port 7443 (a parallel run of the test projects collided on it).
+
+| Project | Before | After |
+|---|---|---|
+| Installations.Tests | 158 | **164** |
+| Central.Tests | 62 | **64** |
+| Rpc.Tests | 13 | 13 |
+| Windows.Tests | 9 | 9 |
+
+### 2026-10-29 — I6b step 2: presence (⚑I30), `SponsoredBy` / `PresenceWitness` in the roster (Claude)
+
+User: "commit then start next step" after the I42 work was committed (Installations `8ed2006`). This step is presence; the broker path
+(offline handheld enrollment + sponsor push) is the next one.
+
+**Built:**
+
+| Item | Where |
+|---|---|
+| **Roster format 3** (written only when used, format 1/2 bytes unchanged): `RosterEntry.SponsoredBy`, `RosterEntry.PresenceWitness`, `InstallationRoster.PresenceValidity` (whole seconds ≤ 1 day; zero = `SitePresence.DefaultValidity` 15 min, `EffectivePresenceValidity`). Central fills them from the registry's `SponsoredBy` and new `RosterSettings.PresenceWitnesses` / `PresenceValidity`; `RosterSettings.Default` now also shares `ChannelSharing.Presence` | `Roster/`, Central |
+| **`SitePresence`** (domain `yfex.installation.presence.v1`): statement = subject · witness · scope · issued at · challenge kind (`Central` token / `Nonce`) · challenge · binding; `Sign`, `TryDecode` (canonical), `HasValidSignature`, `MayWitness` (broker, the subject's sponsor, a listed witness), and the offline check `Verify(trust, subject, now, binding?, challenge?)` → `SitePresenceCheck` | `Presence/SitePresence.cs` |
+| **Channel** `PeerChannel.Presence` = `installations.presence` (SameSite), served by **every** installation (`SitePresenceHost`, in `InstallationPeersService` and the harness); a terminal listed as witness listens (`ShouldListen`). New opt-in **`IPeerCertificateChannelHandler`**: `PeerConnection` passes the handshake certificate to such handlers (one type test per request; other handlers unchanged) | `Peers/`, `Presence/` |
+| **Client** `SitePresenceClient` (`peers.RequestPresence()`, also `ISitePresenceSource`): asks the active broker, then standby brokers, then its sponsor or listed witnesses; verifies the answer against its own roster; refreshes every 5 min and on each new central challenge | `Presence/` |
+| **Assertion v2**: `InstallationAssertion.Presence` (wire tag 2 = v1 fields · bytes(statement); v1 bytes unchanged; `MaximumLength` 2048 → 4096). `InstallationAssertionProvider(…, presence)` reports each challenge to the source and re-encodes the cached header when a newer statement arrives (no new evidence-key signature). `InstallationAssertionValidator(…, witnesses)` → `InstallationAssertionAccepted.Presence` (`VerifiedSitePresence(Witness, Scope, At)`); a failing statement is ignored, never refuses the call | `Assertions/` |
+| **Central** `CentralPresenceWitnesses : ISitePresenceWitnesses` (registered by `AddYFexInstallationsCentral`; used by the RPC and HTTP validators): witness unrevoked, same tenant, enrolled at the statement's scope with the subject at or below it, and a site broker, the subject's `SponsoredBy` or listed in `RosterSettings.PresenceWitnesses`; looked up at every call. RPC: `InstallationCallContext.CurrentPresence` | Central, Rpc, AspNetCore |
+
+**Deviations from 11 §5.2 (with reason):**
+1. **Binding = key id of the transport key** in the handshake certificate, not the certificate's hash: central knows the installation's
+   transport key, not its certificate, and the key is what TLS proved. Same guarantee (a renewal changes both).
+2. **Online, a statement lasts as long as its central challenge** (5 min, must be *valid*, not just authentic: an expired token's purpose and
+   audience are not checked by `MessageToken`). `VerifiedSitePresence.At` = the challenge's issue time on central's clock. The 15 min roster
+   validity applies to offline checks (nonce + the witness's trusted time). The client asks again with every new challenge, so presence stays
+   continuous while a witness answers.
+3. **The statement is outside the installation's signature** (assertion v2 appends it): it carries the witness's signature and is bound to the
+   subject's id and transport key, so a newer one costs no TPM signature.
+4. **Listed witnesses are central's per-scope setting** (`RosterSettings.PresenceWitnesses`), not a registry field; standby brokers witness too.
+5. `InstallationCallContext.CurrentPresence`, not `Current.Presence` (`Current` is the identity).
+
+**Open (for the user):** a **sponsor terminal** witnesses only when it can serve TLS: it must listen (mesh `AllInstallations` or listed as
+witness) **and** have a certificate with server authentication, which central issues today only to `Central` and `SiteBroker`
+(`CertificateUsageFor`), and on Windows a software transport key (⚑I25). So by default the **broker** is the witness; Direct stores
+(no broker) need the host to widen `CertificateUsageFor` for their witness terminals. Decide whether central should do that automatically for
+listed witnesses and sponsors.
+
+**Not built:** the consumers (Authentication `presence_at` / off-site rule ⚑AN27, Authorization `RequireSitePresence` ⚑Z20, Offline ⚑O32); the
+broker path and sponsor push (next step); the real-handheld run.
+
+**Tests:** `SitePresenceTests` (6, harness): broker witnesses the handheld, statement bound to its certificate, verified offline by CAIXA-01
+(other subject / key / nonce / age refused); central challenge used while valid, `ForAssertion` drops it after expiry; Direct store: sponsor or
+listed witness answer, CAIXA-02 refuses `NotAWitness`, the sponsor refuses for a member it did not sponsor; roster without the channel; forged
+and non-witness statements, a 30-min site validity; roster format 3 round trips and refuses relabelled bytes. `PresenceTests` (5, central, real
+sponsored enrollment): broker statement → `Presence` with `At` from central's challenge; sponsor yes, CAIXA-02 only when listed; another store's
+broker, another signer, another transport key, a nonce, a junk or expired challenge, a revoked broker → ignored; the provider re-encodes
+without signing again; assertion v1 bytes unchanged, v2 canonical. Mutation: the witness rule off in `SitePresenceHost` → the Direct-store test
+fails. AOT smoke segment I30 (exit codes 44–47): publish 0 IL warnings, run exit 0. The Android solution was not rebuilt (no Android code changed).
+
+| Project | Before | After |
+|---|---|---|
+| Installations.Tests | 164 | **170** |
+| Central.Tests | 64 | **69** |
+| Rpc.Tests | 13 | 13 |
+| Windows.Tests | 9 | 9 |
+
+### 2026-10-31 — I6b step 3: broker path and sponsor push (Claude)
+
+Committed as Installations `55f725f`. This closes the I6b code; the real-handheld run (I6 acceptance) is still pending.
+
+**Built:**
+
+| Item | Where |
+|---|---|
+| **Channel** `PeerChannel.SponsoredPairing` = `installations.sponsored-pairing` (`ChannelSharing.SponsoredPairing`, SameSite; in `RosterSettings.Default`, used only while the roster enables pairing). The broker serves it (codes, decisions); a sponsor serves it for the broker's pushes | `Roster/`, `Pairing/SponsoredPairing.cs` |
+| **Sponsor side** `HandheldSponsorship.StartAsync(self, keys, sponsor, central, …)`: builds the enrollment link (tenant root, sponsor id + evidence key id, central's part when reachable, a broker part asked of the broker when it answers); `BrokerOutcome` says why a link has no broker part. `ConfirmBrokerAsync` (the person confirms the digits on the sponsor; central's code is then cancelled, `CentralCancelled`), `ConfirmedOnlineAsync` (central confirmed: the broker code is cancelled), both codes cancelled when the screen closes | `Pairing/SponsoredPairing.cs` |
+| **Broker side**: per-sponsor codes (`PairingOptions.SponsoredCodeLifetime` default and maximum 5 min, `MaximumCodesPerSponsor` 3, `SponsorPollInterval` 20 s); a sponsor must be an enrolled, not provisional member of the site; answers `SponsoredPairingOutcome`. DI: `AcceptPairing()` without an approver = sponsored pairing only (never confirmed on the broker's screen); `SponsorPairings()` on terminals | `InstallationPairingHost`, `InstallationPeersBuilder` |
+| **Handheld** `PairingClient.PairAsync(EnrollmentLink, …)`: tries the link's broker addresses and talks only to a TLS server whose certificate names the link's broker and holds its transport key (else `UnexpectedBroker`, nothing sent); sends the link's code (Hello **v2**, v1 bytes unchanged; link codes have every group, 80 bits); the answer must chain to the link's root hash and the receipt must name the link's sponsor. New refusals: the code is unknown/expired/spent, another device already presented it | `Pairing/` |
+| **Receipt v2** carries `SponsoredBy` (v1 bytes unchanged without it); central keeps it as `InstallationRegistryRecord.SponsoredBy` when it confirms the provisional handheld, and registers the handheld as revoked when the sponsor was revoked since | `EnrollmentProtocol.Pairing.cs`, Central `Registry` |
+| **Sponsor push at central** (11 §4.1 step 6): `CentralEnrollmentService.PendingEnrollmentsChanged` (per sponsor; expiry raises nothing), `CancelSponsoredCodeAsync`; `CentralSponsorFeed : ISponsorFeedSource` long poll (answers at once when the version differs, else at the next change or after 25 s), registered by `AddYFexInstallationsCentral`; only enrollments whose code can be shown are listed | Central, `Enrollment/SponsorFeed.cs` |
+| **RPC** `IInstallationSponsorFeed` (plain RPC calls, never compute methods; byte wire `SponsorFeedWire`; the caller's assertion is the sponsor; only the sponsor cancels its code); ActualLab proxy checked in, `ProxyGoldenTests` case added | Rpc |
+
+**Tests:** `BrokerPairingTests` (9, central + broker + sponsor on the in-memory LAN, real TLS): the same QR offline pairs through the broker
+with the digits on the sponsor and central confirms it later; a wrong broker key or id is refused before the Hello; a second device with the
+same QR is refused while the first waits and after it paired; other digits decide nothing and a rejection spends the code; codes are limited
+per sponsor, bound to it and need a trusted sponsor; without pairing there is no broker code and the link has central only; central
+confirming the online path cancels the broker code; central rejects a broker pairing whose sponsor was revoked since; Hello and receipt keep their v1 bytes without a code or sponsor. `SponsorFeedRpcTests`
+(2, real ActualLab RPC): the long poll returns the waiting handheld with its digits, another sponsor sees nothing, only the sponsor cancels; the feed wire is canonical.
+
+| Project | Before | After |
+|---|---|---|
+| Installations.Tests | 170 | 170 |
+| Central.Tests | 69 | **78** |
+| Rpc.Tests | 13 | **16** |
+| Windows.Tests | 9 | 9 |
+
+**Not done:** no AOT smoke segment for step 3 (its types are not in the smoke app); the real-handheld run; the apps' screens (QR, digits,
+confirm) belong to the apps.
+
+### 2026-10-31 — Two machines on a real LAN: a Raspberry Pi and the development PC (Claude)
+
+Committed as Installations `1e2a18b`. User: test on another machine. A Raspberry Pi 3 Model B (Raspbian 13 trixie, **32-bit ARM** armv7l,
+1 GB, OpenSSL 3.5.7, no TPM) on the same Wi-Fi, with the .NET 11 preview.4 runtime and SDK in `~/.dotnet`; the PC reaches it with the SSH key
+`~/.ssh/yfex_pi`. Builds are made on Windows and copied (the SD card is too slow to build on).
+
+**Linux on the Pi** (`Installations.Tests` built on Windows, `dotnet vstest` on the Pi): 167/170 at first.
+- 2 failures were a **harness bug**, now fixed: `HarnessDisk.Restore` wrote the copied state file with `File.WriteAllBytes` (0644 under the
+  umask) and the store rightly refused it ("must have mode 0600"). It now writes 0600 in a 0700 directory on Unix. Production code was
+  right; only `AddCopy` (a disk image booted on a second PC) was affected, on Linux and macOS.
+- 1 failure stays: `Handshake_and_first_request_take_at_most_50_ms_with_software_keys` measures a median of 100–120 ms on a Pi 3.
+  **Open:** keep the 50 ms budget for PC-class hardware only, or accept the Pi's number.
+- After the fix: Pi 169/170, Windows 170/170.
+
+**New tool `tests/YFex.Installations.LanProbe`** (in `installations.slnx`, not a test project): `broker` runs a `TestCentral`, enrolls a site
+broker and listens on the real peer port (pairing and an echo on `time`); `pair <address[:port]>` is a new terminal that pairs offline (S7)
+and then opens a friend channel; `firewall` prints `WindowsFirewallRuleProbe`'s answer. Exit codes 0, 2 usage, 10 pairing, 11 channel. The
+broker listens on the roster's port (7443): `PeerEndpointOptions.Port` applies only when the roster entry has none.
+
+| Run | Result |
+|---|---|
+| PC pairs with the Pi's broker | same SAS on both, provisional in 0.9 s, mutual TLS 1.3 channel in 0.7 s, requests 6–13 ms |
+| Pi pairs with the PC's broker | same SAS, provisional in **≈ 4 s** (the Pi's key creation and signatures), channel 0.8 s, requests 5–15 ms |
+| Windows **Private** profile, no allow rule (pop-up left unanswered) | the Pi gets no TCP answer → `BrokerUnreachable`; probe `Missing` ✔ |
+| Only `YFex Installations peer` (TCP 7443, Private) | paired, channel OK, no pop-up and no program rule created; probe `Present` ✔ |
+
+Windows behaviour seen on the way (for the future YFex.Installer and for support):
+- The "allow access" pop-up creates program rules for the listening executable (`dotnet.exe` or the app host) on the current profile.
+  **Allow** gives allow rules for every port, which hide a missing peer rule; leaving it unanswered (or Cancel) gives **block** rules for that
+  program, and a block rule beats the port rule. With the port rule present no pop-up appears.
+- So on a PC where someone clicked Allow, `CheckWindowsFirewall()` says `Missing` while friends do connect; the measured inbound connections
+  decide, as the probe's summary already says. The `FirewallRuleState.Missing` comment ("friends cannot connect") is too strong for that case.
+
+**Fixed: pairing connect timeout.** A broker behind a firewall that drops the connection made the client wait `PairingOptions.MessageTimeout`
+(30 s) per address. New `PairingOptions.ConnectTimeout` (default 3 s, like `PeerEndpointOptions.ConnectTimeout`) bounds only the TCP connect;
+the TLS handshake and the messages keep `MessageTimeout`. Test
+`A_broker_behind_a_firewall_that_drops_the_connection_is_unreachable_after_the_connect_timeout_not_the_message_timeout` (a silent transport;
+mutation back to `MessageTimeout` → fails after 1 min). On the LAN: 30.6 s → **3.6 s**; a normal Pi → PC pairing still works.
+
+| Project | Before | After |
+|---|---|---|
+| Installations.Tests | 170 | 170 |
+| Central.Tests | 78 | **79** |
+| Rpc.Tests | 16 | 16 |
+| Windows.Tests | 9 | 9 |
+
+**Not covered:** Native AOT on 32-bit ARM Linux (.NET does not support it); the TPM store (no TPM on the Pi: use WSL + swtpm); macOS and
+Windows 10. The AOT smoke was not re-run for the `ConnectTimeout` property.

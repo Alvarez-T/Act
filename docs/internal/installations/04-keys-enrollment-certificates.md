@@ -10,7 +10,7 @@ mechanisms are the library's (crypto 12 §5 handoff, now addressed to this libra
 |---|---|---|---|
 | `installation/transport` | TLS 1.3 handshakes (its public key is in the installation certificate) | with the certificate (new key at each renewal, 90 days) | until the certificate expires |
 | `installation/evidence` | enrollment and renewal requests, installation assertion, beacons, offline envelopes and receipts (Offline), device/site approval tokens (Authorization), audit node-chain heads (Audit), offline consent (Privacy) | only on re-enrollment | **forever** in the central registry (years of audit retention) |
-| `installation/key-agreement` *(Phase I5, ⚑I4)* | nothing — ECDH P-256 so central can seal a secret **to this installation** (an A1 certificate for offline NFC-e, crypto 13 §6) | yearly | while sealed secrets reference it |
+| `installation/key-agreement` *(Phase I5, ⚑I4)* | nothing — ECDH P-256 so central can seal a secret **to this installation** (an A1 certificate for offline NFC-e, crypto 13 §6). Kept in an `IRecipientKeyStore` (crypto 14 §10, built 2026-10-27), not in the `ISigningKeyStore` | yearly | while sealed secrets reference it |
 
 ```csharp
 // YFex.Installations — the thin typed layer over YFex.Cryptography (was planned in YFex.Offline, offline 03 §2)
@@ -28,8 +28,24 @@ public interface IInstallationKeyStore
 | Windows | `CngSigningKeyStore(keyNamePrefix: "YFex.Installations.{app}.", machineScope, preferHardware: true)` (`CngSigningKeyStore.cs:29`) | `.UseWindowsKeyStore()` (user scope) / `.UseWindowsKeyStore(machine: true)` (broker service, kiosks) |
 | macOS | Keychain / Secure Enclave store (`YFex.Cryptography.Apple` `AppleSigningKeyStore`, spike later: crypto 14 §5; 09 §2, §4 R2) for the **evidence** key in signed apps; transport key and unsigned builds: `FileSigningKeyStore` | `.UsePlatformKeyStore()` |
 | Linux | v1: `FileSigningKeyStore` (crypto 14 §2): software keys sealed under the root key (`FileRootKeyProvider`, 0600) = `KeyProtection.File`; later TPM 2.0 (`.Linux` through `tpm2-openssl`, native dependency: crypto 14 §6, crypto 12 §4 question 8) | `.UsePlatformKeyStore()` / `.UseFileKeyStore(directory)` |
-| **gap** | YFex.Cryptography has no persisted `ISigningKeyStore` outside Windows yet. **2026-10-07: designed in crypto 14** (`FileSigningKeyStore` approved, not coded; Apple store = spike) | — |
+| Android *(Phase I6)* | `AndroidKeystoreSigningKeyStore` (`YFex.Cryptography.Android`, crypto 14 §9, built 2026-10-27): StrongBox → TEE → software KeyMint; both keys stay in the Keystore (it is an `ICertificateKeyStore`, TLS client verified on emulators) | `.UseAndroidKeyStore()` (`YFex.Installations.Android`, 11 §1) |
+| ~~gap~~ | **Closed:** `FileSigningKeyStore` built 2026-10-18 (crypto 14 §2). `YFex.Cryptography.Apple` and the Linux TPM store are **written but not yet run** on their OS (crypto 14 §8), opt-in only | — |
 | Tests | `InMemorySigningKeyStore` (YFex.Cryptography.Testing) | `YFex.Installations.Testing` |
+
+**Key-agreement key stores (crypto 14 §10):** Windows `CngRecipientKeyStore` (`StoreRecipientKeysInCng()`, TPM first, classic P-256
+because a TPM has no ML-KEM; ≈ 47 ms per agreement, open in batches); every other OS, **Android included**, `SealedRecipientKeyStore`
+over files (`StoreRecipientKeysInFiles(…)`, sealed under the root key, `KeyProtection.File`, hybrid ML-KEM when the host runs it).
+There is no Keystore recipient store yet (`PURPOSE_AGREE_KEY` needs API 31+), so on Android the file is sealed under the Keystore-wrapped
+root key and must live under `NoBackupFilesDir` (09 §2).
+
+**As built (I5, 2026-10-27):**
+- **Key store.** `InstallationKeyStore(store, transportStore, keyAgreementStore)` and `IInstallationKeyStore.GetKeyAgreementKeyAsync()`.
+  `WindowsInstallationKeys.Create(…, keyAgreement: true)` uses `CngRecipientKeyStore`, TPM first.
+- **Wire.** Enrollment and renewal payloads carry the public half. Format tag 2 is used only when a key is present, so the v1 bytes are
+  unchanged. A renewal adds the key for installations enrolled before I5.
+- **Registry.** It keeps the key (`InstallationKeyRecord.KeyAgreementKey`).
+- **Sealing.** `InstallationSealing.Seal(key, installation, purpose, secret)` / `OpenAsync(keys, self, purpose, sealed)` bind the
+  installation id and a purpose into the sealed value.
 
 **TPM cost (≈ 22–32 ms per signature, crypto 06):** fine for enrollment, one assertion per connection, a beacon every 5 s, one envelope
 per sale and one audit head per batch. A broker that must sign more than ~20 objects/s (receipts, session tokens) uses the session
@@ -101,6 +117,14 @@ Tenant root (P-256, 10 y) — a SigningKeyRing key on central servers or a CNG/T
   (⚑O5 option).
 - Each step is an operation in Logging and an audit entry (`Installations.Enrolled`, actor = the admin who created the code, installation
   = the new one).
+- **Handhelds (2026-10-20, ⚑I27–I28, [11](11-mobile-handhelds.md) §3–§4):** the code can travel in a QR `EnrollmentLink` (root hash,
+  central, broker, sponsor; 80-bit codes), and `EnrollmentCodeRequest` gains a **sponsor** and **confirmation**: central keeps the
+  enrollment *pending* until the person at the sponsor compares the SAS (§5 computation) and confirms. Without confirmation the
+  protocol above is unchanged.
+  *As built (I6a, 2026-10-27, 08 §5):* `EnrollmentCodeRequest(…, Sponsor, Confirm)`; the handheld commits to a nonce in its first request
+  (payload tag 3), central answers `EnrollmentPending` with its nonce, the handheld reveals its nonce, and both screens show
+  `EnrollmentConfirmation.CodeOf(…)`; `ConfirmEnrollmentAsync` issues the certificate. Keys created after the challenge are attested over
+  `EnrollmentProtocol.AttestationChallenge(token)`, and the chains travel in the same payload (recorded, not checked).
 
 ## 4. Renewal, revocation, rotation
 
@@ -110,7 +134,8 @@ Tenant root (P-256, 10 y) — a SigningKeyRing key on central servers or a CNG/T
 | terminal stolen | admin revokes at central (`installations.revoke`) → revocation bundle pushed to the site at once; central refuses evidence signatures made after the revocation time (`PublicKeyRecord.RevokedAt`, `SigningContracts.cs:58-59`) | a manager revokes at the broker → **site revocation** (signed by the broker's evidence key), effective on the site's friends at once, forwarded to central for confirmation |
 | broker compromised or replaced | revoke the broker + its site issuing CA; enroll the new one; new roster | terminals see no valid broker → Offline `Standalone` |
 | re-enrollment (reinstall, replaced disk) | new id, new keys; the old id is revoked when the admin confirms (hint helps, §7) | — |
-| tenant root rotation (10 years) | new root signs the old root's successor intermediates; rosters carry both anchors during the overlap | — |
+| installation issuing CA rotation (yearly, *built 2026-10-27*) | the host builds `InstallationAuthority` with the new CA and the old one as `retiringIssuing`; rosters list both until the old one expires (central re-issues the roster by itself); enrollments and renewals use the new CA | installations certified by the old CA stay friends while the roster lists it |
+| tenant root rotation (10 years, *built 2026-10-27*) | the two roots cross-certify each other; rosters carry the other root + the cross-certificates (`TenantRootCertificates`, roster format 2) during the overlap — an installation adds a root only through a cross-certificate issued **directly by its pinned root** (the bundle key cannot add anchors); a renewal re-pins the new root only with that endorsement (08 §5) | both generations are friends until the cross-certificates expire |
 
 Revocation lists are **signed bundles** (`installations.revocations`) with version floors (05 §3), never CRL/OCSP downloads — devices
 are often offline and the private CA publishes nothing (`CertificateTrust` takes the caller's `isRevoked`, `CertificateTrust.cs:22-34`).
@@ -129,12 +154,46 @@ Saturday outage, `CAIXA-03` dies, the manager brings the spare PC from the stock
    ◄── provisional certificate from the site issuing CA: ≤ 72 h, role Terminal, same scope; status Provisional
 ```
 
-- Hashing for the SAS uses `Hashing.Sha256` of the library (no keyed operation needed).
+> **As built (I5, 2026-10-27; code in `src/YFex.Installations/Pairing/`, log in 08 §5):**
+> - **Same port, no new firewall rule.** The spare PC connects to the broker's peer port with TLS server authentication only. It asks
+>   for the server name `pairing.yfex.invalid` (peers send none) and ALPN `yfex-pairing/1`. The broker then serves the pairing exchange
+>   instead of the peer protocol, without asking for a client certificate.
+> - **Commit/reveal (deviation from the sketch above).** Without it, a man in the middle who sees the other side's nonce first can try
+>   about 2^20 nonces until the 6 digits match. The order is: Hello {keys} → Commit {H(hello ‖ broker id ‖ nonce B)} → Nonce A →
+>   Reveal {nonce B} → Proof {both keys sign the transcript}. The transcript also contains the **broker TLS certificate the spare saw**.
+>   A relay with another certificate therefore fails at the proof, before anybody is asked to compare digits (test
+>   `A_relaying_man_in_the_middle_cannot_complete_a_pairing`).
+> - **The confirmation screen is the app's.** `IPairingApprover` runs on the broker; the app checks `installations.pair`.
+>   `ConfirmedBy` goes into the receipt.
+> - **The broker signs a receipt** (`SignedPairingReceipt`, evidence key): installation, keys, scope, site CA key id, paired at,
+>   expires at, confirmed by. The spare stores it with its provisional receipt (state format 3).
+> - **Site issuing CA.** The broker key is `installation/site-authority`. Central issues it at `POST …/site-ca` while the scope's
+>   `RosterSettings.PairingEnabled` is on: 30 days, path length 0, the broker's URNs. The roster lists each broker's two newest valid
+>   site CAs. The broker asks again when a third of the CA's life is left (`InstallationPairingHost.EnsureSiteAuthorityAsync`, every
+>   6 h through `peers.AcceptPairing`). The tenant's installation issuing CA needs a path length ≥ 1.
+> - **Confirmation at central.** A provisional installation's renewal (`EnrollmentClient.RenewAsync`) posts the receipt, signed by
+>   both keys, to `POST …/confirm`. Central checks:
+>   - the broker's signature;
+>   - that the site CA was issued to that broker and was valid when it paired;
+>   - a window of 30 days;
+>   - the enrollment policies.
+>
+>   Confirmed: a normal certificate for the same transport key, with `PairedBy` recorded. Rejected (a policy refuses, or the broker
+>   was revoked since): the installation is registered as **revoked**, so the site stops accepting its provisional certificate.
+>   **Both modes (user, 2026-10-27):** `CentralInstallationOptions.PairingConfirmationFor(scope)` = `Automatic` (default: the
+>   policies decide) or `AdminApproval`. With `AdminApproval` the request waits (`PairingPending`, the renewal loop retries) until an
+>   administrator calls `ApprovePairingAsync` (the policies then run) or `RejectPairingAsync` (registered revoked at once, revocation
+>   list published). `ListPendingPairingsAsync` feeds the admin screen.
+> - Hashing for the SAS uses `Hashing.Sha256` of the library (no keyed operation needed).
 - A provisional installation is a `SameSite` friend for time, relay and facts, **cannot issue approvals**, and every envelope carries
   `ProvisionalInstallation` (Offline). At reconnect central confirms (normal certificate, same id) or rejects (revoked, its operations
   become review findings).
 - The site issuing CA exists only when the roster enables pairing; ≤ 30 days, auto-renewed online; our validator limits it to its own
   scope and the Terminal role. Default: **disabled**.
+- **Handhelds (2026-10-20, ⚑I29):** the discovery step can come from the QR instead of a beacon (broker id, key hash, addresses pinned),
+  and the SAS is confirmed on the **sponsor** terminal that showed the QR, not only on the broker ([11](11-mobile-handhelds.md) §4.2).
+- **Revocation (⚑I31):** a site revocation can be started from any trusted terminal of the site or from the device itself; the broker
+  signs it ([11](11-mobile-handhelds.md) §7).
 
 ## 6. Installation assertion to central (⚑I11)
 

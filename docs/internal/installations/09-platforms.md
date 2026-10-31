@@ -28,7 +28,8 @@ theirs when referenced. Without any, it uses the software store and records `Key
 | Concern | Windows 10/11, Server | Linux (desktop, server, containers) | macOS 13+ |
 |---|---|---|---|
 | **Private keys (⚑I4)** | `CngSigningKeyStore` (built): TPM (Platform Crypto Provider) → software KSP; user or machine scope | **v1:** software P-256 key sealed under the YFex.Cryptography root key (`FileRootKeyProvider`, file mode 0600; `KeyProtection.File`). **Later `.Linux`:** TPM 2.0 through `/dev/tpmrm0` (tpm2-tss or a PKCS#11 module = native dependency, needs approval); libsecret for desktop users (crypto Phase 5) | **`.MacOS`:** Secure Enclave key (`SecKeyCreateRandomKey`, `kSecAttrTokenIDSecureEnclave`; P-256 only, which is ours) → data-protection Keychain → software fallback. Needs a **signed app with a keychain-access-group entitlement**; unsigned CLI/dev builds fall back to software keys |
-| **Key-store gap** | none | YFex.Cryptography has **no persisted `ISigningKeyStore` outside Windows** today (only `CngSigningKeyStore`, `InMemorySigningKeyStore`, `SigningKeyRing` for rotating server keys). Needs a `FileSigningKeyStore` (named, root-wrapped) — a crypto-library task (§5) | same gap, plus a Keychain/Secure Enclave store (`.MacOS`, crypto or here — §5) |
+| **Key-store gap** | none | **closed 2026-10-18:** `FileSigningKeyStore` (crypto 14 §2). TPM store in `YFex.Cryptography.Linux` written, **not run** on Linux (crypto 14 §8.1) | `FileSigningKeyStore`; Keychain/Secure Enclave store in `YFex.Cryptography.Apple` written, **not run** on a Mac (crypto 14 §8.3) |
+| **Key-agreement key (I5)** | `CngRecipientKeyStore` (TPM first) | `SealedRecipientKeyStore` over files (`KeyProtection.File`) | same as Linux |
 | **Local identity file** (user scope) | `%LOCALAPPDATA%\YFex\Installations\{app}\` | `$XDG_DATA_HOME/yfex/installations/{app}/` (default `~/.local/share/…`) | `~/Library/Application Support/YFex/Installations/{app}/` |
 | **Local identity file** (machine scope: broker service, kiosk) | `%PROGRAMDATA%\YFex\Installations\{app}\` (ACL: service account + Administrators) | `/var/lib/yfex/installations/{app}/` (owner = service user, mode 0700/0600) | `/Library/Application Support/YFex/Installations/{app}/` (root or the daemon's user) |
 | **File permissions** | NTFS ACL set on create | `UnixCreateMode` 0600 files / 0700 directories (BCL, as `FileRootKeyProvider` already does) | same as Linux |
@@ -43,8 +44,16 @@ theirs when referenced. Without any, it uses the software store and records `Key
 | **Service host (broker)** | Windows service, machine keys | systemd unit with its own user, `StateDirectory=yfex` | launchd daemon |
 | **Time** | YFex.Time (same on all) | same | same |
 
-Mobile and browser (later, README §9): Android Keystore (StrongBox) and iOS Secure Enclave would be `.Android`/`.iOS` key stores;
-Blazor WASM has no sockets, no persistent non-exportable keys and no TPM → **never** a friend; at most a `NotEnrolled` client of central.
+Mobile and browser: **Android decided 2026-10-20** ([11](11-mobile-handhelds.md), ⚑I26, ⚑I32): `YFex.Installations.Android` over
+`YFex.Cryptography.Android` (⚑K19, **built 2026-10-27**, crypto 14 §9). Keys go to StrongBox, else the TEE Keystore, else the software
+Keystore; both the transport and the evidence key stay there (R7). The state lives under **`Context.NoBackupFilesDir`**
+(`…/yfex/installations/{app}/`, next to `AndroidKeyPaths.Directory("keys")`), sealed under the Keystore-wrapped root key: Auto Backup and
+device transfer skip that folder, because a restored file whose Keystore key does not exist on the new device can never be opened
+(crypto 14 §9.4 gap 1). `Context.FilesDir` would be backed up. The key-agreement key is a sealed file in the same folder (no Keystore
+recipient store yet). A lost Keystore key (uninstall, clear data, restore elsewhere) means re-enrollment with a new QR (11 §4.3).
+Handhelds are peer-channel clients only (no listener, no firewall), multicast needs the app's `IMulticastLock`, and the hint comes from
+Android sources (only a hint). iOS would reuse `YFex.Cryptography.Apple` later. Blazor WASM has no sockets, no persistent non-exportable keys
+and no TPM → **never** a friend; at most a `NotEnrolled` client of central.
 
 ## 3. What this changes in the design
 
@@ -66,8 +75,8 @@ Blazor WASM has no sockets, no persistent non-exportable keys and no TPM → **n
 | R3 | Can a Linux TPM key sign TLS handshakes from .NET without a native OpenSSL provider? | Linux v1 keeps software transport keys; TPM only for evidence (through the `.Linux` store) |
 | R4 | macOS Local Network permission for a non-UI daemon (broker) | macOS brokers are not supported in v1 (pharmacy brokers are Windows PCs); macOS terminals are clients |
 | R5 | `UnixCreateMode` + rename atomicity on network/home directories | state directory must be local; diagnostics refuse a network path |
-
-| R6 | *(added by the I3 spike, 2026-10-14)* Can a **TPM-held** CNG key be the TLS **server** credential? | Measured on the development PC (Windows 11, TPM 2.0, user-scope key in the Platform Crypto Provider): **no** — Schannel refuses it with `SEC_E_UNKNOWN_CREDENTIALS` (TLS 1.3 and 1.2). As the TLS **client** credential the same key works (TLS 1.3 and 1.2). Machine-scope TPM keys (a broker as a Windows service) need an elevated run of `Machine_scope_TPM_key_as_TLS_server_measurement`: **not verified**. Until then, an installation that **listens** needs a software transport key (CNG software KSP, non-exportable) while its evidence key stays in the TPM → ⚑I25 |
+| R6 | *(added by the I3 spike, 2026-10-14)* Can a **TPM-held** CNG key be the TLS **server** credential? | Measured on the development PC (Windows 11, TPM 2.0, user-scope key in the Platform Crypto Provider): **no** — Schannel refuses it with `SEC_E_UNKNOWN_CREDENTIALS` (TLS 1.3 and 1.2). As the TLS **client** credential the same key works (TLS 1.3 and 1.2). Machine-scope TPM keys (a broker as a Windows service) need an elevated run of `Machine_scope_TPM_key_as_TLS_server_measurement`: **not verified**. Until then, an installation that **listens** needs a software transport key (CNG software KSP, non-exportable) while its evidence key stays in the TPM → ⚑I25. **✅ Decided and built 2026-10-19:** exactly that (`TransportKeyPlacement`, `softwareTransport`); a broker with a TPM evidence key and a software transport key served TLS 1.3 on the dev PC |
+| R7 | *(added 2026-10-20, ⚑I26)* Can `SslStream` on .NET for Android use an **Android Keystore** key as the TLS **client** credential, and how slow are StrongBox/TEE signatures? | as R2: software **transport** key (sealed under the Keystore-wrapped root key, rotated every 90 days), evidence key in the Keystore; session subkey (crypto 06) if offline signing is too slow. **2026-10-27 (emulators, crypto 14 §9.5): yes. `AndroidKeystoreSigningKeyStore.CopyWithPrivateKeyAsync` gives a TLS 1.3 client credential from a Keystore key, so the fallback is not needed; signing takes 4–6 ms on the emulator. StrongBox/TEE timing still needs a real handheld.** |
 
 **I3 spike results (2026-10-14, Windows 11 development PC only; no Docker/WSL/Mac):**
 
@@ -77,7 +86,8 @@ Blazor WASM has no sockets, no persistent non-exportable keys and no TPM → **n
 | Mutual TLS 1.3, terminal transport + evidence keys in the TPM, broker on a software KSP key | ✅ `WindowsPeerTests` |
 | TPM key (user scope) as the TLS server credential | ❌ R6 (guard test `A_user_scope_TPM_key_cannot_serve_TLS_and_the_endpoint_says_so`; the endpoint counts `ServerCredentialFailures`) |
 | TLS 1.2 fallback (⚑I22): a TLS-1.2-only client against `Tls13OrTls12` → ECDHE-ECDSA AES-GCM, accepted and flagged; against `Tls13Only` → refused | ✅ simulated on Windows 11 by forcing the client to TLS 1.2; **a real Windows 10 PC was not available** |
-| macOS (`UseNetworkFramework` switch set by `InstallationTls`), Local Network permission (R4), Linux OpenSSL | **not verified** (no Mac, no container) |
+| macOS (`UseNetworkFramework` switch set by `InstallationTls`), Local Network permission (R4) | **not verified** (no Mac) |
+| Linux OpenSSL: mutual TLS 1.3 with software keys, pairing both ways with a Windows PC on a real LAN | ✅ 2026-10-31 on a Raspberry Pi 3 (Raspbian 13, **32-bit ARM**, OpenSSL 3.5.7): `Installations.Tests` 169/170 (the 50 ms handshake budget is not met, ≈ 110 ms), `LanProbe` both directions (08 §5). Not run: x64/arm64 Linux, the TPM store, Native AOT on Linux |
 
 **Answers from the crypto session (2026-10-07, crypto 14 §5.3, §6; desk research, not run):** R1: macOS clients can use TLS 1.3 with
 the `UseNetworkFramework` switch (Installations sets it on macOS); macOS **listeners** stay TLS 1.2 in .NET 11, so ⚑I22's fallback
@@ -98,5 +108,11 @@ applies to them (Macs are terminals in v1). Windows 10 stays TLS 1.2 (unchanged)
 **Status (crypto session, 2026-10-07; crypto 14 §7):** 1 designed and approved, **not coded** (user: design only for now); 2 =
 `YFex.Cryptography.Apple`, a spike when a Mac is available (no allow-list entry needed); 3 = route A (`tpm2-openssl`), waiting for approval
 of the native dependency; 4 unchanged (Phase 5, same `.Apple` package).
+
+**Status 2026-10-27 (crypto 14 header, §8–§10):** 1 **built** 2026-10-18. 2, 3 and 4 are **written** (`YFex.Cryptography.Apple`,
+`YFex.Cryptography.Linux` with route A and a Secret Service root key), compiled and AOT-analysed on Windows, **not run** on macOS or Linux:
+they stay opt-in until `scripts/verify-linux.sh` / `verify-macos.sh` pass. Linux can now be run locally (WSL2 + swtpm, crypto 14 §8.2).
+New requests answered: 5. the **key-agreement key** store (`IRecipientKeyStore`, 14 §10, built) for I5; 6. **`YFex.Cryptography.Android`**
+(14 §9, built, real handheld pending) for I6. Still missing: a Keystore recipient store (`PURPOSE_AGREE_KEY`, API 31+), not needed for v1.
 </content>
 </invoke>
