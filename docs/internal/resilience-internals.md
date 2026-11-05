@@ -80,3 +80,14 @@ The per-resource pipeline (rate limiter → bulkhead → CB) executes as the **o
 ## Package boundary
 
 `YFex.Resilience.Polly` references `Polly.Core` **and** `Polly.RateLimiting` (the rate limiter and concurrency limiter aren't in `Polly.Core`). No Polly package is referenced anywhere else in the framework — CQRS and orchestration depend only on `YFex.Resilience` abstractions.
+
+## Stored retries (F04, decided and built 2026-11-05)
+
+Retries that are stored and scheduled for a later time (Jobs runs, Jobs Hub reconnect, the Notifications dispatcher) can't run inside a Polly pipeline. They use the same vocabulary with a Polly-free calculator. Decisions:
+
+1. **Calculator in `YFex.Resilience`:** `RetryDelay.For(in RetryPolicy, attempt, Random?)` returns the delay after attempt N (1-based) failed; `RetryDelay.TryGetNext(in policy, RetryBudget?, attempt, elapsed, out delay, Random?)` adds the `MaxAttempts` and budget checks. Pure, allocation-free; jitter is applied before the `MaxDelay` cap, so a delay never exceeds `MaxDelay`. Jobs `RetryCalculator`, Hub `ReconnectBackoff` and Notifications call it; none keeps its own backoff code.
+2. **`RetryBudget(MaxTotalElapsed)`** is a separate type for the total-time cap. It is not added to `RetryPolicy`, because `RetryPolicy` is part of the `ResilienceSpec` pipeline cache key and Polly has no use for it. `Jitter: true` means a fixed ±20% in the calculator; there is no jitter-fraction setting.
+3. **No custom multiplier:** `BackoffStrategy` Constant / Linear / Exponential (×2), as Polly does. `[Retry(BackoffMultiplier = …)]` and `JitterFraction` go away.
+4. **Clean break in Jobs:** the Jobs `RetryPolicy` class is replaced by `YFex.Resilience.RetryPolicy` + `RetryBudget` (settings layers, `JobDescriptor`, `IJobStore`, `[Retry]` source generator). Stored retry records in the old `StoredRetry` shape are not read; the job's default applies.
+
+Jobs references `YFex.Resilience` (base package only, a leaf with just DI abstractions, so there is no cycle; never `YFex.Resilience.Polly`).

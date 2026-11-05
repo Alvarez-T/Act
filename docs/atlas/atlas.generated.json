@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-11-05T11:24:39-03:00",
-  "scanMs": 21253,
-  "contentHash": "3B9F77CE9A1D15BD",
+  "generatedAt": "2026-11-05T12:48:11-03:00",
+  "scanMs": 10392,
+  "contentHash": "451FBF0A3856C891",
   "root": "C:\\Dev\\YFex",
   "machine": "ALVAREZ-ASUS",
   "groups": [
@@ -71,11 +71,11 @@
         "tests": 1,
         "benchmarks": 0,
         "apps": 1,
-        "csFiles": 128,
-        "lines": 17490,
+        "csFiles": 129,
+        "lines": 17515,
         "testFiles": 20,
         "aot": 1,
-        "lastChange": "2026-10-18T12:17:52"
+        "lastChange": "2026-11-05T12:35:22"
       },
       "docs": [
         {
@@ -96,11 +96,11 @@
         {
           "repo": "YFex",
           "isRepo": true,
-          "branch": "main",
-          "lastCommit": "2026-11-05T11:24:12-03:00",
-          "lastSubject": "Move framework projects to sibling repos (atlas F01)",
-          "dirty": 0,
-          "commits14d": 4
+          "branch": "privacy/tier1-scrubber-and-leaks",
+          "lastCommit": "2026-11-05T12:37:08-03:00",
+          "lastSubject": "Atlas: F29 no longer lists Persistence.Tests (fixed)",
+          "dirty": 13,
+          "commits14d": 7
         },
         {
           "repo": "YFex.Cqrs",
@@ -108,7 +108,7 @@
           "branch": "main",
           "lastCommit": "2026-11-05T11:24:09-03:00",
           "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-          "dirty": 0,
+          "dirty": 7,
           "commits14d": 1
         }
       ]
@@ -233,7 +233,7 @@
         "lines": 21543,
         "testFiles": 19,
         "aot": 12,
-        "lastChange": "2026-10-29T19:52:46"
+        "lastChange": "2026-11-05T12:03:34"
       },
       "docs": [
         {
@@ -266,12 +266,12 @@
       "git": [
         {
           "repo": "YFex.Authentication",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T12:38:25-03:00",
+          "lastSubject": "Initial import of YFex.Authentication",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -354,6 +354,91 @@
           "lastSubject": "Commit pending work-in-progress changes",
           "dirty": 44,
           "commits14d": 0
+        }
+      ]
+    },
+    {
+      "id": "YFex.Automation",
+      "name": "Automation",
+      "group": "flow",
+      "status": "building",
+      "progress": 60,
+      "summary": "Layered desktop + AI automation engine (Plans A–H): task graphs, orchestrator, Windows input/observation, AI agents (API, reversed, desktop), secret and session stores.",
+      "next": "Moved under C:\\Dev\\YFex 2026-11-05; secrets now sealed with YFex.Cryptography (YFex.Automation.Secrets); git initialized 2026-11-05 (no remote yet).",
+      "pending": [],
+      "curated": true,
+      "repos": [
+        "YFex.Automation"
+      ],
+      "projects": [
+        "YFex.Automation.Abstractions",
+        "YFex.Automation.Ai.Api",
+        "YFex.Automation.Ai.Desktop",
+        "YFex.Automation.Ai.Reversed",
+        "YFex.Automation.Core",
+        "YFex.Automation.Hosting",
+        "YFex.Automation.Platform.Linux",
+        "YFex.Automation.Platform.Windows",
+        "YFex.Automation.Secrets",
+        "YFex.Automation.Steps",
+        "YFex.Automation.Ai.Api.Tests",
+        "YFex.Automation.Core.Tests",
+        "YFex.Automation.Platform.Windows.Tests"
+      ],
+      "platforms": [
+        "Linux",
+        "Windows"
+      ],
+      "metrics": {
+        "projects": 13,
+        "libraries": 10,
+        "generators": 0,
+        "tests": 3,
+        "benchmarks": 0,
+        "apps": 0,
+        "csFiles": 145,
+        "lines": 9891,
+        "testFiles": 10,
+        "aot": 0,
+        "lastChange": "2026-11-05T11:57:32"
+      },
+      "docs": [
+        {
+          "path": "YFex.Automation/README.md",
+          "file": "YFex.Automation/README.md",
+          "title": "YFex.Automation",
+          "status": null,
+          "files": 1,
+          "flags": 0,
+          "lastDate": null,
+          "lastWrite": "2026-06-21T00:14:01",
+          "components": [
+            "YFex.Automation"
+          ]
+        },
+        {
+          "path": "YFex.Automation/MULTIOS.md",
+          "file": "YFex.Automation/MULTIOS.md",
+          "title": "Multi-OS Contract (Plan I)",
+          "status": null,
+          "files": 1,
+          "flags": 0,
+          "lastDate": null,
+          "lastWrite": "2026-06-20T23:22:24",
+          "components": [
+            "YFex.Automation"
+          ]
+        }
+      ],
+      "git": [
+        {
+          "repo": "YFex.Automation",
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T12:22:59-03:00",
+          "lastSubject": "Initial commit: import existing project sources",
+          "dirty": 0,
+          "commits14d": 1
         }
       ]
     },
@@ -604,7 +689,7 @@
       "status": "done",
       "progress": 95,
       "summary": "Commands/queries contracts, aggregate configuration, generated dispatch, pipeline stages (validation, rules, authorization, approvals, compensation, tenancy).",
-      "next": "Replace its own RetryPolicy with Resilience (F04).",
+      "next": "Retry is on Resilience since 2026-11-05 (F04).",
       "pending": [],
       "curated": true,
       "repos": [
@@ -631,11 +716,11 @@
         "tests": 5,
         "benchmarks": 0,
         "apps": 0,
-        "csFiles": 97,
-        "lines": 9783,
+        "csFiles": 96,
+        "lines": 9724,
         "testFiles": 17,
         "aot": 1,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T11:37:45"
       },
       "docs": [
         {
@@ -646,7 +731,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": null,
-          "lastWrite": "2026-09-30T09:52:03",
+          "lastWrite": "2026-11-05T11:41:58",
           "components": [
             "YFex.Cqrs"
           ]
@@ -659,7 +744,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": null,
-          "lastWrite": "2026-09-20T13:18:54",
+          "lastWrite": "2026-11-05T11:41:58",
           "components": [
             "YFex.Cqrs"
           ]
@@ -672,7 +757,7 @@
           "branch": "main",
           "lastCommit": "2026-11-05T11:24:09-03:00",
           "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-          "dirty": 0,
+          "dirty": 7,
           "commits14d": 1
         }
       ]
@@ -738,7 +823,7 @@
           "files": 15,
           "flags": 8,
           "lastDate": "2026-10-27",
-          "lastWrite": "2026-11-05T11:09:29",
+          "lastWrite": "2026-11-05T12:48:00",
           "components": [
             "YFex.Cryptography"
           ]
@@ -1081,11 +1166,11 @@
         "tests": 1,
         "benchmarks": 0,
         "apps": 0,
-        "csFiles": 12,
-        "lines": 2265,
-        "testFiles": 1,
+        "csFiles": 13,
+        "lines": 2492,
+        "testFiles": 2,
         "aot": 0,
-        "lastChange": "2026-10-02T10:41:08"
+        "lastChange": "2026-11-05T12:39:21"
       },
       "docs": [],
       "git": [
@@ -1095,7 +1180,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:27-03:00",
           "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 1,
+          "dirty": 4,
           "commits14d": 0
         }
       ]
@@ -1130,10 +1215,10 @@
         "benchmarks": 0,
         "apps": 2,
         "csFiles": 52,
-        "lines": 4092,
+        "lines": 4104,
         "testFiles": 8,
         "aot": 3,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T12:20:22"
       },
       "docs": [
         {
@@ -1170,7 +1255,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:28-03:00",
           "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 1,
+          "dirty": 7,
           "commits14d": 0
         }
       ]
@@ -1521,7 +1606,7 @@
         "lines": 31325,
         "testFiles": 49,
         "aot": 8,
-        "lastChange": "2026-10-31T15:09:58"
+        "lastChange": "2026-11-05T12:03:34"
       },
       "docs": [
         {
@@ -1545,7 +1630,7 @@
           "branch": "installations/i5-i6a",
           "lastCommit": "2026-10-31T15:35:01-03:00",
           "lastSubject": "Installations: pairing connect timeout, LAN probe, harness file modes",
-          "dirty": 0,
+          "dirty": 3,
           "commits14d": 6
         }
       ]
@@ -1641,10 +1726,10 @@
         "benchmarks": 0,
         "apps": 4,
         "csFiles": 174,
-        "lines": 28664,
+        "lines": 28624,
         "testFiles": 18,
         "aot": 10,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T12:42:18"
       },
       "docs": [
         {
@@ -1681,7 +1766,7 @@
           "branch": "main",
           "lastCommit": "2026-11-03T21:57:47-03:00",
           "lastSubject": "YFex.Jobs Plan D phase D0: user surface (YFex.Jobs.Templates)",
-          "dirty": 79,
+          "dirty": 93,
           "commits14d": 5
         }
       ]
@@ -1763,10 +1848,10 @@
         "benchmarks": 1,
         "apps": 1,
         "csFiles": 65,
-        "lines": 11293,
+        "lines": 11337,
         "testFiles": 11,
         "aot": 3,
-        "lastChange": "2026-11-05T11:23:39"
+        "lastChange": "2026-11-05T12:42:15"
       },
       "docs": [
         {
@@ -1800,11 +1885,11 @@
         {
           "repo": "YFex.Logging",
           "isRepo": true,
-          "branch": "main",
-          "lastCommit": "2026-10-17T20:38:19-03:00",
-          "lastSubject": "Initial commit: import existing project sources",
-          "dirty": 13,
-          "commits14d": 0
+          "branch": "privacy/tier1-scrubber-and-leaks",
+          "lastCommit": "2026-11-05T12:24:20-03:00",
+          "lastSubject": "Scrub free text with YFex.Privacy and add Redaction settings",
+          "dirty": 2,
+          "commits14d": 1
         }
       ]
     },
@@ -1931,10 +2016,10 @@
         "benchmarks": 0,
         "apps": 1,
         "csFiles": 157,
-        "lines": 20091,
+        "lines": 20104,
         "testFiles": 62,
         "aot": 6,
-        "lastChange": "2026-11-05T11:03:12"
+        "lastChange": "2026-11-05T11:39:12"
       },
       "docs": [
         {
@@ -1971,7 +2056,7 @@
           "branch": "main",
           "lastCommit": "2026-11-05T11:24:10-03:00",
           "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-          "dirty": 0,
+          "dirty": 1,
           "commits14d": 1
         }
       ]
@@ -2198,7 +2283,7 @@
           "files": 7,
           "flags": 14,
           "lastDate": "2026-11-04",
-          "lastWrite": "2026-11-05T11:09:33",
+          "lastWrite": "2026-11-05T11:41:58",
           "components": [
             "YFex.Notifications"
           ]
@@ -2248,7 +2333,7 @@
         "lines": 25241,
         "testFiles": 20,
         "aot": 10,
-        "lastChange": "2026-10-30T23:22:07"
+        "lastChange": "2026-11-05T12:03:34"
       },
       "docs": [
         {
@@ -2285,7 +2370,7 @@
           "branch": "main",
           "lastCommit": "2026-10-30T14:22:30-03:00",
           "lastSubject": "Offline Phase 4c and 4d: custody and coordination on the site broker",
-          "dirty": 19,
+          "dirty": 26,
           "commits14d": 4
         }
       ]
@@ -2323,7 +2408,7 @@
         "lines": 4328,
         "testFiles": 12,
         "aot": 3,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T12:18:41"
       },
       "docs": [
         {
@@ -2360,7 +2445,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:30-03:00",
           "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 3,
+          "dirty": 5,
           "commits14d": 0
         }
       ]
@@ -2428,6 +2513,7 @@
         "YFex.Persistence.Smoke",
         "YFex.Persistence",
         "YFex.Persistence.Encryption",
+        "YFex.Persistence.Encryption.Windows",
         "YFex.Persistence.FileSystem",
         "YFex.Persistence.Generator",
         "YFex.Persistence.IndexedDb",
@@ -2437,19 +2523,21 @@
         "YFex.Persistence.Tenancy.Tests",
         "YFex.Persistence.Tests"
       ],
-      "platforms": [],
+      "platforms": [
+        "Windows"
+      ],
       "metrics": {
-        "projects": 11,
-        "libraries": 6,
+        "projects": 12,
+        "libraries": 7,
         "generators": 1,
         "tests": 3,
         "benchmarks": 0,
         "apps": 1,
         "csFiles": 54,
-        "lines": 4707,
-        "testFiles": 9,
-        "aot": 5,
-        "lastChange": "2026-11-05T11:02:40"
+        "lines": 4778,
+        "testFiles": 8,
+        "aot": 6,
+        "lastChange": "2026-11-05T12:47:06"
       },
       "docs": [
         {
@@ -2471,10 +2559,10 @@
           "repo": "YFex.Persistence",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-05T11:24:06-03:00",
-          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-          "dirty": 0,
-          "commits14d": 1
+          "lastCommit": "2026-11-05T12:37:08-03:00",
+          "lastSubject": "Fix Persistence tests for the key-value store API",
+          "dirty": 6,
+          "commits14d": 2
         }
       ]
     },
@@ -2483,9 +2571,9 @@
       "name": "Privacy",
       "group": "identity",
       "status": "building",
-      "progress": 30,
+      "progress": 38,
       "summary": "Data classification on value-object types ([Sensitive], DataSensitivity in core), masks, scrubbing; later consent by purpose, pseudonyms, crypto-shredding and data-subject rights.",
-      "next": "Tier 1 remainder: TextScrubber (backs logging ILogTextScrubber), UI mask presenter, fix existing leaks (Profiling scrubber/hashing, Web credential records, PortableSecretStore plaintext). Tier 2 is built with the features that need it (health, loyalty, rights, AI). Runtime types live in core; the repo holds only the generator.",
+      "next": "TextScrubber + logging Redaction and the Web credential leak done 2026-11-05. PortableSecretStore sealed and IExtractable (Cpf/Telefone, TextScrubber.Add<T>) built 2026-11-05. Tier 1 remainder: Profiling scrubber/hashing, UI mask presenter. Tier 2 is built with the features that need it (health, loyalty, rights, AI). Runtime types live in core; the repo holds only the generator.",
       "pending": [],
       "curated": true,
       "repos": [
@@ -2506,22 +2594,22 @@
         "tests": 2,
         "benchmarks": 0,
         "apps": 1,
-        "csFiles": 11,
-        "lines": 1933,
-        "testFiles": 2,
+        "csFiles": 12,
+        "lines": 2071,
+        "testFiles": 3,
         "aot": 2,
-        "lastChange": "2026-11-05T11:24:13"
+        "lastChange": "2026-11-05T12:43:17"
       },
       "docs": [
         {
           "path": "YFex/docs/internal/privacy",
           "file": "YFex/docs/internal/privacy/README.md",
           "title": "YFex.Privacy — Data Classification, Consent, Redaction & Data Subject Rights — Design",
-          "status": "Status: Tier 1 BUILT (2026-10-02): core contract in YFex/src/YFex/Privacy/, generator in repo YFex.Privacy, logging integration (log in 11). Tier 1 remainder (TextScrubber, UI mask presenter, existing leaks) and Tier 2/3 are designed, not built. Open decisions are marked ⚑P# (the list is at the end of this file). No 3rd-party package is added without explicit approval. The design uses only the BCL (HMACSHA256, HKDF, AesGcm, ECDsa, SHA256, [GeneratedRegex], RandomNumberGenerator).",
+          "status": "Status: Tier 1 BUILT (2026-10-02): core contract in YFex/src/YFex/Privacy/, generator in repo YFex.Privacy, logging integration (log in 11); TextScrubber + logging .Redaction(...) BUILT 2026-11-05. Tier 1 remainder (UI mask presenter, existing leaks, value-object detectors) and Tier 2/3 are designed, not built. Open decisions are marked ⚑P# (the list is at the end of this file). No 3rd-party package is added without explicit approval. The design uses only the BCL (HMACSHA256, HKDF, AesGcm, ECDsa, SHA256, [GeneratedRegex], RandomNumberGenerator).",
           "files": 15,
           "flags": 26,
-          "lastDate": "2026-10-02",
-          "lastWrite": "2026-11-05T11:09:35",
+          "lastDate": "2026-11-05",
+          "lastWrite": "2026-11-05T12:45:27",
           "components": [
             "YFex.Privacy"
           ]
@@ -2534,7 +2622,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": null,
-          "lastWrite": "2026-10-02T10:50:19",
+          "lastWrite": "2026-11-05T11:26:04",
           "components": [
             "YFex.Privacy"
           ]
@@ -2544,11 +2632,11 @@
         {
           "repo": "YFex.Privacy",
           "isRepo": true,
-          "branch": "main",
-          "lastCommit": "2026-10-17T20:38:19-03:00",
-          "lastSubject": "Initial commit: import existing project sources",
-          "dirty": 5,
-          "commits14d": 0
+          "branch": "privacy/tier1-scrubber-and-leaks",
+          "lastCommit": "2026-11-05T12:24:19-03:00",
+          "lastSubject": "Add TextScrubber runtime (privacy 06)",
+          "dirty": 7,
+          "commits14d": 1
         }
       ]
     },
@@ -2621,7 +2709,7 @@
       "status": "done",
       "progress": 90,
       "summary": "Retry / timeout / circuit-breaker policy vocabulary (ResilienceSpec as a cheap record struct) with an optional Polly adapter.",
-      "next": "Adoption: Cqrs, Jobs, Web.Refit and Orchestration still have their own retry types (see F04).",
+      "next": "Every retry in the ecosystem uses its vocabulary since 2026-11-05 (F04); stored retries use RetryDelay + RetryBudget.",
       "pending": [],
       "curated": true,
       "repos": [
@@ -2641,11 +2729,11 @@
         "tests": 1,
         "benchmarks": 0,
         "apps": 1,
-        "csFiles": 22,
-        "lines": 2173,
-        "testFiles": 6,
+        "csFiles": 24,
+        "lines": 2320,
+        "testFiles": 7,
         "aot": 3,
-        "lastChange": "2026-11-04T16:03:06"
+        "lastChange": "2026-11-05T12:38:05"
       },
       "docs": [
         {
@@ -2656,7 +2744,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": null,
-          "lastWrite": "2026-09-20T13:17:24",
+          "lastWrite": "2026-11-05T12:45:04",
           "components": [
             "YFex.Resilience"
           ]
@@ -2669,7 +2757,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": null,
-          "lastWrite": "2026-09-20T13:15:20",
+          "lastWrite": "2026-11-05T12:45:04",
           "components": [
             "YFex.Resilience"
           ]
@@ -2682,7 +2770,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:31-03:00",
           "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 11,
+          "dirty": 13,
           "commits14d": 0
         }
       ]
@@ -2723,7 +2811,7 @@
         "lines": 13714,
         "testFiles": 21,
         "aot": 3,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T12:00:03"
       },
       "docs": [
         {
@@ -2747,7 +2835,7 @@
           "branch": "main",
           "lastCommit": "2026-11-05T11:24:08-03:00",
           "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-          "dirty": 0,
+          "dirty": 1,
           "commits14d": 1
         }
       ]
@@ -2915,11 +3003,11 @@
         "tests": 3,
         "benchmarks": 0,
         "apps": 1,
-        "csFiles": 126,
-        "lines": 15370,
-        "testFiles": 54,
+        "csFiles": 127,
+        "lines": 15504,
+        "testFiles": 55,
         "aot": 5,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T12:25:20"
       },
       "docs": [
         {
@@ -2954,10 +3042,10 @@
           "repo": "YFex.State",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-05T11:24:07-03:00",
-          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
+          "lastCommit": "2026-11-05T12:37:08-03:00",
+          "lastSubject": "Add UndoSnapshotProvider tests (moved from YFex.Persistence)",
           "dirty": 0,
-          "commits14d": 1
+          "commits14d": 2
         }
       ]
     },
@@ -3028,11 +3116,11 @@
         {
           "repo": "YFex",
           "isRepo": true,
-          "branch": "main",
-          "lastCommit": "2026-11-05T11:24:12-03:00",
-          "lastSubject": "Move framework projects to sibling repos (atlas F01)",
-          "dirty": 0,
-          "commits14d": 4
+          "branch": "privacy/tier1-scrubber-and-leaks",
+          "lastCommit": "2026-11-05T12:37:08-03:00",
+          "lastSubject": "Atlas: F29 no longer lists Persistence.Tests (fixed)",
+          "dirty": 13,
+          "commits14d": 7
         },
         {
           "repo": "YFex.System",
@@ -3143,7 +3231,7 @@
         "lines": 3983,
         "testFiles": 11,
         "aot": 6,
-        "lastChange": "2026-10-14T22:30:23"
+        "lastChange": "2026-11-05T12:03:34"
       },
       "docs": [
         {
@@ -3167,7 +3255,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:19-03:00",
           "lastSubject": "Initial commit: import existing project sources",
-          "dirty": 2,
+          "dirty": 4,
           "commits14d": 0
         }
       ]
@@ -3245,11 +3333,11 @@
         {
           "repo": "YFex",
           "isRepo": true,
-          "branch": "main",
-          "lastCommit": "2026-11-05T11:24:12-03:00",
-          "lastSubject": "Move framework projects to sibling repos (atlas F01)",
-          "dirty": 0,
-          "commits14d": 4
+          "branch": "privacy/tier1-scrubber-and-leaks",
+          "lastCommit": "2026-11-05T12:37:08-03:00",
+          "lastSubject": "Atlas: F29 no longer lists Persistence.Tests (fixed)",
+          "dirty": 13,
+          "commits14d": 7
         },
         {
           "repo": "YFex.UI",
@@ -3331,7 +3419,7 @@
       "status": "done",
       "progress": 80,
       "summary": "Outbound HTTP API clients (Refit): per-scope endpoints and credentials, token handling, sealed secrets in SQL (Web.Data), ASP.NET Core glue.",
-      "next": "Move ISecretProtector to Cryptography (F08); retry onto Resilience (F04); confirm the web-tenancy plan status.",
+      "next": "Move ISecretProtector to Cryptography (F08); confirm the web-tenancy plan status.",
       "pending": [],
       "curated": true,
       "repos": [
@@ -3357,11 +3445,11 @@
         "tests": 4,
         "benchmarks": 0,
         "apps": 1,
-        "csFiles": 85,
-        "lines": 6342,
-        "testFiles": 26,
+        "csFiles": 86,
+        "lines": 6468,
+        "testFiles": 27,
         "aot": 1,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T11:38:27"
       },
       "docs": [
         {
@@ -3396,11 +3484,11 @@
         {
           "repo": "YFex.Web",
           "isRepo": true,
-          "branch": "main",
-          "lastCommit": "2026-10-17T20:38:34-03:00",
-          "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 26,
-          "commits14d": 0
+          "branch": "privacy/tier1-scrubber-and-leaks",
+          "lastCommit": "2026-11-05T12:24:20-03:00",
+          "lastSubject": "Stop credential records from printing their secrets",
+          "dirty": 25,
+          "commits14d": 1
         }
       ]
     },
@@ -3441,11 +3529,11 @@
         {
           "repo": "YFex",
           "isRepo": true,
-          "branch": "main",
-          "lastCommit": "2026-11-05T11:24:12-03:00",
-          "lastSubject": "Move framework projects to sibling repos (atlas F01)",
-          "dirty": 0,
-          "commits14d": 4
+          "branch": "privacy/tier1-scrubber-and-leaks",
+          "lastCommit": "2026-11-05T12:37:08-03:00",
+          "lastSubject": "Atlas: F29 no longer lists Persistence.Tests (fixed)",
+          "dirty": 13,
+          "commits14d": 7
         }
       ]
     }
@@ -3529,6 +3617,16 @@
     },
     {
       "from": "YFex.Authentication",
+      "to": "YFex.Messaging",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Authentication.Rpc → YFex.Messaging.Rpc"
+      ]
+    },
+    {
+      "from": "YFex.Authentication",
       "to": "YFex.Offline",
       "weight": 2,
       "analyzerOnly": false,
@@ -3536,6 +3634,17 @@
       "refs": [
         "YFex.Authentication.Offline → YFex.Offline",
         "YFex.Authentication.Offline.Central → YFex.Offline"
+      ]
+    },
+    {
+      "from": "YFex.Authentication",
+      "to": "YFex.Persistence",
+      "weight": 2,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Authentication.Client → YFex.Persistence",
+        "YFex.Authentication.Client → YFex.Persistence.Encryption"
       ]
     },
     {
@@ -3600,6 +3709,16 @@
       "refs": [
         "YFex.Authorization → YFex.Tenancy",
         "YFex.Authorization → YFex.Tenancy.Resolution"
+      ]
+    },
+    {
+      "from": "YFex.Automation",
+      "to": "YFex.Cryptography",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Automation.Secrets → YFex.Cryptography"
       ]
     },
     {
@@ -4033,6 +4152,16 @@
     },
     {
       "from": "YFex.Installations",
+      "to": "YFex.Messaging",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": true,
+      "refs": [
+        "YFex.Installations.Rpc → YFex.Messaging.Rpc"
+      ]
+    },
+    {
+      "from": "YFex.Installations",
       "to": "YFex.Networking",
       "weight": 2,
       "analyzerOnly": false,
@@ -4040,6 +4169,16 @@
       "refs": [
         "YFex.Installations → YFex.Networking",
         "YFex.Installations.Testing → YFex.Networking.Testing"
+      ]
+    },
+    {
+      "from": "YFex.Installations",
+      "to": "YFex.Persistence",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Installations.Persistence → YFex.Persistence"
       ]
     },
     {
@@ -4121,6 +4260,16 @@
       "cycle": false,
       "refs": [
         "YFex.Jobs.Persistence.KeyValue → YFex.Persistence"
+      ]
+    },
+    {
+      "from": "YFex.Jobs",
+      "to": "YFex.Resilience",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Jobs.Abstractions → YFex.Resilience"
       ]
     },
     {
@@ -4424,6 +4573,17 @@
     },
     {
       "from": "YFex.Offline",
+      "to": "YFex.Cqrs",
+      "weight": 2,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Offline → YFex.Cqrs",
+        "YFex.Offline.Central → YFex.Cqrs"
+      ]
+    },
+    {
+      "from": "YFex.Offline",
       "to": "YFex.Cryptography",
       "weight": 1,
       "analyzerOnly": false,
@@ -4457,12 +4617,43 @@
     },
     {
       "from": "YFex.Offline",
+      "to": "YFex.Messaging",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Offline.Rpc → YFex.Messaging.Rpc"
+      ]
+    },
+    {
+      "from": "YFex.Offline",
       "to": "YFex.Networking",
       "weight": 1,
       "analyzerOnly": false,
       "cycle": false,
       "refs": [
         "YFex.Offline → YFex.Networking"
+      ]
+    },
+    {
+      "from": "YFex.Offline",
+      "to": "YFex.Persistence",
+      "weight": 2,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Offline.Persistence → YFex.Persistence",
+        "YFex.Offline.Persistence → YFex.Persistence.Encryption"
+      ]
+    },
+    {
+      "from": "YFex.Offline",
+      "to": "YFex.Rules",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Offline.Rules → YFex.Rules"
       ]
     },
     {
@@ -4565,7 +4756,7 @@
       "cycle": false,
       "refs": [
         "YFex.Persistence.Encryption → YFex.Cryptography",
-        "YFex.Persistence.Encryption → YFex.Cryptography.Windows"
+        "YFex.Persistence.Encryption.Windows → YFex.Cryptography.Windows"
       ]
     },
     {
@@ -4815,6 +5006,16 @@
       ]
     },
     {
+      "from": "YFex.Time",
+      "to": "YFex.Persistence",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Time.Persistence → YFex.Persistence"
+      ]
+    },
+    {
       "from": "YFex.UI",
       "to": "YFex",
       "weight": 1,
@@ -4896,6 +5097,16 @@
       "refs": [
         "YFex.Web.Data → YFex.Data",
         "YFex.Web.Data → YFex.Data.Generator (analyzer)"
+      ]
+    },
+    {
+      "from": "YFex.Web",
+      "to": "YFex.Privacy",
+      "weight": 1,
+      "analyzerOnly": true,
+      "cycle": false,
+      "refs": [
+        "YFex.Web → YFex.Privacy.Generator (analyzer)"
       ]
     },
     {
@@ -5193,9 +5404,9 @@
         "System.Reactive",
         "Vogen"
       ],
-      "csFiles": 97,
-      "lines": 13176,
-      "lastChange": "2026-10-18T12:17:52",
+      "csFiles": 98,
+      "lines": 13201,
+      "lastChange": "2026-11-05T12:35:22",
       "inSolution": true
     },
     {
@@ -5458,7 +5669,9 @@
         "YFex.Authentication.Public",
         "YFex.Authorization",
         "YFex.Cryptography",
-        "YFex.Installations"
+        "YFex.Installations",
+        "YFex.Persistence",
+        "YFex.Persistence.Encryption"
       ],
       "refsIn": 4,
       "packages": [
@@ -5466,7 +5679,7 @@
       ],
       "csFiles": 6,
       "lines": 1406,
-      "lastChange": "2026-10-19T11:17:09",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -5595,13 +5808,14 @@
       "tfms": [],
       "aot": true,
       "refs": [
-        "YFex.Authentication"
+        "YFex.Authentication",
+        "YFex.Messaging.Rpc"
       ],
       "refsIn": 1,
       "packages": [],
       "csFiles": 1,
       "lines": 49,
-      "lastChange": "2026-10-18T02:06:29",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -5979,6 +6193,280 @@
       "csFiles": 16,
       "lines": 1801,
       "lastChange": "2026-10-30T13:27:33",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Abstractions",
+      "path": "YFex.Automation/src/YFex.Automation.Abstractions/YFex.Automation.Abstractions.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "library",
+      "tfms": [],
+      "aot": false,
+      "refs": [],
+      "refsIn": 9,
+      "packages": [],
+      "csFiles": 41,
+      "lines": 1600,
+      "lastChange": "2026-06-20T23:20:21",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Ai.Api",
+      "path": "YFex.Automation/src/YFex.Automation.Ai.Api/YFex.Automation.Ai.Api.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "library",
+      "tfms": [],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Abstractions"
+      ],
+      "refsIn": 2,
+      "packages": [
+        "Microsoft.Extensions.Http"
+      ],
+      "csFiles": 6,
+      "lines": 657,
+      "lastChange": "2026-06-20T22:20:58",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Ai.Api.Tests",
+      "path": "YFex.Automation/tests/YFex.Automation.Ai.Api.Tests/YFex.Automation.Ai.Api.Tests.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "test",
+      "tfms": [
+        "net11.0"
+      ],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Ai.Api"
+      ],
+      "refsIn": 0,
+      "packages": [
+        "Microsoft.NET.Test.Sdk",
+        "xunit",
+        "xunit.runner.visualstudio"
+      ],
+      "csFiles": 1,
+      "lines": 120,
+      "lastChange": "2026-06-20T23:39:22",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Ai.Desktop",
+      "path": "YFex.Automation/src/YFex.Automation.Ai.Desktop/YFex.Automation.Ai.Desktop.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "library",
+      "tfms": [],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Abstractions"
+      ],
+      "refsIn": 1,
+      "packages": [],
+      "csFiles": 3,
+      "lines": 210,
+      "lastChange": "2026-06-20T22:27:27",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Ai.Reversed",
+      "path": "YFex.Automation/src/YFex.Automation.Ai.Reversed/YFex.Automation.Ai.Reversed.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "library",
+      "tfms": [],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Abstractions"
+      ],
+      "refsIn": 1,
+      "packages": [
+        "Microsoft.Extensions.Http"
+      ],
+      "csFiles": 3,
+      "lines": 161,
+      "lastChange": "2026-06-20T22:24:36",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Core",
+      "path": "YFex.Automation/src/YFex.Automation.Core/YFex.Automation.Core.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "library",
+      "tfms": [],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Abstractions",
+        "YFex.Automation.Secrets"
+      ],
+      "refsIn": 2,
+      "packages": [],
+      "csFiles": 44,
+      "lines": 2834,
+      "lastChange": "2026-11-05T11:56:22",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Core.Tests",
+      "path": "YFex.Automation/tests/YFex.Automation.Core.Tests/YFex.Automation.Core.Tests.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "test",
+      "tfms": [
+        "net11.0"
+      ],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Core",
+        "YFex.Automation.Platform.Linux"
+      ],
+      "refsIn": 0,
+      "packages": [
+        "Microsoft.NET.Test.Sdk",
+        "xunit",
+        "xunit.runner.visualstudio",
+        "Microsoft.Extensions.DependencyInjection"
+      ],
+      "csFiles": 7,
+      "lines": 800,
+      "lastChange": "2026-11-05T11:57:32",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Hosting",
+      "path": "YFex.Automation/src/YFex.Automation.Hosting/YFex.Automation.Hosting.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "library",
+      "tfms": [
+        "net11.0-windows10.0.19041.0"
+      ],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Abstractions",
+        "YFex.Automation.Core",
+        "YFex.Automation.Steps",
+        "YFex.Automation.Platform.Windows",
+        "YFex.Automation.Ai.Api",
+        "YFex.Automation.Ai.Reversed",
+        "YFex.Automation.Ai.Desktop"
+      ],
+      "refsIn": 0,
+      "packages": [],
+      "csFiles": 9,
+      "lines": 606,
+      "lastChange": "2026-06-20T22:26:49",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Platform.Linux",
+      "path": "YFex.Automation/src/YFex.Automation.Platform.Linux/YFex.Automation.Platform.Linux.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "library",
+      "tfms": [],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Abstractions",
+        "YFex.Automation.Secrets"
+      ],
+      "refsIn": 1,
+      "packages": [],
+      "csFiles": 3,
+      "lines": 87,
+      "lastChange": "2026-11-05T11:56:22",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Platform.Windows",
+      "path": "YFex.Automation/src/YFex.Automation.Platform.Windows/YFex.Automation.Platform.Windows.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "library",
+      "tfms": [
+        "net11.0-windows10.0.19041.0"
+      ],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Abstractions"
+      ],
+      "refsIn": 2,
+      "packages": [
+        "System.Security.Cryptography.ProtectedData",
+        "System.Drawing.Common",
+        "FlaUI.UIA3"
+      ],
+      "csFiles": 21,
+      "lines": 2091,
+      "lastChange": "2026-06-20T23:20:47",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Platform.Windows.Tests",
+      "path": "YFex.Automation/tests/YFex.Automation.Platform.Windows.Tests/YFex.Automation.Platform.Windows.Tests.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "test",
+      "tfms": [
+        "net11.0-windows10.0.19041.0"
+      ],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Platform.Windows"
+      ],
+      "refsIn": 0,
+      "packages": [
+        "Microsoft.NET.Test.Sdk",
+        "xunit",
+        "xunit.runner.visualstudio",
+        "System.Drawing.Common"
+      ],
+      "csFiles": 2,
+      "lines": 224,
+      "lastChange": "2026-06-20T23:41:01",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Secrets",
+      "path": "YFex.Automation/src/YFex.Automation.Secrets/YFex.Automation.Secrets.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "library",
+      "tfms": [],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Abstractions",
+        "YFex.Cryptography"
+      ],
+      "refsIn": 2,
+      "packages": [],
+      "csFiles": 1,
+      "lines": 114,
+      "lastChange": "2026-11-05T11:56:22",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Automation.Steps",
+      "path": "YFex.Automation/src/YFex.Automation.Steps/YFex.Automation.Steps.csproj",
+      "repo": "YFex.Automation",
+      "component": "YFex.Automation",
+      "kind": "library",
+      "tfms": [],
+      "aot": false,
+      "refs": [
+        "YFex.Automation.Abstractions"
+      ],
+      "refsIn": 1,
+      "packages": [],
+      "csFiles": 4,
+      "lines": 387,
+      "lastChange": "2026-06-19T16:28:45",
       "inSolution": true
     },
     {
@@ -6363,13 +6851,13 @@
         "YFex.Cqrs.SourceGenerator*",
         "YFex.Cqrs.Analyzer*"
       ],
-      "refsIn": 19,
+      "refsIn": 21,
       "packages": [
         "Microsoft.Extensions.DependencyInjection.Abstractions"
       ],
-      "csFiles": 57,
-      "lines": 4641,
-      "lastChange": "2026-11-05T11:02:40",
+      "csFiles": 56,
+      "lines": 4582,
+      "lastChange": "2026-11-05T11:37:45",
       "inSolution": true
     },
     {
@@ -6628,7 +7116,7 @@
       "refs": [
         "YFex"
       ],
-      "refsIn": 25,
+      "refsIn": 26,
       "packages": [
         "Microsoft.Extensions.DependencyInjection.Abstractions"
       ],
@@ -7722,11 +8210,11 @@
         "YFex",
         "YFex.Privacy.Generator*"
       ],
-      "refsIn": 9,
+      "refsIn": 10,
       "packages": [],
       "csFiles": 11,
-      "lines": 2206,
-      "lastChange": "2026-10-02T10:39:37",
+      "lines": 2337,
+      "lastChange": "2026-11-05T12:36:58",
       "inSolution": true
     },
     {
@@ -7749,9 +8237,9 @@
         "xunit.runner.visualstudio",
         "FluentAssertions"
       ],
-      "csFiles": 1,
-      "lines": 59,
-      "lastChange": "2026-10-02T10:41:08",
+      "csFiles": 2,
+      "lines": 155,
+      "lastChange": "2026-11-05T12:39:21",
       "inSolution": true
     },
     {
@@ -7902,8 +8390,8 @@
         "Microsoft.Extensions.DependencyInjection"
       ],
       "csFiles": 8,
-      "lines": 761,
-      "lastChange": "2026-10-07T12:28:00",
+      "lines": 773,
+      "lastChange": "2026-11-05T12:20:22",
       "inSolution": true
     },
     {
@@ -8603,13 +9091,14 @@
       "tfms": [],
       "aot": true,
       "refs": [
-        "YFex.Installations"
+        "YFex.Installations",
+        "YFex.Persistence"
       ],
       "refsIn": 1,
       "packages": [],
       "csFiles": 1,
       "lines": 20,
-      "lastChange": "2026-10-07T21:24:01",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -8622,13 +9111,14 @@
       "aot": true,
       "refs": [
         "YFex.Installations",
+        "YFex.Messaging.Rpc",
         "YFex.Authorization.Public"
       ],
       "refsIn": 4,
       "packages": [],
       "csFiles": 13,
       "lines": 1035,
-      "lastChange": "2026-10-29T19:31:34",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -8796,8 +9286,8 @@
         "System.Diagnostics.DiagnosticSource"
       ],
       "csFiles": 41,
-      "lines": 8215,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 8206,
+      "lastChange": "2026-11-05T12:40:03",
       "inSolution": true
     },
     {
@@ -8812,13 +9302,14 @@
       "aot": false,
       "refs": [
         "YFex.Tenancy",
+        "YFex.Resilience",
         "YFex.Validation"
       ],
       "refsIn": 2,
       "packages": [],
       "csFiles": 26,
-      "lines": 2116,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 2094,
+      "lastChange": "2026-11-05T12:39:52",
       "inSolution": true
     },
     {
@@ -8982,8 +9473,8 @@
         "Microsoft.Extensions.Hosting"
       ],
       "csFiles": 32,
-      "lines": 3117,
-      "lastChange": "2026-06-17T23:43:13",
+      "lines": 3093,
+      "lastChange": "2026-11-05T12:40:29",
       "inSolution": true
     },
     {
@@ -9007,8 +9498,8 @@
         "Microsoft.Extensions.Logging"
       ],
       "csFiles": 1,
-      "lines": 369,
-      "lastChange": "2026-06-17T23:50:45",
+      "lines": 368,
+      "lastChange": "2026-11-05T12:40:45",
       "inSolution": true
     },
     {
@@ -9052,8 +9543,8 @@
       "refsIn": 2,
       "packages": [],
       "csFiles": 3,
-      "lines": 602,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 600,
+      "lastChange": "2026-11-05T12:39:52",
       "inSolution": true
     },
     {
@@ -9096,8 +9587,8 @@
         "Microsoft.CodeAnalysis.Analyzers"
       ],
       "csFiles": 9,
-      "lines": 2443,
-      "lastChange": "2026-11-04T15:08:56",
+      "lines": 2441,
+      "lastChange": "2026-11-05T12:40:20",
       "inSolution": true
     },
     {
@@ -9197,8 +9688,8 @@
         "Microsoft.CodeAnalysis.CSharp"
       ],
       "csFiles": 17,
-      "lines": 4553,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 4573,
+      "lastChange": "2026-11-05T12:42:18",
       "inSolution": true
     },
     {
@@ -9222,8 +9713,8 @@
         "Microsoft.Extensions.Configuration.Abstractions"
       ],
       "csFiles": 36,
-      "lines": 6308,
-      "lastChange": "2026-11-05T11:23:13",
+      "lines": 6318,
+      "lastChange": "2026-11-05T12:42:04",
       "inSolution": true
     },
     {
@@ -9374,8 +9865,8 @@
         "Microsoft.Extensions.DependencyInjection"
       ],
       "csFiles": 10,
-      "lines": 1537,
-      "lastChange": "2026-11-05T11:23:39",
+      "lines": 1571,
+      "lastChange": "2026-11-05T12:42:15",
       "inSolution": true
     },
     {
@@ -9564,7 +10055,7 @@
         "YFex.Cryptography",
         "YFex.Time"
       ],
-      "refsIn": 10,
+      "refsIn": 13,
       "packages": [
         "ActualLab.Fusion.Server",
         "MemoryPack",
@@ -9719,8 +10210,8 @@
         "Microsoft.Extensions.Logging.Abstractions"
       ],
       "csFiles": 37,
-      "lines": 4772,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 4785,
+      "lastChange": "2026-11-05T11:39:12",
       "inSolution": true
     },
     {
@@ -9742,7 +10233,7 @@
         "YFex.Validation.Generator*",
         "YFex.Authorization.Generator*"
       ],
-      "refsIn": 1,
+      "refsIn": 2,
       "packages": [
         "MemoryPack"
       ],
@@ -10109,7 +10600,8 @@
         "YFex.Cryptography",
         "YFex.Networking",
         "YFex.Installations",
-        "YFex.Authorization.Public"
+        "YFex.Authorization.Public",
+        "YFex.Cqrs"
       ],
       "refsIn": 11,
       "packages": [
@@ -10118,7 +10610,7 @@
       ],
       "csFiles": 49,
       "lines": 9937,
-      "lastChange": "2026-10-30T23:17:51",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -10203,13 +10695,14 @@
       "refs": [
         "YFex.Offline",
         "YFex.Installations.Central",
+        "YFex.Cqrs",
         "YFex.Authorization.Generator*"
       ],
       "refsIn": 5,
       "packages": [],
       "csFiles": 11,
       "lines": 2303,
-      "lastChange": "2026-10-30T23:13:37",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -10263,13 +10756,15 @@
       "aot": true,
       "refs": [
         "YFex.Offline",
-        "YFex.Offline.Broker"
+        "YFex.Offline.Broker",
+        "YFex.Persistence",
+        "YFex.Persistence.Encryption"
       ],
       "refsIn": 2,
       "packages": [],
       "csFiles": 4,
       "lines": 1117,
-      "lastChange": "2026-10-30T13:24:30",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -10282,13 +10777,14 @@
       "aot": true,
       "refs": [
         "YFex.Offline",
+        "YFex.Messaging.Rpc",
         "YFex.Authorization.Installations"
       ],
       "refsIn": 2,
       "packages": [],
       "csFiles": 4,
       "lines": 577,
-      "lastChange": "2026-10-30T23:10:58",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -10300,13 +10796,14 @@
       "tfms": [],
       "aot": true,
       "refs": [
-        "YFex.Offline"
+        "YFex.Offline",
+        "YFex.Rules"
       ],
       "refsIn": 2,
       "packages": [],
       "csFiles": 3,
       "lines": 467,
-      "lastChange": "2026-10-15T15:07:29",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -10341,6 +10838,7 @@
         "YFex.Offline.Broker",
         "YFex.Offline.Central",
         "YFex.Offline.Rules",
+        "YFex.Rules.Admin",
         "YFex.Authorization.Testing",
         "YFex.Offline.Persistence",
         "YFex.Offline.Testing",
@@ -10365,7 +10863,7 @@
       ],
       "csFiles": 20,
       "lines": 5909,
-      "lastChange": "2026-10-30T23:20:58",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -10395,7 +10893,7 @@
       ],
       "csFiles": 28,
       "lines": 2006,
-      "lastChange": "2026-11-05T11:02:40",
+      "lastChange": "2026-11-05T12:18:41",
       "inSolution": true
     },
     {
@@ -10625,7 +11123,7 @@
       "refs": [
         "YFex.Persistence.Generator"
       ],
-      "refsIn": 21,
+      "refsIn": 25,
       "packages": [
         "MemoryPack",
         "Microsoft.Extensions.DependencyInjection.Abstractions",
@@ -10648,17 +11146,16 @@
       "aot": true,
       "refs": [
         "YFex.Persistence",
-        "YFex.Cryptography",
-        "YFex.Cryptography.Windows"
+        "YFex.Cryptography"
       ],
-      "refsIn": 3,
+      "refsIn": 6,
       "packages": [
         "Microsoft.Extensions.DependencyInjection.Abstractions",
         "Microsoft.Extensions.Logging.Abstractions"
       ],
       "csFiles": 3,
-      "lines": 536,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 566,
+      "lastChange": "2026-11-05T12:43:15",
       "inSolution": true
     },
     {
@@ -10674,6 +11171,7 @@
       "refs": [
         "YFex.Persistence",
         "YFex.Persistence.Encryption",
+        "YFex.Persistence.Encryption.Windows",
         "YFex.Cryptography.Testing"
       ],
       "refsIn": 0,
@@ -10685,8 +11183,29 @@
         "Microsoft.Extensions.DependencyInjection"
       ],
       "csFiles": 2,
-      "lines": 330,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 364,
+      "lastChange": "2026-11-05T12:43:52",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Persistence.Encryption.Windows",
+      "path": "YFex.Persistence/src/YFex.Persistence.Encryption.Windows/YFex.Persistence.Encryption.Windows.csproj",
+      "repo": "YFex.Persistence",
+      "component": "YFex.Persistence",
+      "kind": "library",
+      "tfms": [
+        "net11.0"
+      ],
+      "aot": true,
+      "refs": [
+        "YFex.Persistence.Encryption",
+        "YFex.Cryptography.Windows"
+      ],
+      "refsIn": 1,
+      "packages": [],
+      "csFiles": 1,
+      "lines": 33,
+      "lastChange": "2026-11-05T12:47:06",
       "inSolution": true
     },
     {
@@ -10875,9 +11394,9 @@
         "coverlet.collector",
         "MemoryPack"
       ],
-      "csFiles": 6,
-      "lines": 546,
-      "lastChange": "2026-11-05T11:02:40",
+      "csFiles": 5,
+      "lines": 520,
+      "lastChange": "2026-11-05T12:25:28",
       "inSolution": true
     },
     {
@@ -10894,8 +11413,8 @@
       "refsIn": 3,
       "packages": [],
       "csFiles": 4,
-      "lines": 845,
-      "lastChange": "2026-11-05T11:14:39",
+      "lines": 904,
+      "lastChange": "2026-11-05T12:39:57",
       "inSolution": true
     },
     {
@@ -10915,8 +11434,8 @@
       "refsIn": 0,
       "packages": [],
       "csFiles": 1,
-      "lines": 47,
-      "lastChange": "2026-11-05T11:24:13",
+      "lines": 52,
+      "lastChange": "2026-11-05T12:43:17",
       "inSolution": true
     },
     {
@@ -10930,7 +11449,7 @@
       ],
       "aot": false,
       "refs": [],
-      "refsIn": 8,
+      "refsIn": 9,
       "packages": [
         "Microsoft.CodeAnalysis.CSharp",
         "Microsoft.CodeAnalysis.Analyzers"
@@ -10974,7 +11493,8 @@
       "tfms": [],
       "aot": false,
       "refs": [
-        "YFex.Privacy"
+        "YFex.Privacy",
+        "YFex.Entity.Public"
       ],
       "refsIn": 0,
       "packages": [
@@ -10983,9 +11503,9 @@
         "xunit.runner.visualstudio",
         "FluentAssertions"
       ],
-      "csFiles": 1,
-      "lines": 177,
-      "lastChange": "2026-11-05T11:19:04",
+      "csFiles": 2,
+      "lines": 251,
+      "lastChange": "2026-11-05T12:41:02",
       "inSolution": true
     },
     {
@@ -11095,13 +11615,13 @@
       ],
       "aot": true,
       "refs": [],
-      "refsIn": 8,
+      "refsIn": 9,
       "packages": [
         "Microsoft.Extensions.DependencyInjection.Abstractions"
       ],
-      "csFiles": 10,
-      "lines": 503,
-      "lastChange": "2026-11-04T16:02:15",
+      "csFiles": 11,
+      "lines": 571,
+      "lastChange": "2026-11-05T12:37:53",
       "inSolution": true
     },
     {
@@ -11173,9 +11693,9 @@
         "xunit.runner.visualstudio",
         "FluentAssertions"
       ],
-      "csFiles": 6,
-      "lines": 883,
-      "lastChange": "2026-11-04T16:03:06",
+      "csFiles": 7,
+      "lines": 962,
+      "lastChange": "2026-11-05T12:38:05",
       "inSolution": true
     },
     {
@@ -11199,7 +11719,7 @@
       ],
       "csFiles": 1,
       "lines": 136,
-      "lastChange": "2026-11-05T11:02:40",
+      "lastChange": "2026-11-05T12:00:03",
       "inSolution": true
     },
     {
@@ -11218,7 +11738,7 @@
         "YFex.Authorization.Public",
         "YFex.Rules.Generator*"
       ],
-      "refsIn": 7,
+      "refsIn": 8,
       "packages": [],
       "csFiles": 42,
       "lines": 6618,
@@ -11835,7 +12355,7 @@
         "YFex.Persistence",
         "YFex.State.History"
       ],
-      "refsIn": 0,
+      "refsIn": 1,
       "packages": [
         "MemoryPack",
         "System.Text.Json"
@@ -11878,6 +12398,7 @@
       "aot": false,
       "refs": [
         "YFex.State.History",
+        "YFex.State.History.Persistence",
         "YFex.State.History.Testing",
         "YFex.State",
         "YFex.State.Collections",
@@ -11893,9 +12414,9 @@
         "FluentAssertions",
         "coverlet.collector"
       ],
-      "csFiles": 6,
-      "lines": 870,
-      "lastChange": "2026-11-05T11:02:40",
+      "csFiles": 7,
+      "lines": 1004,
+      "lastChange": "2026-11-05T12:25:20",
       "inSolution": true
     },
     {
@@ -12250,13 +12771,14 @@
       "tfms": [],
       "aot": true,
       "refs": [
-        "YFex.Time"
+        "YFex.Time",
+        "YFex.Persistence"
       ],
       "refsIn": 1,
       "packages": [],
       "csFiles": 1,
       "lines": 60,
-      "lastChange": "2026-10-14T22:17:35",
+      "lastChange": "2026-11-05T12:03:34",
       "inSolution": true
     },
     {
@@ -12738,13 +13260,14 @@
       "refs": [
         "YFex.Cqrs",
         "YFex.Authorization.Public",
+        "YFex.Privacy.Generator*",
         "YFex.Tenancy.Resolution"
       ],
       "refsIn": 7,
       "packages": [],
       "csFiles": 17,
-      "lines": 561,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 622,
+      "lastChange": "2026-11-05T11:36:42",
       "inSolution": true
     },
     {
@@ -12952,9 +13475,9 @@
         "xunit",
         "xunit.runner.visualstudio"
       ],
-      "csFiles": 7,
-      "lines": 426,
-      "lastChange": "2026-09-28T17:12:27",
+      "csFiles": 8,
+      "lines": 491,
+      "lastChange": "2026-11-05T11:38:27",
       "inSolution": true
     },
     {
@@ -13028,11 +13551,11 @@
       "git": {
         "repo": "YFex",
         "isRepo": true,
-        "branch": "main",
-        "lastCommit": "2026-11-05T11:24:12-03:00",
-        "lastSubject": "Move framework projects to sibling repos (atlas F01)",
-        "dirty": 0,
-        "commits14d": 4
+        "branch": "privacy/tier1-scrubber-and-leaks",
+        "lastCommit": "2026-11-05T12:37:08-03:00",
+        "lastSubject": "Atlas: F29 no longer lists Persistence.Tests (fixed)",
+        "dirty": 13,
+        "commits14d": 7
       },
       "residue": [
         "YFex/src/Cqrs/YFex.Cqrs",
@@ -13116,7 +13639,7 @@
         "YFex/src/YFex/GenOut"
       ],
       "worktrees": [],
-      "lastChange": "2026-10-18T12:17:52"
+      "lastChange": "2026-11-05T12:35:22"
     },
     {
       "name": "YFex.Audit",
@@ -13145,16 +13668,16 @@
       "projects": 13,
       "git": {
         "repo": "YFex.Authentication",
-        "isRepo": false,
-        "branch": null,
-        "lastCommit": null,
-        "lastSubject": null,
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T12:38:25-03:00",
+        "lastSubject": "Initial import of YFex.Authentication",
         "dirty": 0,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-10-29T19:52:46"
+      "lastChange": "2026-11-05T12:03:34"
     },
     {
       "name": "YFex.Authorization",
@@ -13179,6 +13702,25 @@
       ],
       "worktrees": [],
       "lastChange": "2026-11-05T11:02:40"
+    },
+    {
+      "name": "YFex.Automation",
+      "solutions": [
+        "YFex.Automation.slnx"
+      ],
+      "projects": 13,
+      "git": {
+        "repo": "YFex.Automation",
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T12:22:59-03:00",
+        "lastSubject": "Initial commit: import existing project sources",
+        "dirty": 0,
+        "commits14d": 1
+      },
+      "residue": [],
+      "worktrees": [],
+      "lastChange": "2026-11-05T11:57:32"
     },
     {
       "name": "YFex.Avalonia",
@@ -13270,14 +13812,14 @@
         "branch": "main",
         "lastCommit": "2026-11-05T11:24:09-03:00",
         "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-        "dirty": 0,
+        "dirty": 7,
         "commits14d": 1
       },
       "residue": [
         "YFex.Cqrs/src/YFex.Cqrs.SourceGenerator/Generated"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T11:37:45"
     },
     {
       "name": "YFex.Cryptography",
@@ -13370,14 +13912,14 @@
         "branch": "main",
         "lastCommit": "2026-10-17T20:38:27-03:00",
         "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 1,
+        "dirty": 4,
         "commits14d": 0
       },
       "residue": [
         "YFex.Domain/src/YFex.Entity.Public/DevYFexYFex.Fiscal_geninspect"
       ],
       "worktrees": [],
-      "lastChange": "2026-10-02T10:41:08"
+      "lastChange": "2026-11-05T12:39:21"
     },
     {
       "name": "YFex.EventSourcing",
@@ -13391,12 +13933,12 @@
         "branch": "main",
         "lastCommit": "2026-10-17T20:38:28-03:00",
         "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 1,
+        "dirty": 7,
         "commits14d": 0
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T12:20:22"
     },
     {
       "name": "YFex.Expressions",
@@ -13498,12 +14040,12 @@
         "branch": "installations/i5-i6a",
         "lastCommit": "2026-10-31T15:35:01-03:00",
         "lastSubject": "Installations: pairing connect timeout, LAN probe, harness file modes",
-        "dirty": 0,
+        "dirty": 3,
         "commits14d": 6
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-10-31T15:09:58"
+      "lastChange": "2026-11-05T12:03:34"
     },
     {
       "name": "YFex.Jobs",
@@ -13517,7 +14059,7 @@
         "branch": "main",
         "lastCommit": "2026-11-03T21:57:47-03:00",
         "lastSubject": "YFex.Jobs Plan D phase D0: user surface (YFex.Jobs.Templates)",
-        "dirty": 79,
+        "dirty": 93,
         "commits14d": 5
       },
       "residue": [
@@ -13526,7 +14068,7 @@
         "YFex.Jobs/src/YFex.Jobs/Diagnostics"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T12:42:18"
     },
     {
       "name": "YFex.Logging",
@@ -13537,15 +14079,15 @@
       "git": {
         "repo": "YFex.Logging",
         "isRepo": true,
-        "branch": "main",
-        "lastCommit": "2026-10-17T20:38:19-03:00",
-        "lastSubject": "Initial commit: import existing project sources",
-        "dirty": 13,
-        "commits14d": 0
+        "branch": "privacy/tier1-scrubber-and-leaks",
+        "lastCommit": "2026-11-05T12:24:20-03:00",
+        "lastSubject": "Scrub free text with YFex.Privacy and add Redaction settings",
+        "dirty": 2,
+        "commits14d": 1
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:23:39"
+      "lastChange": "2026-11-05T12:42:15"
     },
     {
       "name": "YFex.LoggY",
@@ -13598,14 +14140,14 @@
         "branch": "main",
         "lastCommit": "2026-11-05T11:24:10-03:00",
         "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-        "dirty": 0,
+        "dirty": 1,
         "commits14d": 1
       },
       "residue": [
         "YFex.Messaging/src/YFex.Messaging.Generator/Generated"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:03:12"
+      "lastChange": "2026-11-05T11:39:12"
     },
     {
       "name": "YFex.Mvvm",
@@ -13678,12 +14220,12 @@
         "branch": "main",
         "lastCommit": "2026-10-30T14:22:30-03:00",
         "lastSubject": "Offline Phase 4c and 4d: custody and coordination on the site broker",
-        "dirty": 19,
+        "dirty": 26,
         "commits14d": 4
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-10-30T23:22:07"
+      "lastChange": "2026-11-05T12:03:34"
     },
     {
       "name": "YFex.Orchestration",
@@ -13697,12 +14239,12 @@
         "branch": "main",
         "lastCommit": "2026-10-17T20:38:30-03:00",
         "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 3,
+        "dirty": 5,
         "commits14d": 0
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T12:18:41"
     },
     {
       "name": "YFex.Payment",
@@ -13735,21 +14277,21 @@
       "solutions": [
         "persistence.slnx"
       ],
-      "projects": 11,
+      "projects": 12,
       "git": {
         "repo": "YFex.Persistence",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-11-05T11:24:06-03:00",
-        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-        "dirty": 0,
-        "commits14d": 1
+        "lastCommit": "2026-11-05T12:37:08-03:00",
+        "lastSubject": "Fix Persistence tests for the key-value store API",
+        "dirty": 6,
+        "commits14d": 2
       },
       "residue": [
         "YFex.Persistence/src/YFex.Persistence.Data"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T12:47:06"
     },
     {
       "name": "YFex.Privacy",
@@ -13760,15 +14302,15 @@
       "git": {
         "repo": "YFex.Privacy",
         "isRepo": true,
-        "branch": "main",
-        "lastCommit": "2026-10-17T20:38:19-03:00",
-        "lastSubject": "Initial commit: import existing project sources",
-        "dirty": 5,
-        "commits14d": 0
+        "branch": "privacy/tier1-scrubber-and-leaks",
+        "lastCommit": "2026-11-05T12:24:19-03:00",
+        "lastSubject": "Add TextScrubber runtime (privacy 06)",
+        "dirty": 7,
+        "commits14d": 1
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:24:13"
+      "lastChange": "2026-11-05T12:43:17"
     },
     {
       "name": "YFex.Profiling",
@@ -13801,12 +14343,12 @@
         "branch": "main",
         "lastCommit": "2026-10-17T20:38:31-03:00",
         "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 11,
+        "dirty": 13,
         "commits14d": 0
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-04T16:03:06"
+      "lastChange": "2026-11-05T12:38:05"
     },
     {
       "name": "YFex.Rules",
@@ -13820,14 +14362,14 @@
         "branch": "main",
         "lastCommit": "2026-11-05T11:24:08-03:00",
         "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-        "dirty": 0,
+        "dirty": 1,
         "commits14d": 1
       },
       "residue": [
         "YFex.Rules/src/YFex.Rules.Generator/Generated"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T12:00:03"
     },
     {
       "name": "YFex.Search",
@@ -13877,17 +14419,17 @@
         "repo": "YFex.State",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-11-05T11:24:07-03:00",
-        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
+        "lastCommit": "2026-11-05T12:37:08-03:00",
+        "lastSubject": "Add UndoSnapshotProvider tests (moved from YFex.Persistence)",
         "dirty": 0,
-        "commits14d": 1
+        "commits14d": 2
       },
       "residue": [
         "YFex.State/src/YFex.State.Generator/Generated",
         "YFex.State/src/YFex.State.History.Generator/Generated"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T12:25:20"
     },
     {
       "name": "YFex.System",
@@ -13941,12 +14483,12 @@
         "branch": "main",
         "lastCommit": "2026-10-17T20:38:19-03:00",
         "lastSubject": "Initial commit: import existing project sources",
-        "dirty": 2,
+        "dirty": 4,
         "commits14d": 0
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-10-14T22:30:23"
+      "lastChange": "2026-11-05T12:03:34"
     },
     {
       "name": "YFex.UI",
@@ -14006,17 +14548,17 @@
       "git": {
         "repo": "YFex.Web",
         "isRepo": true,
-        "branch": "main",
-        "lastCommit": "2026-10-17T20:38:34-03:00",
-        "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 26,
-        "commits14d": 0
+        "branch": "privacy/tier1-scrubber-and-leaks",
+        "lastCommit": "2026-11-05T12:24:20-03:00",
+        "lastSubject": "Stop credential records from printing their secrets",
+        "dirty": 25,
+        "commits14d": 1
       },
       "residue": [
         "YFex.Web/src/Web/YFex.Web.Generator/Generated"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T11:38:27"
     }
   ],
   "docs": [
@@ -14057,6 +14599,32 @@
       "lastWrite": "2026-10-29T21:23:52",
       "components": [
         "YFex.Authorization"
+      ]
+    },
+    {
+      "path": "YFex.Automation/MULTIOS.md",
+      "file": "YFex.Automation/MULTIOS.md",
+      "title": "Multi-OS Contract (Plan I)",
+      "status": null,
+      "files": 1,
+      "flags": 0,
+      "lastDate": null,
+      "lastWrite": "2026-06-20T23:22:24",
+      "components": [
+        "YFex.Automation"
+      ]
+    },
+    {
+      "path": "YFex.Automation/README.md",
+      "file": "YFex.Automation/README.md",
+      "title": "YFex.Automation",
+      "status": null,
+      "files": 1,
+      "flags": 0,
+      "lastDate": null,
+      "lastWrite": "2026-06-21T00:14:01",
+      "components": [
+        "YFex.Automation"
       ]
     },
     {
@@ -14185,7 +14753,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": null,
-      "lastWrite": "2026-10-02T10:50:19",
+      "lastWrite": "2026-11-05T11:26:04",
       "components": [
         "YFex.Privacy"
       ]
@@ -14337,7 +14905,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": null,
-      "lastWrite": "2026-09-30T09:52:03",
+      "lastWrite": "2026-11-05T11:41:58",
       "components": [
         "YFex.Cqrs"
       ]
@@ -14350,7 +14918,7 @@
       "files": 15,
       "flags": 8,
       "lastDate": "2026-10-27",
-      "lastWrite": "2026-11-05T11:09:29",
+      "lastWrite": "2026-11-05T12:48:00",
       "components": [
         "YFex.Cryptography"
       ]
@@ -14569,7 +15137,7 @@
       "files": 7,
       "flags": 14,
       "lastDate": "2026-11-04",
-      "lastWrite": "2026-11-05T11:09:33",
+      "lastWrite": "2026-11-05T11:41:58",
       "components": [
         "YFex.Notifications"
       ]
@@ -14617,11 +15185,11 @@
       "path": "YFex/docs/internal/privacy",
       "file": "YFex/docs/internal/privacy/README.md",
       "title": "YFex.Privacy — Data Classification, Consent, Redaction & Data Subject Rights — Design",
-      "status": "Status: Tier 1 BUILT (2026-10-02): core contract in YFex/src/YFex/Privacy/, generator in repo YFex.Privacy, logging integration (log in 11). Tier 1 remainder (TextScrubber, UI mask presenter, existing leaks) and Tier 2/3 are designed, not built. Open decisions are marked ⚑P# (the list is at the end of this file). No 3rd-party package is added without explicit approval. The design uses only the BCL (HMACSHA256, HKDF, AesGcm, ECDsa, SHA256, [GeneratedRegex], RandomNumberGenerator).",
+      "status": "Status: Tier 1 BUILT (2026-10-02): core contract in YFex/src/YFex/Privacy/, generator in repo YFex.Privacy, logging integration (log in 11); TextScrubber + logging .Redaction(...) BUILT 2026-11-05. Tier 1 remainder (UI mask presenter, existing leaks, value-object detectors) and Tier 2/3 are designed, not built. Open decisions are marked ⚑P# (the list is at the end of this file). No 3rd-party package is added without explicit approval. The design uses only the BCL (HMACSHA256, HKDF, AesGcm, ECDsa, SHA256, [GeneratedRegex], RandomNumberGenerator).",
       "files": 15,
       "flags": 26,
-      "lastDate": "2026-10-02",
-      "lastWrite": "2026-11-05T11:09:35",
+      "lastDate": "2026-11-05",
+      "lastWrite": "2026-11-05T12:45:27",
       "components": [
         "YFex.Privacy"
       ]
@@ -14634,7 +15202,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": null,
-      "lastWrite": "2026-09-20T13:17:24",
+      "lastWrite": "2026-11-05T12:45:04",
       "components": [
         "YFex.Resilience"
       ]
@@ -14749,7 +15317,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": null,
-      "lastWrite": "2026-09-20T13:18:54",
+      "lastWrite": "2026-11-05T11:41:58",
       "components": [
         "YFex.Cqrs"
       ]
@@ -14788,7 +15356,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": null,
-      "lastWrite": "2026-09-20T13:15:20",
+      "lastWrite": "2026-11-05T12:45:04",
       "components": [
         "YFex.Resilience"
       ]
@@ -14878,7 +15446,8 @@
       "id": "F04",
       "severity": "high",
       "category": "duplication",
-      "status": "open",
+      "status": "done",
+      "resolution": "2026-11-04: Web.Refit moved onto Resilience (UseResilience; RetryHandler/RetryOptions deleted). 2026-11-05: Cqrs RetryPolicy/BackoffStrategy/RetryConfigurationBuilder deleted (.Retry takes YFex.Resilience.RetryPolicy or int; no-op query .Retry removed). Resilience gained RetryBudget + the Polly-free RetryDelay calculator for stored retries; Jobs RetryPolicy class deleted, [Retry]/settings/store/generator use Resilience types, RetryCalculator and Hub ReconnectBackoff call RetryDelay (fixed x2, jitter +-20%, clean storage break). Orchestration RetryThenDeadLetterPolicy kept: a redelivery count, not backoff. Notifications/Files plans already route retries through Resilience.",
       "title": "Retry/backoff is implemented five times next to YFex.Resilience",
       "components": [
         "YFex.Resilience",
@@ -15283,8 +15852,8 @@
         "YFex.State",
         "YFex.Validation"
       ],
-      "detail": "YFex.Avalonia.Gallery (YFex.UI/src/Avalonia) references NavigatR, Mvvm, State.Mvvm and Validation, while NavigatR and Mvvm reference YFex.UI.Public: a repo cycle caused only by a sample app. Also YFex.Persistence.Tests has stale references to State projects (broken before the split) and does not build.",
-      "recommendation": "Move the Gallery to YFex.Mvvm/app (top layer). Move the State-dependent Persistence tests to YFex.State/tests and fix their references.",
+      "detail": "YFex.Avalonia.Gallery (YFex.UI/src/Avalonia) references NavigatR, Mvvm, State.Mvvm and Validation, while NavigatR and Mvvm reference YFex.UI.Public: a repo cycle caused only by a sample app.",
+      "recommendation": "Move the Gallery to YFex.Mvvm/app (top layer).",
       "source": "curated"
     },
     {
@@ -15313,7 +15882,7 @@
       "status": "open",
       "source": "auto",
       "title": "Component cycle: YFex.Authorization ⇄ YFex.Cqrs ⇄ YFex.Installations ⇄ YFex.Messaging ⇄ YFex.Rules",
-      "detail": "These components reach each other through project references (no project-level cycle, but they cannot be released or reasoned about separately). Edges inside the cycle:\nYFex.Authorization → YFex.Installations: YFex.Authorization.Installations → YFex.Installations\nYFex.Authorization → YFex.Installations: YFex.Authorization.Installations.Central → YFex.Installations.Central\nYFex.Authorization → YFex.Installations: YFex.Authorization.Installations.Central → YFex.Installations.Rpc\nYFex.Authorization → YFex.Messaging: YFex.Authorization.Installations → YFex.Messaging.Rpc\nYFex.Cqrs → YFex.Rules: YFex.Cqrs → YFex.Rules\nYFex.Cqrs → YFex.Authorization: YFex.Cqrs → YFex.Authorization.Public\nYFex.Installations → YFex.Authorization: YFex.Installations.Central → YFex.Authorization.Public\nYFex.Installations → YFex.Authorization: YFex.Installations.Central → YFex.Authorization.Generator (analyzer)\nYFex.Installations → YFex.Authorization: YFex.Installations.Rpc → YFex.Authorization.Public\nYFex.Messaging → YFex.Cqrs: YFex.Cqrs.Approvals → YFex.Cqrs\nYFex.Messaging → YFex.Cqrs: YFex.Cqrs.Approvals → YFex.Cqrs.SourceGenerator (analyzer)\nYFex.Messaging → YFex.Cqrs: YFex.Messaging.Rpc → YFex.Cqrs\nYFex.Messaging → YFex.Cqrs: YFex.Rules.Admin → YFex.Cqrs\nYFex.Messaging → YFex.Cqrs: YFex.Rules.Admin → YFex.Cqrs.SourceGenerator (analyzer)\nYFex.Messaging → YFex.Authorization: YFex.Cqrs.Approvals → YFex.Authorization\nYFex.Messaging → YFex.Authorization: YFex.Messaging.Rpc → YFex.Authorization\nYFex.Messaging → YFex.Authorization: YFex.Rules.Admin → YFex.Authorization.Generator (analyzer)\nYFex.Messaging → YFex.Rules: YFex.Rules.Admin → YFex.Rules\nYFex.Rules → YFex.Authorization: YFex.Rules → YFex.Authorization.Public",
+      "detail": "These components reach each other through project references (no project-level cycle, but they cannot be released or reasoned about separately). Edges inside the cycle:\nYFex.Authorization → YFex.Installations: YFex.Authorization.Installations → YFex.Installations\nYFex.Authorization → YFex.Installations: YFex.Authorization.Installations.Central → YFex.Installations.Central\nYFex.Authorization → YFex.Installations: YFex.Authorization.Installations.Central → YFex.Installations.Rpc\nYFex.Authorization → YFex.Messaging: YFex.Authorization.Installations → YFex.Messaging.Rpc\nYFex.Cqrs → YFex.Rules: YFex.Cqrs → YFex.Rules\nYFex.Cqrs → YFex.Authorization: YFex.Cqrs → YFex.Authorization.Public\nYFex.Installations → YFex.Authorization: YFex.Installations.Central → YFex.Authorization.Public\nYFex.Installations → YFex.Authorization: YFex.Installations.Central → YFex.Authorization.Generator (analyzer)\nYFex.Installations → YFex.Authorization: YFex.Installations.Rpc → YFex.Authorization.Public\nYFex.Installations → YFex.Messaging: YFex.Installations.Rpc → YFex.Messaging.Rpc\nYFex.Messaging → YFex.Cqrs: YFex.Cqrs.Approvals → YFex.Cqrs\nYFex.Messaging → YFex.Cqrs: YFex.Cqrs.Approvals → YFex.Cqrs.SourceGenerator (analyzer)\nYFex.Messaging → YFex.Cqrs: YFex.Messaging.Rpc → YFex.Cqrs\nYFex.Messaging → YFex.Cqrs: YFex.Rules.Admin → YFex.Cqrs\nYFex.Messaging → YFex.Cqrs: YFex.Rules.Admin → YFex.Cqrs.SourceGenerator (analyzer)\nYFex.Messaging → YFex.Authorization: YFex.Cqrs.Approvals → YFex.Authorization\nYFex.Messaging → YFex.Authorization: YFex.Messaging.Rpc → YFex.Authorization\nYFex.Messaging → YFex.Authorization: YFex.Rules.Admin → YFex.Authorization.Generator (analyzer)\nYFex.Messaging → YFex.Rules: YFex.Rules.Admin → YFex.Rules\nYFex.Rules → YFex.Authorization: YFex.Rules → YFex.Authorization.Public",
       "components": [
         "YFex.Rules",
         "YFex.Cqrs",
@@ -15330,7 +15899,7 @@
       "status": "open",
       "source": "auto",
       "title": "Repository cycle across 5 repos",
-      "detail": "Repos YFex.Authorization, YFex.Cqrs, YFex.Installations, YFex.Messaging, YFex.Rules reference each other, so none can be built, versioned or packaged on its own.\nYFex.Authorization → YFex.Installations (3): YFex.Authorization.Installations → YFex.Installations; YFex.Authorization.Installations.Central → YFex.Installations.Central; YFex.Authorization.Installations.Central → YFex.Installations.Rpc\nYFex.Authorization → YFex.Messaging (1): YFex.Authorization.Installations → YFex.Messaging.Rpc\nYFex.Cqrs → YFex.Rules (1): YFex.Cqrs → YFex.Rules\nYFex.Cqrs → YFex.Authorization (1): YFex.Cqrs → YFex.Authorization.Public\nYFex.Installations → YFex.Authorization (2): YFex.Installations.Central → YFex.Authorization.Public; YFex.Installations.Rpc → YFex.Authorization.Public\nYFex.Messaging → YFex.Cqrs (3): YFex.Cqrs.Approvals → YFex.Cqrs; YFex.Messaging.Rpc → YFex.Cqrs; YFex.Rules.Admin → YFex.Cqrs\nYFex.Messaging → YFex.Authorization (2): YFex.Cqrs.Approvals → YFex.Authorization; YFex.Messaging.Rpc → YFex.Authorization\nYFex.Messaging → YFex.Rules (1): YFex.Rules.Admin → YFex.Rules\nYFex.Rules → YFex.Authorization (1): YFex.Rules → YFex.Authorization.Public",
+      "detail": "Repos YFex.Authorization, YFex.Cqrs, YFex.Installations, YFex.Messaging, YFex.Rules reference each other, so none can be built, versioned or packaged on its own.\nYFex.Authorization → YFex.Installations (3): YFex.Authorization.Installations → YFex.Installations; YFex.Authorization.Installations.Central → YFex.Installations.Central; YFex.Authorization.Installations.Central → YFex.Installations.Rpc\nYFex.Authorization → YFex.Messaging (1): YFex.Authorization.Installations → YFex.Messaging.Rpc\nYFex.Cqrs → YFex.Rules (1): YFex.Cqrs → YFex.Rules\nYFex.Cqrs → YFex.Authorization (1): YFex.Cqrs → YFex.Authorization.Public\nYFex.Installations → YFex.Authorization (2): YFex.Installations.Central → YFex.Authorization.Public; YFex.Installations.Rpc → YFex.Authorization.Public\nYFex.Installations → YFex.Messaging (1): YFex.Installations.Rpc → YFex.Messaging.Rpc\nYFex.Messaging → YFex.Cqrs (3): YFex.Cqrs.Approvals → YFex.Cqrs; YFex.Messaging.Rpc → YFex.Cqrs; YFex.Rules.Admin → YFex.Cqrs\nYFex.Messaging → YFex.Authorization (2): YFex.Cqrs.Approvals → YFex.Authorization; YFex.Messaging.Rpc → YFex.Authorization\nYFex.Messaging → YFex.Rules (1): YFex.Rules.Admin → YFex.Rules\nYFex.Rules → YFex.Authorization (1): YFex.Rules → YFex.Authorization.Public",
       "components": [
         "YFex.Authorization",
         "YFex.Installations",
@@ -15364,23 +15933,6 @@
         "YFex.Offline/src/YFex.Offline.Broker/YFex.Offline.Broker.csproj"
       ],
       "recommendation": "Move what these callers need into YFex.Authorization.Public, or make them bridge packages that apps opt into."
-    },
-    {
-      "id": "AUTO-PLATFORM-YFex.Persistence.Encryption",
-      "severity": "high",
-      "category": "cross-platform",
-      "status": "open",
-      "source": "auto",
-      "title": "OS-neutral YFex.Persistence.Encryption references YFex.Cryptography.Windows",
-      "detail": "YFex.Persistence.Encryption targets net11.0 (no platform TFM) but references the platform package YFex.Cryptography.Windows. Every consumer ships that platform code on every OS, and other platforms cannot be plugged in.",
-      "components": [
-        "YFex.Persistence",
-        "YFex.Cryptography"
-      ],
-      "evidence": [
-        "YFex.Persistence/src/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj"
-      ],
-      "recommendation": "Take the platform implementation from DI (the composition root calls the platform package), or split a ‘.Windows’ variant."
     },
     {
       "id": "AUTO-NOSLN-YFex",
@@ -15423,31 +15975,14 @@
       "category": "hygiene",
       "status": "open",
       "source": "auto",
-      "title": "21 project reference(s) point to missing files",
-      "detail": "YFex/src/System/YFex.System.Windows.Security/YFex.System.Windows.Security.csproj → YFex/src/System/YFex.System/YFex.System.csproj\nYFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj\nYFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex/src/Persistence/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj\nYFex.Authentication/src/YFex.Authentication.Rpc/YFex.Authentication.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj\nYFex.Cqrs/src/YFex.Cqrs.SourceGenerator/Sample.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj\nYFex.Cqrs/src/YFex.Cqrs.SourceGenerator/YFex.CQRS.SourceGenerator.Tests.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj\nYFex.Installations/src/YFex.Installations.Persistence/YFex.Installations.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj\nYFex.Installations/src/YFex.Installations.Rpc/YFex.Installations.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj\nYFex.LoggY/YFex.LoggY/YFex.LoggY.csproj → ../Avalonia.Mcp/Avalonia.Mcp.Injector/Avalonia.Mcp.Injector.csproj\nYFex.Offline/src/YFex.Offline/YFex.Offline.csproj → YFex/src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj\nYFex.Offline/src/YFex.Offline.Central/YFex.Offline.Central.csproj → YFex/src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj\nYFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj\nYFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex/src/Persistence/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj\nYFex.Offline/src/YFex.Offline.Rpc/YFex.Offline.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj\nYFex.Offline/src/YFex.Offline.Rules/YFex.Offline.Rules.csproj → YFex/src/Validation/YFex.Rules/YFex.Rules.csproj\nYFex.Offline/tests/YFex.Offline.Tests/YFex.Offline.Tests.csproj → YFex/src/Validation/YFex.Rules.Admin/YFex.Rules.Admin.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.History/YFex.State.History.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.History.Persistence/YFex.State.History.Persistence.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State/YFex.State.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.Generator/YFex.State.Generator.csproj\nYFex.Time/src/YFex.Time.Persistence/YFex.Time.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj",
+      "title": "4 project reference(s) point to missing files",
+      "detail": "YFex/src/System/YFex.System.Windows.Security/YFex.System.Windows.Security.csproj → YFex/src/System/YFex.System/YFex.System.csproj\nYFex.Cqrs/src/YFex.Cqrs.SourceGenerator/Sample.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj\nYFex.Cqrs/src/YFex.Cqrs.SourceGenerator/YFex.CQRS.SourceGenerator.Tests.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj\nYFex.LoggY/YFex.LoggY/YFex.LoggY.csproj → ../Avalonia.Mcp/Avalonia.Mcp.Injector/Avalonia.Mcp.Injector.csproj",
       "components": [],
       "evidence": [
         "YFex/src/System/YFex.System.Windows.Security/YFex.System.Windows.Security.csproj → YFex/src/System/YFex.System/YFex.System.csproj",
-        "YFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj",
-        "YFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex/src/Persistence/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj",
-        "YFex.Authentication/src/YFex.Authentication.Rpc/YFex.Authentication.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj",
         "YFex.Cqrs/src/YFex.Cqrs.SourceGenerator/Sample.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj",
         "YFex.Cqrs/src/YFex.Cqrs.SourceGenerator/YFex.CQRS.SourceGenerator.Tests.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj",
-        "YFex.Installations/src/YFex.Installations.Persistence/YFex.Installations.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj",
-        "YFex.Installations/src/YFex.Installations.Rpc/YFex.Installations.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj",
-        "YFex.LoggY/YFex.LoggY/YFex.LoggY.csproj → ../Avalonia.Mcp/Avalonia.Mcp.Injector/Avalonia.Mcp.Injector.csproj",
-        "YFex.Offline/src/YFex.Offline/YFex.Offline.csproj → YFex/src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj",
-        "YFex.Offline/src/YFex.Offline.Central/YFex.Offline.Central.csproj → YFex/src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj",
-        "YFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj",
-        "YFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex/src/Persistence/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj",
-        "YFex.Offline/src/YFex.Offline.Rpc/YFex.Offline.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj",
-        "YFex.Offline/src/YFex.Offline.Rules/YFex.Offline.Rules.csproj → YFex/src/Validation/YFex.Rules/YFex.Rules.csproj",
-        "YFex.Offline/tests/YFex.Offline.Tests/YFex.Offline.Tests.csproj → YFex/src/Validation/YFex.Rules.Admin/YFex.Rules.Admin.csproj",
-        "YFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.History/YFex.State.History.csproj",
-        "YFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.History.Persistence/YFex.State.History.Persistence.csproj",
-        "YFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State/YFex.State.csproj",
-        "YFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.Generator/YFex.State.Generator.csproj",
-        "YFex.Time/src/YFex.Time.Persistence/YFex.Time.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj"
+        "YFex.LoggY/YFex.LoggY/YFex.LoggY.csproj → ../Avalonia.Mcp/Avalonia.Mcp.Injector/Avalonia.Mcp.Injector.csproj"
       ]
     },
     {
@@ -15542,19 +16077,6 @@
         "YFex/src/YFex/DevYFexYFex.Fiscal_geninspect",
         "YFex/src/YFex/GenOut"
       ]
-    },
-    {
-      "id": "AUTO-NOGIT-YFex.Authentication",
-      "severity": "high",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.Authentication is not under version control",
-      "detail": "13 projects and 99 C# files with no git history.",
-      "components": [
-        "YFex.Authentication"
-      ],
-      "recommendation": "git init and commit the current phase."
     },
     {
       "id": "AUTO-RESIDUE-YFex.Authorization",
@@ -15698,7 +16220,7 @@
       "category": "hygiene",
       "status": "open",
       "source": "auto",
-      "title": "YFex.Jobs: 79 uncommitted changes, last commit 1 days ago",
+      "title": "YFex.Jobs: 93 uncommitted changes, last commit 1 days ago",
       "detail": "Branch main. Last commit 2026-11-03: YFex.Jobs Plan D phase D0: user surface (YFex.Jobs.Templates)",
       "components": [
         "YFex.Jobs"
@@ -15932,7 +16454,7 @@
       "category": "docs",
       "status": "open",
       "source": "auto",
-      "title": "YFex.Web: design status says not built, but the component has 85 C# files",
+      "title": "YFex.Web: design status says not built, but the component has 86 C# files",
       "detail": "Status lines that disagree with the code:\nYFex/docs/internal/web-tenancy-consolidation-plan.md: “Status: Plan only — no code (2026-09-24). Supersedes §3 of”",
       "components": [
         "YFex.Web"

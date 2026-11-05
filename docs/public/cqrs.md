@@ -314,7 +314,6 @@ b.Query<TQuery, TResult>()
     .InvalidatedBy<IMyGroup>()                                        // Group: expanded at Build() time
 
     // ── Runtime ─────────────────────────────────────────────────────────
-    .Retry(r => r.MaxAttempts(3).Backoff(BackoffStrategy.Exponential))
     .Timeout(TimeSpan.FromSeconds(30))
     .Telemetry(t => t.TraceEnabled().SpanName("GetCustomer"));
 ```
@@ -356,9 +355,9 @@ b.Command<TCommand, TResult>()         // or b.Command<TCommand>() for void comm
         apply: (result, cmd) => new TQueryResult(cmd.Id, cmd.NewName)) // Must use ctor, not `with`
 
     // ── Runtime / Resilience ────────────────────────────────────────────
-    .Retry(r => r.MaxAttempts(5).Backoff(BackoffStrategy.Linear)
-                 .InitialDelay(TimeSpan.FromMilliseconds(200))
-                 .MaxDelay(TimeSpan.FromSeconds(10)))
+    .Retry(3)                                                         // exponential + jitter, 100 ms → 5 s
+    .Retry(new RetryPolicy(5, BackoffStrategy.Linear,                // or an explicit YFex.Resilience.RetryPolicy
+        TimeSpan.FromMilliseconds(200), TimeSpan.FromSeconds(10), Jitter: true))
     .Timeout(TimeSpan.FromSeconds(60))
     .UseResource("payments")                                          // named breaker/limiter/bulkhead
     .Fallback(new FallbackPolicy(token))                             // degraded result on failure
@@ -790,12 +789,9 @@ public interface IDispatcher
 | `ValidationProblem` | Input validation failed |
 | `Conflict` | Concurrency or idempotency conflict |
 
-### BackoffStrategy Values
+### Retry Policy
 
-| Value | Behavior |
-|---|---|
-| `Linear` | Fixed delay between retries |
-| `Exponential` | Doubling delay between retries |
+`.Retry` takes `YFex.Resilience.RetryPolicy` and `BackoffStrategy` (`Constant`, `Linear`, `Exponential`); see the [Resilience guide](resilience.md). Cqrs has no retry types of its own. Queries have no `.Retry`.
 
 ### All Marker Interfaces
 

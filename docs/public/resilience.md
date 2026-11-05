@@ -118,7 +118,7 @@ You rarely call the factory yourself. You declare policy on a **CQRS command** o
 // CQRS command builder (see the CQRS guide)
 b.Command<SubmitNfeCommand>()
  .UseResource("sefaz")
- .Retry(r => r.MaxAttempts(3))
+ .Retry(3)
  .Timeout(TimeSpan.FromSeconds(8));
 ```
 
@@ -203,6 +203,23 @@ var spec = new ResilienceSpec(Fallback: new FallbackPolicy(lastKnown));
 ```csharp
 var effective = commandSpec.Overlay(stepSpec);   // step knobs win; unset inherit from the command
 ```
+
+### Stored retries (no pipeline)
+
+When a retry is stored and run later — a scheduled job, an outbox, a reconnect loop — there is nothing to await, so
+use the same `RetryPolicy` with the pure `RetryDelay` calculator and an optional `RetryBudget` (total-time cap):
+
+```csharp
+var policy = new RetryPolicy(5, BackoffStrategy.Exponential, TimeSpan.FromSeconds(5), TimeSpan.FromMinutes(5), Jitter: true);
+var budget = new RetryBudget(TimeSpan.FromHours(1));
+
+if (RetryDelay.TryGetNext(policy, budget, attempt: failedAttempt, elapsed: now - firstAttemptAt, out var delay))
+    ScheduleAt(now + delay);          // Jitter = ±20%, capped by MaxDelay
+else
+    DeadLetter();                     // MaxAttempts reached or budget spent
+```
+
+YFex.Jobs (`[Retry]`, Hub reconnect) uses exactly this; don't write another backoff calculator.
 
 ---
 

@@ -35,7 +35,7 @@ References today: `YFex.Authentication.Delivery` → `YFex.Authentication.Public
 | `[Sensitive]`, `DataSensitivity`, `Masks` (incl. `{email}` preset) | core `src/YFex/Privacy/` | log masking |
 | consent (`IConsentStore`, `ConsentRecord`, `ConsentState`, `ConsentLevel`) — profiling/telemetry consent levels; **purpose** consent is Privacy's ledger (⚑P9, not built) | core `src/YFex/Consent/` | ⚑N7 |
 | `ApiEndpoint`, `IApiEndpointStore` (per-tenant credentials, protected secrets) | `YFex.Web/src/Web/YFex.Web/Stores/IApiEndpointStore.cs` | provider endpoint per scope (⚑N18) |
-| `YFex.Web.Refit` endpoint builder: `AddRateLimit`, `AddRetry` (Polly-free handlers, web 07) | `YFex.Web/src/Web/YFex.Web.Refit/Builder/CrossCuttingExtensions.cs:18, 29` | provider HTTP clients, handler retry off (⚑N5) |
+| `YFex.Web.Refit` endpoint builder: `UseResilience` + `HttpFailureClassifier` (2026-11-04 replaced `AddRetry`/`AddRateLimit`, web 07) | `YFex.Web/src/Web/YFex.Web.Refit/Handlers/ResilienceHandler.cs` | provider HTTP clients, rate-limited resource, no `Retry` (⚑N5) |
 | `IResiliencePipelineFactory`, `ResilienceSpec` (+ `YFex.Resilience.Polly`) | `YFex.Resilience` (built) | dispatcher retries, breaker per provider |
 | `IEventChannel<T>`, `EventChannelHost<T>`, `EnableServerPushedEvents()` (opt-in exists, **flag never read**: `YFexMessagingRpcClientOptions.cs:76-83`) | YFex `YFex.Messaging/src/YFex.Messaging.Rpc/` | in-app push; wiring is a Messaging prerequisite (05 §3) |
 | `IOutbox`, `IOutboxCallerCapture` (offline RPC outbox, captures the caller) | `YFex.Messaging.Rpc/IOutbox.cs:61, 79` | terminal-queued sends carry the caller to central |
