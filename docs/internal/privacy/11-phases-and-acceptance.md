@@ -237,3 +237,33 @@ warnings, exit 0. `yfex.slnx` does not restore (pre-existing: it lists the missi
 **Next (Tier 1 remainder):** Profiling `PrivacyScrubber` → `TextScrubber` (+ `Add<Cpf>()`); UI mask presenter. Later implementers of
 `IExtractable`: `Rg`, `Cnpj` (public, not registered for redaction), EAN, NCM, NF-e key for Search and scraping.
 
+### Tier 1 remainder, part 5 — Profiling `PrivacyScrubber` → `PropertyRedactor` (2026-11-05)
+
+User decision: the UI mask presenter stays last and is not started; continue with the next non-UI step.
+
+**Done**
+
+- YFex.Privacy: `NameConventions` (02 §5.2 at run time: whole-token matching on camelCase/PascalCase/`_`/digits, lower-case,
+  Portuguese diacritics folded, built-in Portuguese + English table incl. compounds such as `full name`, `e mail`, `nome` + person
+  token; `CreateBuilder().Add(...)/.AddCombination(...)` for app tokens; span lookups, no allocation) and `PropertyRedactor` (06 §6:
+  in place through the dictionary's value slots; sensitive/financial/secret names → `<redacted>`, personal names →
+  `PersonalValueRedaction` callback or the level's mask, other text → `TextScrubber`).
+- YFex.Profiling: `TelemetryPrivacy` (default conventions + telemetry keys `title`, `url`, `uri`, `mac`, `machine`/`user`/`host`/
+  `computer`/`device` + `name`; personal values → host hash for URLs, IP mask, salted hash otherwise; scrubber
+  `TelemetryOptions.Scrubber`, default All + `LongDigitRuns` as labels). `TelemetryBatch` redacts in place before shipping or
+  queueing (no LINQ, one snapshot array per batch; queued events are never redacted twice). `PrivacyScrubber.Scrub` is an
+  `[Obsolete]` shim returning a redacted copy; `MaskIpAddress` uses core `Masks`; `HashUrl` without a bare `catch`.
+
+**Behaviour changes (intended):** `multipleMonitors`, `shipping`, `recipient` stay readable (substring bug); `userName`,
+`machineName`, `zipCode` are now hashed; secret names erased; free-text values scrubbed (e-mails, URL queries, IPs, digit runs);
+IP masks end in `.*` / `:*` (were `.xxx` / `:xxxx`); non-IP → `******` (was `masked`).
+
+**Deviation:** `HashString` is still SHA-256(value + salt), not a keyed pseudonym: replacing it changes every hashed value the
+telemetry server joins on, so it moves with Phase 2 (`Pseudonymizer`, key from the vault) together with removing `TransportSaltKey`.
+
+**Counts:** YFex.Privacy.Tests 92 (+37), YFex.Profiling.Tests 68 (+2; 6 expectations updated to the changes above). Privacy AOT smoke
++4 redaction checks, 0 IL warnings, exit 0.
+
+**Tier 1 status:** done except the UI mask presenter (last, by decision). Next non-UI step is Phase 2's `Pseudonymizer` (its trigger
+is now real: Profiling hashing, and logging's `Hash` redaction mode).
+
