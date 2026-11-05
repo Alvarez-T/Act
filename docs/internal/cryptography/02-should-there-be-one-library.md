@@ -58,7 +58,7 @@ YFex.Cryptography  (sibling repo; BCL + core)
    MessageAuthentication · MessageDomain · KeyDerivation · PasswordHashing · ISigningKey · SignatureVerifier · PublicKeyCache
    RecipientSealing · HashChain · MerkleTree · CertificateAuthority · CertificateTrust · CryptographyCapabilities
         ▲                                   ▲
-YFex.Cryptography.Windows             consumers: Privacy · Offline · Audit · Authorization · Persistence.Encryption ·
+YFex.Cryptography.Windows             consumers: Privacy · Offline · Audit · Authorization · Persistence.Encryption.Windows ·
    CngRootKeyProvider · CngSigningKeyStore      Messaging.Rpc · Web.Data · Automation · (Fiscal: certificates only)
 ```
 
