@@ -24,6 +24,7 @@ Use this file only when a task crosses package or repository boundaries. This is
 | Keys, cryptographic bytes, signatures, certificates | `YFex.Cryptography` | [`YFex.Cryptography/README.md`](../../../YFex.Cryptography/README.md) |
 | Data classification and masking | `YFex.Privacy` | [`YFex.Privacy/README.md`](../../../YFex.Privacy/README.md) |
 | Logs and operation telemetry | `YFex.Logging` | [`YFex.Logging/README.md`](../../../YFex.Logging/README.md) |
+| Who acts: actor kinds and identity, text form and canonical bytes, ambient actor scope with capture/restore, record stamps, names at read time | `YFex.Actors` | [`YFex.Actors/README.md`](../../../YFex.Actors/README.md), [`actors/README.md`](../internal/actors/README.md) |
 | Tamper-evident audit trails | `YFex.Audit` | [`YFex.Audit/README.md`](../../../YFex.Audit/README.md) |
 | Trusted time and rollback detection | `YFex.Time` | [`YFex.Time/README.md`](../../../YFex.Time/README.md) |
 | Network conditions, probes, discovery, Telnet, SNMP | `YFex.Networking` | [`YFex.Networking/README.md`](../../../YFex.Networking/README.md) |
