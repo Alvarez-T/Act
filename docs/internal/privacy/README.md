@@ -1,8 +1,8 @@
 # YFex.Privacy — Data Classification, Consent, Redaction & Data Subject Rights — Design
 
 > **Status:** Tier 1 BUILT (2026-10-02): core contract in `YFex/src/YFex/Privacy/`, generator in repo `YFex.Privacy`, logging
-> integration (log in [11](11-phases-and-acceptance.md)). Tier 1 remainder (`TextScrubber`, UI mask presenter, existing leaks) and
-> Tier 2/3 are designed, not built. Open decisions are marked **⚑P#** (the list is at the end of this file). No 3rd-party package is added without explicit approval. The design uses only the BCL
+> integration (log in [11](11-phases-and-acceptance.md)); `TextScrubber` + logging `.Redaction(...)` BUILT 2026-11-05. Tier 1
+> remainder (UI mask presenter, existing leaks, value-object detectors) and Tier 2/3 are designed, not built. Open decisions are marked **⚑P#** (the list is at the end of this file). No 3rd-party package is added without explicit approval. The design uses only the BCL
 > (`HMACSHA256`, `HKDF`, `AesGcm`, `ECDsa`, `SHA256`, `[GeneratedRegex]`, `RandomNumberGenerator`).
 > **Audience:** the user first, then the AI sessions that will implement it. Read this file, then only the files your phase needs
 > (see [11-phases-and-acceptance.md](11-phases-and-acceptance.md)).

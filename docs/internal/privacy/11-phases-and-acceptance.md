@@ -122,3 +122,84 @@ test methods (reviewed: `Nome redacted`, `Cpf redacted`, `Dispensacao shape`).
 
 **Next (Tier 1 remainder):** `TextScrubber` + `Masks`-based UI presenter, fix of the existing leaks (Profiling scrubber/hashing,
 Web credential records, PortableSecretStore), logging `ILogTextScrubber` backed by the privacy scrubber.
+
+### Tier 1 remainder, part 1 — TextScrubber + logging integration (2026-11-05)
+
+User decisions: the scrubber lives in Privacy; Logging references Privacy (option A, never the reverse); logging gets a
+`.Redaction(...)` policy section, configurable from code and `appsettings.json`.
+
+**Done**
+
+- New project `YFex.Privacy/src/YFex.Privacy` (runtime, references YFex core only, `IsAotCompatible`): `TextScrubber`,
+  `TextScrubberBuilder`, `ITextDetector`, `DetectorPrefilter`, `BuiltInDetectors`, `DetectedKinds`, `ScrubReplacement`,
+  `ScrubSummary`. Built-ins of 06 §3: e-mail, card (Luhn + length + IIN 2–6), JWT, bearer, known API keys, secret assignment (key
+  kept), URL query (scheme/host/path kept), IPv4 (octets ≤ 255, version context excluded) + IPv6 (BCL parser). Prefilter pass
+  (`SearchValues<string>`), overlap resolution (longer wins, then higher sensitivity), fail closed on regex timeout, truncation marker.
+- YFex.Logging: references `YFex.Privacy`. `LoggingBuilder.Redaction(r => r.PersonalData(Mask|Omit).BuiltInDetectors(...).Detect(...)
+  .MaximumInputLength(n))`, `RedactionOptions` on `LoggingOptions`, config section `Redaction` (`PersonalData`, `Detectors`,
+  `MaximumInputLength`), `PrivacyLogTextScrubber` (the adapter), `ILogTextScrubber.OmitMaskedText` (default member) honoured by
+  `RecordFormatter` and `PortableFields`. The engine's default scrubber is now the privacy one; `InterimLogTextScrubber` stays for
+  tools without the engine. Memory and live-tap sinks now get the engine's scrubber (they always used the interim one before).
+
+**Deviations from the design**
+
+1. No `ScrubContext` / `Redactor` / pseudonyms yet: the replacement mode is fixed per scrubber (`ScrubReplacement.Label` or `.Mask`).
+   Logs use masks by default (consistent with typed values in Tier 1), `Omit` uses labels. `Hash` waits for `Pseudonymizer` (Phase 2).
+2. New built-in `LongDigitRuns` (not in `All`): fail-closed fallback for national documents until value objects expose
+   `TryFindIn` (⚑P18, `Add<T>()` not built). Logging enables it by default, so CPF/phones in exception messages stay masked like
+   before; it also masks barcodes, NF-e keys and timestamps in free text. Remove it once `Cpf`/`Telefone` detectors exist.
+3. Redaction is read once at `Build` (reloads do not change it). The secret detectors are mandatory: removing any is a startup problem.
+4. `ExceptionScrubbing` and `PropertyRedactor` (06 §6) not built: the logging sinks already scrub exception messages.
+
+**Counts:** YFex.Privacy.Tests 41 (new), YFex.Privacy.Generator.Tests 18, YFex.Logging.Tests 65 (+7; 4 existing expectations moved
+from `***@***` to the core e-mail mask `a***@x.com`), YFex.Logging.Generator.Tests 16. AOT: Privacy smoke (+5 scrub checks) and
+Logging smoke, 0 IL warnings, exit 0. 10 000 no-match scrubs allocate 0 B (after tiered-JIT warm-up; tier-0 code allocates).
+
+**Next (Tier 1 remainder):** UI mask presenter; existing leaks (Profiling scrubber/hashing, Web credential records,
+`PortableSecretStore`); `Cpf.TryFindIn`/`Telefone.TryFindIn` + `Add<T>()` so logging can drop `LongDigitRuns`.
+
+### Tier 1 remainder, part 2 — credential records leak in YFex.Web (2026-11-05)
+
+**Done:** every `ApiCredential` record (`ApiKeyCredential`, `BasicCredential`, `BearerTokenCredential`, `OAuthClientCredential`,
+`ClientCertificateCredential`) is `[Sensitive(DataSensitivity.Secret)]` (record level: structured logs omit it) and overrides
+`PrintMembers`, so `ToString()`, interpolation and exception messages print `<redacted>` (`ApiCredential.Redacted`) in place of the
+key, secret, token or certificate password. Identifiers stay readable (`HeaderName`, `Username`, `ClientId`, `GrantType`, `Scope`,
+`Resource`, PKCS#12 length). `ClientCertificateCredential` already hid its bytes; it now also states whether a password is set.
+`YFex.Web` references the privacy generator as an analyzer only. New `YFex.Web.Tests/Credentials/CredentialToStringTests`: the
+secret is absent from `ToString`/interpolation/exception text for each type, each is classified `Secret` + `RecordLevel`, and a new
+credential type that is not added to the test list makes the coverage test fail.
+
+**Gotcha:** the compiler marks even a hand-written record `PrintMembers` with `[CompilerGenerated]`, so reflection cannot detect a
+missing override; the behavioural test plus the coverage check is what enforces it.
+
+**Counts:** YFex.Web.Tests 44 (+12); YFex.Web.Data.Tests 52, YFex.Web.Refit.Tests 35, YFex.Web.Generator.Tests 1 unchanged.
+
+**Next (Tier 1 remainder):** `PortableSecretStore` plain text (YFex.Automation), value-object detectors (`Cpf`/`Telefone`
+`TryFindIn` + `Add<T>()`), Profiling `PrivacyScrubber` → `TextScrubber`, UI mask presenter.
+
+### Tier 1 remainder, part 3 — PortableSecretStore / LinuxSecretStore plain text (2026-11-05)
+
+User decisions: encrypt through YFex.Cryptography (no fifth AES implementation), and move the repo from `C:\Dev\YFex.Automation`
+to `C:\Dev\YFex\YFex.Automation` so it sits inside the ecosystem (it is not under git; moved with `mv`, nothing outside referenced it).
+
+**Done**
+
+- New project `YFex.Automation.Secrets` (Abstractions + YFex.Cryptography): `SealedFileSecretStore`, the Automation `ISecretStore`
+  over Cryptography's `FileSecretStore` (sealed `*.sealedsecret` files bound to the key name, owner-only on Unix). Environment
+  variable first (`YFEX_<KEY>`, unchanged). Root key: `YFEX_ROOT_KEY` when set, else a 32-byte key file next to the directory
+  (`<directory>.root.key`). Legacy plain-text `*.secret` files are sealed on first read and deleted; `SetAsync` deletes them too.
+- `PortableSecretStore` (Core) and `LinuxSecretStore` (Platform.Linux) are thin wrappers over it (Core and the platforms still do not
+  reference each other). DI registrations create the store on first use (the root key file is created then, not at registration).
+  `LinuxPlatformCapabilities.SecretEncryption` is now true. The Windows DPAPI store is unchanged.
+
+**Limits (stated in the XML docs):** the key file protects secret files that leak on their own (backups, synced or copied folders),
+not against code running as the same user; DPAPI (Windows) or an injected `YFEX_ROOT_KEY` covers that. A libsecret root key is the
+later Linux upgrade. Not run on Linux in this session (Cryptography's file permissions are covered by its own tests).
+
+**Counts:** YFex.Automation.Core.Tests 39 (+9: round trip with no plain text on disk, legacy migration, set replaces legacy,
+environment wins, edited file throws, copied directory without its key fails, Portable + Linux encrypted, lazy registration; one
+capability assertion flipped), Ai.Api.Tests 9, Platform.Windows.Tests 11 unchanged.
+
+**Next (Tier 1 remainder):** value-object detectors (`Cpf`/`Telefone` `TryFindIn` + `Add<T>()`), Profiling `PrivacyScrubber` →
+`TextScrubber`, UI mask presenter.
+

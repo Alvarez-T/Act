@@ -37,6 +37,7 @@ Use this file only when a task crosses package or repository boundaries. This is
 | Running background services: one service host per machine role (`yfex-host`), module profiles from central, tray/CLI control | composition roots; `YFex.Hosting` (planned, plan proposed 2026-11-03) | [`hosting/README.md`](../internal/hosting/README.md) |
 | Sending messages to people (e-mail, SMS, WhatsApp, chat, webhooks, in-app), templates, outbox | `YFex.Notifications` (planned, plan proposed 2026-11-04); OTP rules stay in `YFex.Authentication.Delivery` | [`notifications/README.md`](../internal/notifications/README.md) |
 | Installing products, firewall rules, enrollment UI, self-update | `YFex.Installer` (future, orientation only) | [`installer/README.md`](../internal/installer/README.md) |
+| Desktop + AI automation: task graphs, orchestrator, input/observation, AI agents, secret and session stores | `YFex.Automation` | [`YFex.Automation/README.md`](../../../YFex.Automation/README.md) |
 | Consent-gated machine telemetry | `YFex.System` | [`YFex.System/README.md`](../../../YFex.System/README.md) |
 | Consent-aware profile signals | `YFex.Profiling` | [`YFex.Profiling/AGENTS.md`](../../../YFex.Profiling/AGENTS.md) |
 | Security intelligence and inspection | `YFex.Security` | [`YFex.Security/AGENTS.md`](../../../YFex.Security/AGENTS.md) |
