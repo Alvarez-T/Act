@@ -51,7 +51,7 @@ had "YFex.Rules (→ Expressions)"; the dependency is **YFex.Rules.Dynamic → Y
 ## 3. Target layout
 
 ```
-YFex/src/Expressions/
+YFex.Expressions/
   YFex.Expressions               net11.0, AOT, → YFex core + YFex.Validation (Violation, FieldPath, ValidationResult)
     Model/      Expr, ExprKind, ExprJson (read/write, operator table), ExprText
     Typing/     ExprType, ExprEnumDomain, TypeConstraint, TypeRef
@@ -325,15 +325,15 @@ wording of composer-design C1.
  M yfex.slnx                                                   (+ /Expressions/ folder: 5 projects)
  M src/YFex/Values/RawValueConvert.cs                          (+ FromDecimal — XD6)
 ?? src/YFex/Values/EnumOption.cs                               (moved from YFex.Rules — XD3)
- M src/Validation/YFex.Rules/Definition/Amounts.cs             (ToRaw delegates to RawValueConvert.FromDecimal)
- M src/Validation/YFex.Rules/Situations/ISituation.cs          (EnumOption removed)
- M src/Validation/YFex.Rules.Generator/{Diagnostics.cs,RulesGenerator.cs,AnalyzerReleases.Unshipped.md}   (functions removed)
- D src/Validation/YFex.Rules.Generator/FunctionGen.cs
- M src/Validation/YFex.Rules.Generator.Tests/{GeneratorTests.cs,*.csproj}                                  (6 function tests moved)
- M/D/?? src/Validation/YFex.Rules.Dynamic/**                   (re-pointed, §6; new RuleSpec.cs, DynamicRuleCodes.cs, SituationExpressions.cs)
- M src/Validation/YFex.Rules.Dynamic.Tests/{DynamicRuleTests.cs,GeneratedFunctionTests.cs,*.csproj}        (type renames only)
-?? src/Validation/YFex.Rules.Dynamic.Tests/GoldenProbe.cs      (equivalence probe; no-op unless YFEX_GOLDEN_OUT is set)
-?? src/Expressions/**                                           (YFex.Expressions, .Generator, .Tests, .Generator.Tests, .Benchmarks)
+ M YFex.Rules/src/YFex.Rules/Definition/Amounts.cs             (ToRaw delegates to RawValueConvert.FromDecimal)
+ M YFex.Rules/src/YFex.Rules/Situations/ISituation.cs          (EnumOption removed)
+ M YFex.Rules/src/YFex.Rules.Generator/{Diagnostics.cs,RulesGenerator.cs,AnalyzerReleases.Unshipped.md}   (functions removed)
+ D YFex.Rules/src/YFex.Rules.Generator/FunctionGen.cs
+ M YFex.Rules/tests/YFex.Rules.Generator.Tests/{GeneratorTests.cs,*.csproj}                                  (6 function tests moved)
+ M/D/?? YFex.Rules/src/YFex.Rules.Dynamic/**                   (re-pointed, §6; new RuleSpec.cs, DynamicRuleCodes.cs, SituationExpressions.cs)
+ M YFex.Rules/tests/YFex.Rules.Dynamic.Tests/{DynamicRuleTests.cs,GeneratedFunctionTests.cs,*.csproj}        (type renames only)
+?? YFex.Rules/tests/YFex.Rules.Dynamic.Tests/GoldenProbe.cs      (equivalence probe; no-op unless YFEX_GOLDEN_OUT is set)
+?? YFex.Expressions/**                                           (YFex.Expressions, .Generator, .Tests, .Generator.Tests, .Benchmarks)
 ?? docs/internal/expressions/phase-x-extraction.md             (this file)
  M docs/internal/composer-design.md                            (decisions C1–C5, Phase X links)
 ```
@@ -356,7 +356,7 @@ Because of this, X.4 was verified in a **temporary git worktree** (HEAD + only t
 | # | Task | Done when |
 |---|---|---|
 | 1 | **Re-verify in the real tree** once the other work compiles: `dotnet build yfex.slnx -c Release`; run YFex.Tests, Validation(+Generator), Rules, Rules.Generator, Rules.Dynamic, Rules.Admin, **Rules.Data**, Expressions(+Generator), and the Capabilities suites (`..\YFex.Capabilities\capabilities.slnx`: 28 + Cqrs 7 + Generator 5). | All green with the counts in §12.2 |
-| 2 | **AOT (acceptance 4):** add a `YFex.Expressions` reference to `src/Validation/YFex.Validation.Smoke`, evaluate one expression over a runtime `ExprSchema` with a struct reader there, then `dotnet publish src/Validation/YFex.Validation.Smoke -c Release -r win-x64` → **zero IL2xxx/IL3xxx**. | Publish clean |
+| 2 | **AOT (acceptance 4):** add a `YFex.Expressions` reference to `YFex.Validation/app/YFex.Validation.Smoke`, evaluate one expression over a runtime `ExprSchema` with a struct reader there, then `dotnet publish YFex.Validation/app/YFex.Validation.Smoke -c Release -r win-x64` → **zero IL2xxx/IL3xxx**. | Publish clean |
 | 3 | **Benchmarks on a quiet machine** (nothing else building): old vs new as in §12.2 (a HEAD worktree with only the benchmark project copied in, vs. the current tree); fill §7's table. | Within §7 limits |
 | 4 | **X.5 — named collections (XD4):** append `ExprKind.Item` (keep the existing order); `ExprJson` read/write `{"item": ["Items", "Qty"]}`; `ExprText` renders `Items.Qty`; binder resolves `ExprSchema.TryGetCollection` + item field; aggregates **infer** their collection from the item reads inside (default collection when only `line`/none); new `ExprDiagnosticCodes.AmbiguousCollection` (an aggregate mixing collections, or none while the schema has several and no default) — Rules maps it to a new `rules.dynamic.ambiguous-collection`. `BoundExpression.CollectionId` already flows to `Op.Agg` (D) and `Op.ItemField` (B). `ExprAuthoring.WriteExpressionDefs` gets an `item` def when a schema has collections. Tests over a two-collection schema. GoldenProbe must stay identical for Rules. | Expressions.Tests green; Rules golden unchanged |
 | 5 | **X.6 (optional, may slip to Composer P2):** text syntax parser (§5). | Round-trip property test |
@@ -368,7 +368,7 @@ Because of this, X.4 was verified in a **temporary git worktree** (HEAD + only t
 
 ### 12.1 What was done
 
-- **X.0** `src/Expressions/YFex.Expressions.Benchmarks` (5 scenarios, `[MemoryDiagnoser]`, in-process toolchain). Baseline tests:
+- **X.0** `YFex.Rules/benchmark/YFex.Expressions.Benchmarks` (5 scenarios, `[MemoryDiagnoser]`, in-process toolchain). Baseline tests:
   YFex 65, Validation 62, Validation.Generator 50, Rules 64, Rules.Generator 27, Rules.Dynamic 19, Rules.Admin 22, Rules.Data 15.
 - **X.1** `EnumOption` → YFex core (namespace `YFex`; Rules files resolve it through the parent namespace, no `using` changes; the
   Rules generator emits target-typed literals, so it needed no change). `RawValueConvert.FromDecimal`; `Amounts.ToRaw` delegates.

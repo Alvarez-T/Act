@@ -232,7 +232,7 @@ hot path touched (DS-P4, DS-P6).
 | `SchemaAssert.InSync(module, tables)`, `SchemaOutOfSyncException` (`MissingSteps`, `Unsupported`), printer `SchemaSync` | `YFex.Data/src/YFex.Data/Schema/SchemaSync.cs`, `SchemaValidator.cs` |
 | Tests: `DataTableGeneratorTests` (driver: naming, EF attributes by name, 13 diagnostics × `#pragma`, incrementality, printed versions compiled with Roslyn and re-checked), `DataTableRowTests` (rows compiled into the test project: structural equality, same DDL on 4 engines, bulk write + read back on SQLite, `InSync`) | `tests/YFex.Data.Tests/Schema/` |
 | AOT smoke: `LedgerRow` in sync with the smoke module, bulk-written by its mapper, read back by its reader | `tests/YFex.Data.AotSmoke/Program.cs` |
-| Pilot: `RuleDataRow` (internal) in YFex.Rules.Data; the project references the generator as an analyzer. `RuleStoreSchema` v1 unchanged (checksum pin still passes); test `The_row_class_describes_the_table_the_module_creates` | `YFex/src/Validation/YFex.Rules.Data/RuleDataRow.cs` |
+| Pilot: `RuleDataRow` (internal) in YFex.Rules.Data; the project references the generator as an analyzer. `RuleStoreSchema` v1 unchanged (checksum pin still passes); test `The_row_class_describes_the_table_the_module_creates` | `YFex.Rules/src/YFex.Rules.Data/RuleDataRow.cs` |
 | User guide §4 "Row classes" | `YFex.Data/docs/SCHEMA.md` |
 
 **Deviations from 08 §6 / 09:**

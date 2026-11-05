@@ -153,7 +153,7 @@ helps Rules too, before any DLL tier is needed.
 ## 4. Solution architecture
 
 ```
-YFex/src/Expressions/                 (NEW, extracted — §8.2)
+YFex.Expressions/                 (NEW, extracted — §8.2)
   YFex.Expressions                    Expr AST + JSON codec, DynType, binder over a schema object, FunctionCatalog,
                                       built-ins, postfix compiler/program over IFieldReader, ExprText, text parser (new)
   YFex.Expressions.Generator          [ExprFunctions]/[ExprFunction] (today's [RuleFunctions] generator, moved)

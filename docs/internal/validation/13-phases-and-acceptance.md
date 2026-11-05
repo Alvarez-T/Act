@@ -28,7 +28,7 @@ Acceptance
 ## Phase 1 — YFex.Validation core + generator
 
 **Load:** README (YFex core section), 02, 03 (§1–6, 8, 9), 10 (§2–3), 11, and `Rate`/`RoundingPolicy`/`Bounds<T>` from 04.
-**Create:** `YFex/src/Validation/YFex.Validation`, `YFex.Validation.Generator`, `YFex.Validation.Tests`,
+**Create:** `YFex.Validation/src/YFex.Validation`, `YFex.Validation.Generator`, `YFex.Validation.Tests`,
 `YFex.Validation.Generator.Tests`, `YFex.Validation.Testing`, AOT smoke console.
 
 Tasks
@@ -589,7 +589,7 @@ Cqrs.SourceGenerator 6 (+1 skipped), Cqrs.Compensation 17, Cqrs.Tenancy 11.
 - `SyncFailure.Violations` (additive, `[JsonConverter(ViolationListJsonConverter)]`, lossless compact JSON) filled on escalated
   replay rejections (G7).
 - ProblemDetails (09 §5): no ASP.NET host in this repo (YFex.Web is a separate repo) → deferred to the host integration.
-- New test project **`src/Messaging/YFex.Messaging.Rpc.Tests`** (imports `YFex.Messaging.Rpc.targets` like a NuGet consumer →
+- New test project **`YFex.Messaging/tests/YFex.Messaging.Rpc.Tests`** (imports `YFex.Messaging.Rpc.targets` like a NuGet consumer →
   `YFEX_RPC`; test-only `ActualLab.Generators 13.0.12`, approved by the user): two DI containers/hubs bridged in memory
   (`RpcFixture.InMemoryBridgeClient`), so every call is really serialized. `WireFormatTests` (4) + `RpcRoundTripTests` (7).
   ActualLab peer teardown takes ~4 s → the fixture is an `IClassFixture`. Messaging.Tests +1 (failure-log violations) → 136.
@@ -606,7 +606,7 @@ Tests: `Messaging.Tests/Cqrs/QueryCoercionTests.cs` (+4) → 140.
 before the offline handler and the enqueue; tests `PipelineStageTests.Offline_invalid_command_is_never_enqueued`,
 `RpcRoundTripTests.FusionMessageBus_offline_never_enqueues_an_invalid_command`).
 
-**Step 7 — `YFex.Cqrs.FluentValidation` — DONE.** New `src/Cqrs/YFex.Cqrs.FluentValidation` (+ `.Tests`, both in `yfex.slnx`
+**Step 7 — `YFex.Cqrs.FluentValidation` — DONE.** New `YFex.Cqrs/src/YFex.Cqrs.FluentValidation` (+ `.Tests`, both in `yfex.slnx`
 `/Cqrs/`); `YFex.Cqrs` no longer references FluentValidation (test asserts it). Failures → violations: path = PropertyName,
 code = ErrorCode (or `"fluent"`), detail = message, severity mapped. **Call-site deviation:** `.UseFluentValidator(new V())`
 instead of `.UseFluentValidator<V>()` — the `<V>()` shape needs explicit type arguments on a C# 14 generic extension-block member,
@@ -767,7 +767,7 @@ Open items carried from Phase 3 (decide before/while doing Phase 4):
 
 Decisions D31–D34 (README). Baseline = Phase 3 final counts + Messaging.Rpc.Tests 40 (after D29/D30).
 
-**Step 1 — `YFex.Rules` runtime (4a tasks 2–7, engine side) — DONE.** New `src/Validation/YFex.Rules` (+ `YFex.Rules.Generator`
+**Step 1 — `YFex.Rules` runtime (4a tasks 2–7, engine side) — DONE.** New `YFex.Rules/src/YFex.Rules` (+ `YFex.Rules.Generator`
 stub, `YFex.Rules.Tests`; all in `yfex.slnx` `/Validation/`). Folders: `Situations/` (attributes, `ISituation<T>`, schema, field
 handles, canonical `SituationWriter/Reader`, `ScopeKey`, loaders/sanitizer), `Rules/` (`IRule` markers, `[Rule]`/`[Effective]`/
 `[Sealed]`/`[RuleSet<T>]`, `RuleContext`, `RuleParameter<T>`), `Definition/` (stages, groups, `Resolve`, `Allocation` (D32),
@@ -981,7 +981,7 @@ so missed versions are caught up in order; one sync at a time (semaphore); `Last
 - Note: the host's in-memory `RuleData.With(keepPerCode)` still prunes by count only (a long run of future-dated versions can
   evict the one in force); the device cache handles it — align if it matters.
 
-**SQL store — new `YFex.Rules.Data`** (`src/Validation`, refs YFex.Rules + `../YFex.Data/src/YFex.Data`): `SqlRuleStore :
+**SQL store — new `YFex.Rules.Data`** (`YFex.Validation`, refs YFex.Rules + `../YFex.Data/src/YFex.Data`): `SqlRuleStore :
 IRuleStore` over `YFexConnectionFactory` with plain ADO.NET commands (no Dapper/reflection in this code; the dialect gives the
 parameter prefix + identifier casing). Table `yfex_rule_data`: PK `(rule_set, version)` (concurrent appends race for the number
 → the loser's insert fails and is retried, re-checking its base version → conflict if it was the same stream), `stream_hash`

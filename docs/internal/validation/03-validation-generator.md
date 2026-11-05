@@ -1,7 +1,7 @@
 # 03 — YFex.Validation.Generator
 
 > Load for: **Phase 1** (sections 1–6, 8, 9) and **Phase 2** (section 7 + file 07).
-> Project: `YFex/src/Validation/YFex.Validation.Generator` — `netstandard2.0`, copy
+> Project: `YFex.Validation/src/YFex.Validation.Generator` — `netstandard2.0`, copy
 > `YFex.State.Generator.csproj` (Roslyn 4.11.0 pinned, `EnforceExtendedAnalyzerRules`,
 > `EmitCompilerGeneratedFiles` to `Generated/`). Reuse the `EquatableArray<T>` pattern from
 > `YFex.State.Generator/EquatableArray.cs`. Bundled as analyzer of `YFex.Validation`.

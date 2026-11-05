@@ -4,7 +4,7 @@
 
 | Where | What | Notes |
 |---|---|---|
-| `YFex/src/Messaging/YFex.Messaging.Rpc/INetworkStatus.cs` | `enum SyncState { Connected, Disconnected, Reconnecting, Syncing }`, `INetworkStatus { IsConnected, State, Changed }`, `AlwaysConnectedNetworkStatus`, static `NetworkStatusProvider` | Means "the Fusion RPC peer to the server is connected" (⚑N4) |
+| `YFex.Messaging/src/YFex.Messaging.Rpc/INetworkStatus.cs` | `enum SyncState { Connected, Disconnected, Reconnecting, Syncing }`, `INetworkStatus { IsConnected, State, Changed }`, `AlwaysConnectedNetworkStatus`, static `NetworkStatusProvider` | Means "the Fusion RPC peer to the server is connected" (⚑N4) |
 | `.../YFex.Messaging.Rpc/FusionNetworkStatus.cs` | projects `RpcPeer.ConnectionState` (`AsyncState.WhenNext()` loop) | `Error is null → Reconnecting`, else `Disconnected` |
 | Consumers of `INetworkStatus` | `LocalDispatcher.cs:25,38`, `OutboxReplayer.cs:33,51,80`, `FusionMessageBus.cs:106,139,153`, `RpcMessagingExtensions.cs:76–79,107,170–171,197`, `Time/CentralTimeSource.cs:15,18,64`, Rules.Admin `RuleAdminSetup.cs:153–170` (`RuleSetSync`), `SyncEvents.cs:25` (`NetworkStatusChangedEvent(SyncState, SyncState)`) | 9 production files |
 | Test doubles of `INetworkStatus` | Messaging.Tests `Fixtures/ManualNetworkStatus.cs` (+ 7 test files), Rpc.Tests `CallContextTests.cs:286`, `CentralTimeTests.cs:121`, `RpcFixture.cs:163`, Rules.Admin.Tests `AdminFixture.cs:165`, EventSourcing.Tests `ModelASyncTests.cs:156`, EventSourcing AotSmoke `Program.cs:38` | 6 hand-written fakes → `.Testing`-style fakes after the rename |

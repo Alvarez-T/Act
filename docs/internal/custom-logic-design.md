@@ -330,7 +330,7 @@ public static partial class GeneratedCustomLogic
 
 ## 4. NavigatR route changes
 
-**Reality check (from `src/Navigation/AGENTS.md`):** the NavigatR generator is *not* wired and
+**Reality check (from `YFex.NavigatR/AGENTS.md`):** the NavigatR generator is *not* wired and
 `NavigatRRegistration.RegisterAll` cannot work across assemblies; the working path is manual
 `registry.Register<TRoute, TViewModel>()`. So the scope overlay must be **additive and
 manual-registration-friendly** — it must not depend on the route generator being fixed.
@@ -518,7 +518,7 @@ no `MakeGenericMethod`/`MakeGenericType`, no `Activator`.
   [web-tenancy-consolidation-plan.md](web-tenancy-consolidation-plan.md)).
 - `C:\Dev\YFex\YFex.CustomLogic\` — `customlogic.slnx` + `src/YFex.CustomLogic`, `src/YFex.CustomLogic.Generator`,
   `src/YFex.CustomLogic.Cqrs`, `tests/YFex.CustomLogic.Tests`.
-- In the main repo: `src/Navigation/YFex.NavigatR.Tenancy.Tests`; edits in `YFex.NavigatR` (RouteRegistry
+- In the main repo: `YFex.NavigatR/tests/YFex.NavigatR.Tenancy.Tests`; edits in `YFex.NavigatR` (RouteRegistry
   overlay + Navigator) and (sibling `YFex.UI`) `YFex.Avalonia` (ViewLocator).
 - Cross-repo `ProjectReference`s use `..\..\..\..\` (siblings under `C:\Dev\YFex`). `yfex.slnx` references the
   five moved projects under folder `/Tenancy/` via `../YFex.Tenancy/...` and `../YFex.CustomLogic/...`.

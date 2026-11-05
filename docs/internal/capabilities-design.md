@@ -59,7 +59,7 @@ src/
 
 **Capability sources are thin bridges.** Each `YFex.Capabilities.<Subsystem>` implements `ICapabilitySource` (§3A), depends on both that subsystem and `YFex.Capabilities`, and is registered in DI; the subsystem itself never references `YFex.Capabilities`. Ship them incrementally — the registries and consumers don't change when a source is added.
 
-**Why the shared abstractions library matters:** the skeleton's command `Name` must equal the command *property* that `YFex.State.Generator` actually emits (`SaveAsync` → `SaveCommand`, via the "trim `Async` + append `Command`" rule in `src/State/YFex.State.Generator/CommandParser.cs:120-124`). If the capability generator re-derives that name independently and the rule ever changes, profile selectors (`x => x.SaveCommand`) silently break. Sharing `CommandParser` eliminates that drift. If the extraction is deferred, the capability generator MUST copy the naming rule verbatim and a test must assert parity.
+**Why the shared abstractions library matters:** the skeleton's command `Name` must equal the command *property* that `YFex.State.Generator` actually emits (`SaveAsync` → `SaveCommand`, via the "trim `Async` + append `Command`" rule in `YFex.State/src/YFex.State.Generator/CommandParser.cs:120-124`). If the capability generator re-derives that name independently and the rule ever changes, profile selectors (`x => x.SaveCommand`) silently break. Sharing `CommandParser` eliminates that drift. If the extraction is deferred, the capability generator MUST copy the naming rule verbatim and a test must assert parity.
 
 ---
 
@@ -295,7 +295,7 @@ public interface ICapabilityLocalizer
 
 ## 5. Authoring API
 
-Mirrors `YFex.Cqrs.Configuration.IAggregateConfiguration<T>` (`src/Cqrs/YFex.Cqrs/Configuration/IAggregateConfiguration.cs`).
+Mirrors `YFex.Cqrs.Configuration.IAggregateConfiguration<T>` (`YFex.Cqrs/src/YFex.Cqrs/Configuration/IAggregateConfiguration.cs`).
 
 ```csharp
 public interface ICapabilityProfile          // non-generic base for collection at startup
@@ -369,7 +369,7 @@ public sealed class OrderEditorCapabilities : ICapabilityProfile<OrderEditorView
 ### 6.1 What it reads
 
 - `[Observable]` properties and `[StateCommand]` methods — reusing `ObservableParser`/`CommandParser` from `YFex.State.Generator.Abstractions`.
-- **XML docs**: `<summary>` for properties (already captured — `src/State/YFex.State.Generator/ObservableParser.cs:59,67`) and, after the extension below, for commands and their `<param>` entries.
+- **XML docs**: `<summary>` for properties (already captured — `YFex.State/src/YFex.State.Generator/ObservableParser.cs:59,67`) and, after the extension below, for commands and their `<param>` entries.
 - **`[RequirePermission]`**: read as a sibling attribute off the method symbol and off the class symbol, via `ISymbol.GetAttributes()` matching `AttributeClass.ToDisplayString() == "YFex.Authorization.RequirePermissionAttribute"`, extracting `ConstructorArguments[0].Value as string`.
 
 ### 6.2 CommandParser XML/`<param>` extension
@@ -461,7 +461,7 @@ The skeleton feeds **both** the runtime registries (search + authz-view) and the
 
 ## 7. Compilation — `CompiledCapabilityRegistry.Build`
 
-Mirrors `YFex.Cqrs.CompiledMessagingRegistry.Build` (three-phase register→compile→frozen; `src/Cqrs/YFex.Cqrs/CompiledMessagingRegistry.cs`).
+Mirrors `YFex.Cqrs.CompiledMessagingRegistry.Build` (three-phase register→compile→frozen; `YFex.Cqrs/src/YFex.Cqrs/CompiledMessagingRegistry.cs`).
 
 ```csharp
 public sealed class CompiledCapabilityRegistry
@@ -531,7 +531,7 @@ static IReadOnlyList<Type> ResolveRoutes(IRouteRegistry routes, Type vm)
 }
 ```
 
-`IRouteRegistry.ResolveRouteType(viewModelType) -> Type?` (`src/Navigation/YFex.NavigatR/IRouteRegistry.cs`) is currently **1:1**, so today `Routes` is 0..1. The compiled model exposes `IReadOnlyList<Type> Routes` to be forward-compatible with a future multi-route registry without a data-model change. Reusable child/component VMs resolve to zero routes and are fully valid manifest entries.
+`IRouteRegistry.ResolveRouteType(viewModelType) -> Type?` (`YFex.NavigatR/src/YFex.NavigatR/IRouteRegistry.cs`) is currently **1:1**, so today `Routes` is 0..1. The compiled model exposes `IReadOnlyList<Type> Routes` to be forward-compatible with a future multi-route registry without a data-model change. Reusable child/component VMs resolve to zero routes and are fully valid manifest entries.
 
 ---
 
@@ -708,9 +708,9 @@ Filtering before ranking guarantees a user never sees, and cannot rank up, an ac
 ---
 
 ### Critical Files for Implementation
-- `src/State/YFex.State.Generator/CommandParser.cs` — extend for XML/`<param>` + `[RequirePermission]`; source of the command-name derivation to share.
-- `src/State/YFex.State.Generator/ObservableParser.cs` — `GetDocumentationCommentXml()` pattern + property model to share.
-- `src/State/YFex.State.Generator/StateGenerator.cs` — `ForAttributeWithMetadataName` wiring the capability generator replicates.
-- `src/Cqrs/YFex.Cqrs/CompiledMessagingRegistry.cs` — the register→compile→frozen-projection + validation blueprint for `CompiledCapabilityRegistry.Build`.
-- `src/Cqrs/YFex.Cqrs/Configuration/IAggregateConfiguration.cs` — the `ICapabilityProfile<T>`/builder authoring-surface pattern.
-- `src/Navigation/YFex.NavigatR/IRouteRegistry.cs` — `ResolveRouteType`/`ResolveViewModel` for route attachment (currently 1:1) and live-VM resolution.
+- `YFex.State/src/YFex.State.Generator/CommandParser.cs` — extend for XML/`<param>` + `[RequirePermission]`; source of the command-name derivation to share.
+- `YFex.State/src/YFex.State.Generator/ObservableParser.cs` — `GetDocumentationCommentXml()` pattern + property model to share.
+- `YFex.State/src/YFex.State.Generator/StateGenerator.cs` — `ForAttributeWithMetadataName` wiring the capability generator replicates.
+- `YFex.Cqrs/src/YFex.Cqrs/CompiledMessagingRegistry.cs` — the register→compile→frozen-projection + validation blueprint for `CompiledCapabilityRegistry.Build`.
+- `YFex.Cqrs/src/YFex.Cqrs/Configuration/IAggregateConfiguration.cs` — the `ICapabilityProfile<T>`/builder authoring-surface pattern.
+- `YFex.NavigatR/src/YFex.NavigatR/IRouteRegistry.cs` — `ResolveRouteType`/`ResolveViewModel` for route attachment (currently 1:1) and live-VM resolution.

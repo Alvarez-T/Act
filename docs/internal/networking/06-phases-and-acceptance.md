@@ -131,7 +131,7 @@ Tests that need a real network are `[Trait("Category", "Network")]` (skipped in 
 - Fakes: Messaging.Tests `ManualServerConnection` (replaces `ManualNetworkStatus`, adds `StartReconnecting`), Rpc.Tests ×3,
   Rules.Admin.Tests, EventSourcing.Tests, EventSourcing AotSmoke. New `ServerConnectionTests` (5): real previous state through the
   replayer (+ the obsolete event), bridges both ways, `Syncing` → Connected, obsolete constructor.
-- Docs: public/messaging.md, internal/messaging-internals.md, src/Messaging/docs/03, offline 04 §1, time README §10.
+- Docs: public/messaging.md, internal/messaging-internals.md, YFex.Messaging/docs/03, offline 04 §1, time README §10.
 - **Counts:** Messaging.Tests 178 + 2 skipped, Messaging.Rpc.Tests 69, Rules.Admin.Tests 27 — all green, no CS0618 outside the
   intended places. EventSourcing.Tests does not compile for a pre-existing reason (`YFex.Quantity` vs `YFex.EventSourcing.Sample.Quantity`
   ambiguity, unrelated); the edited `ModelASyncTests` has no errors; EventSourcing AotSmoke builds.

@@ -83,7 +83,7 @@ public sealed class AlwaysConnectedServer : IServerConnection { public static Al
 | `LocalDispatcher.cs`, `OutboxReplayer.cs`, `FusionMessageBus.cs`, `Time/CentralTimeSource.cs`, Rules.Admin `RuleSetSync` | take `IServerConnection`; public constructors taking `INetworkStatus` stay one release as `[Obsolete]` overloads (Rules.Admin, EventSourcing and tests construct them) |
 | `SyncEvents.cs` | new `ServerConnectionChangedEvent(Previous, Current)`; `NetworkStatusChangedEvent` `[Obsolete]`, still published (correct previous) |
 | test fakes (Messaging.Tests `ManualNetworkStatus`, Rpc.Tests ×3, Rules.Admin.Tests, EventSourcing.Tests, EventSourcing AotSmoke) | move to `IServerConnection` (`ManualServerConnection`); the obsolete path keeps one test |
-| docs: `docs/internal/messaging-internals.md`, `docs/public/messaging.md`, `src/Messaging/docs/03-rpc-and-offline.md`, offline 04 §1, validation 13 | rename + one line on `INetworkConditions` |
+| docs: `docs/internal/messaging-internals.md`, `docs/public/messaging.md`, `YFex.Messaging/docs/03-rpc-and-offline.md`, offline 04 §1, validation 13 | rename + one line on `INetworkConditions` |
 
 Acceptance: Messaging.Tests, Messaging.Rpc.Tests, Rules.Admin.Tests, EventSourcing.Tests counts unchanged + new tests for D1/D4;
 0 new warnings except the intended `CS0618` in the one obsolete-path test (suppressed locally).

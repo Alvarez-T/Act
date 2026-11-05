@@ -534,7 +534,7 @@ AES-256-GCM encryption decorator wraps any storage backend:
 services.AddYFexStorageEncryption();   // YFex.Persistence.Encryption — call after registering the IKeyValueStore
 ```
 
-The storage key is random, generated once and kept wrapped by the OS (TPM-backed CNG key on Windows, DataProtection elsewhere), so it is the same after every restart. Blob format `0x02`: `[version:1][nonce:12][ciphertext:N][tag:16]`, authenticated together with `"yfex.store|" + store name + "|" + key`, so a value moved to another key or store does not decrypt. Details: `src/Messaging/docs/04-storage-and-backends.md`.
+The storage key is random, generated once and kept wrapped by the OS (TPM-backed CNG key on Windows, DataProtection elsewhere), so it is the same after every restart. Blob format `0x02`: `[version:1][nonce:12][ciphertext:N][tag:16]`, authenticated together with `"yfex.store|" + store name + "|" + key`, so a value moved to another key or store does not decrypt. Details: `YFex.Messaging/docs/04-storage-and-backends.md`.
 
 Keys remain plaintext for indexability. Only values are encrypted. The AEAD authentication tag detects tampering.
 

@@ -14,7 +14,7 @@ been burned by premature solutions, so bias toward evidence over opinion.
 
 ## The two libraries whose responsibilities blur
 
-- **YFex.Persistence** (`YFex/src/Persistence/…`) — meant as **local** persistence: snapshots of
+- **YFex.Persistence** (`YFex.Persistence/…`) — meant as **local** persistence: snapshots of
   app/UI state, config, consent, caches, with dumb pluggable backends (Memory, FileSystem,
   IndexedDb planned). Key types: `ISnapshotStore`, `ISnapshotProvider`, `PersistenceService`,
   `SnapshotEnvelope`, `ILocalStore`; file backend in `YFex.Persistence.FileSystem`
@@ -41,9 +41,9 @@ reused cross-project, never reinvented.*
    - `YFex/src/System/YFex.System/Telemetry/IOfflineQueue.cs`, `NullOfflineQueue.cs`,
      `TelemetryBatch.cs` (the consumer), `TelemetryEvent.cs`, `TelemetryEventQueueSerializer.cs`
    - `YFex/src/System/YFex.System.Windows/SqliteOfflineQueue.cs` (SQLite-backed)
-   - Persistence-side abstractions currently: `YFex/src/Persistence/YFex.Persistence/IDurableQueue.cs`,
+   - Persistence-side abstractions currently: `YFex.Persistence/src/YFex.Persistence/IDurableQueue.cs`,
      `IQueueItemSerializer.cs`, `NullDurableQueue.cs`
-   - The bridge under review: `YFex/src/Persistence/YFex.Persistence.Data/DataDurableQueue.cs` (+ its csproj)
+   - The bridge under review: `YFex.Persistence/src/YFex.Persistence.Data/DataDurableQueue.cs` (+ its csproj)
 2. **Security event store** — a genuine relational database of captured security events:
    - `YFex/src/Security/YFex.Security.Storage/`: `SecurityDbConnectionFactory.cs`,
      `Migrations/MigrationRunner.cs` (+ embedded `Migrations/Sql/001_initial.sql`),

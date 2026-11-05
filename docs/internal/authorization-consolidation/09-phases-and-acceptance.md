@@ -178,7 +178,7 @@ Backups: `C:\Temp\authz-backup\phase0\`. No other session had touched the shared
 | `YFex/src/YFex.Tests/Values/ValidityPeriodTests.cs` (new) | 10 tests |
 | `YFex.Authorization/src/YFex.Authorization.Public/Actor.cs` (new) | `ActorKind`, `ActorRelation`, `ActorIdentity` (+ `ILogValue`), `ActorScope`, `ActorContext` (AsyncLocal, `Enter` → restoring `Activation`) |
 | `YFex.Authorization/tests/YFex.Authorization.Tests/ActorContextTests.cs`, `LeafGuardTests.cs` (new) | flow across await, nesting/restore, out-of-order dispose, no leak to caller; leaf guard (assembly references + csproj) |
-| `YFex/src/Validation/YFex.Rules/YFex.Rules.csproj` | references `YFex.Authorization.Public` (unused yet) |
+| `YFex.Rules/src/YFex.Rules/YFex.Rules.csproj` | references `YFex.Authorization.Public` (unused yet) |
 | `YFex/CLAUDE.md` | only the Rules layer-rule line |
 
 Deviations: `ActorIdentity` gets default values for `Kind`/`HomeScope` and an `Anonymous`/`IsAnonymous` helper; `ActorScope` gets
@@ -579,7 +579,7 @@ script wrote a literal NUL into `Evaluator.cs` (fixed at once); later scripts we
 | Authorization.Testing `FakePermissionDirectory.cs` (new) | grants per subject/scope, `Unavailable`, question counter |
 | Cqrs `IDecisionBound.cs` (new), `Error.cs`, `Runtime/ApprovalStage.cs` (new), `Runtime/RulesStage.cs`, `Configuration/CommandConfigurationBuilder.cs` | `IDecisionBound : IApprovalBound` in YFex.Cqrs; `ApprovalRequired.DecisionDigest` + `Error.ApprovalRequired(approvals, fingerprint, digest, violations)`; `.RequireApproval(permission, bind, separationOfDuties = true)` for `string`/`Guid`/`long`/`ICanonicalValue` (both command builders); `ApprovalStage<TMessage>` rides the rules slot (`ApprovalStages.Combine`: after the rules when both are configured); rules approvals verified through `IApprovalTokenVerifier` against `Decision.Digest`, offline tokens also need `EnforceOptions.OfflineCaps`; policy sources applied; `RulesStage.SituationType` nullable; `IApproverDirectory` deleted |
 | Messaging.Rpc `Serialization/RpcResultFormatters.cs` | **wire v5**: `ApprovalRequired` carries the digest (v4 payloads read with a zero digest); `ApprovalTokenFormatter`, `PermissionFormatter`, `Hash256Formatter` registered |
-| **new** `YFex/src/Cqrs/YFex.Cqrs.Approvals` (+ `.Tests`), `yfex.slnx` | `Approvals.Commands.Approve(Permission, Hash256) : ICommand<ApprovalToken>` (RPC contract generated), `ApproveRequirement`, `ApprovalsBaseline`, `ApproveHandler` (refuses anonymous, impersonating/delegated callers and a zero digest), `AddYFexCqrsApprovals()`, `AddYFexApprovalRequirements()`, `AddApprovals()` |
+| **new** `YFex.Messaging/src/YFex.Cqrs.Approvals` (+ `.Tests`), `yfex.slnx` | `Approvals.Commands.Approve(Permission, Hash256) : ICommand<ApprovalToken>` (RPC contract generated), `ApproveRequirement`, `ApprovalsBaseline`, `ApproveHandler` (refuses anonymous, impersonating/delegated callers and a zero digest), `AddYFexCqrsApprovals()`, `AddYFexApprovalRequirements()`, `AddApprovals()` |
 | Rules.Admin `RuleAdmin.cs`, `RuleAdminHandlers.cs`, `RuleAdminSetup.cs`, `RuleAdminAuthorization.cs`; tests `AdminFixture.cs`, `PublishTests.cs` | `ApproveDecision`, its wire `ApprovalToken`, handler and requirement deleted (the test moved to Cqrs.Approvals.Tests) |
 | Messaging.Tests `Fixtures/CheckoutAggregate.cs`, `Cqrs/RulesStageTests.cs`; Messaging.Rpc.Tests `WireFormatTests.cs` | v2 tokens over the decision digest; offline device approval of a rule limit capped and flagged; digest and token wire round trips |
 | Authorization.Tests `ApprovalTokenTests.cs`; Authorization.Installations.Tests `DeviceApprovalTests.cs`; core `StableHash64Tests.cs` | server tokens, ring reload, scope containment, pinned body and digests, options bounds; real-key device tokens (F7 replay, decision-time age, other installation, revoked/foreign keys, tampering, A8 actions, custom handler, Site refused, DI); capture |
@@ -660,7 +660,7 @@ Test `Claims_identity_actor_becomes_the_real_actor_of_an_impersonation`. Authori
 ### 2026-10-19 — Note from authentication AN-P5 (requests R1–R3, R6; R7 still open)
 
 The user allows changing other libraries while they are not in production, with their design docs aligned. Backups:
-`C:\Temp\authentication-backup\P5\other` (tar of this repo and of `YFex/src/Cqrs` + `YFex/src/Messaging` before the change).
+`C:\Temp\authentication-backup\P5\other` (tar of this repo and of `YFex.Cqrs` + `YFex.Messaging` before the change).
 
 - **R1:** `Requirement` case `RecentAuthentication` (`RequirementKind = 8`, payload `RecentAuthenticationRequirement(MaxAge, Minimum)`,
   `Requirement.RequireRecentAuthentication`), compiled as an identity requirement (needs authentication, kept in `Remaining`, sync).
@@ -867,7 +867,7 @@ restored byte-identical — `cmp`; Validation.Smoke already has it). Script `C:\
 
 **Other consumers of the State generator change** (every `[StateCommand]` now declares the hook): YFex.Mvvm, YFex.State.Smoke and
 YFex.Avalonia.Gallery build. `YFex.Persistence.Tests` does not compile — pre-existing: its csproj (2026-08-12) references
-`..\YFex.State\…` under `src/Persistence` (paths that do not exist); no error involves the hook.
+`..\YFex.State\…` under `YFex.Persistence` (paths that do not exist); no error involves the hook.
 
 All runs `-c Release --artifacts-path C:\Temp\authz-art -p:NuGetAudit=false` (runner `C:\Temp\yfex-edits\run-tests-r.sh`, logs
 `C:\Temp\authz-testlogs\phase5-before|phase5-after\`).

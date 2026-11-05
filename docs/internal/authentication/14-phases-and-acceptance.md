@@ -144,7 +144,7 @@ Before: 194 tests. After: **210 green** (+16: `SecondFactorP5Tests` 13, `SecondF
 native AOT smoke 0 IL warnings, exit 0 (now with enrolment, TOTP replay, step-up, the recent-authentication requirement, the inline
 proof and device sign-in). Other repos, all green: Cryptography 220 (+30), AotSmoke 37/37; Authorization 156 (+5); Messaging.Rpc 81
 (+1); Messaging 185 (+1, 2 skipped); Cqrs.Approvals 12; Offline 69; Validation 62, Validation.Generator 50, Rules.Admin 29. Backups: `C:\Temp\authentication-backup\P5` (tar of this repo,
-and under `other` the Authorization and Cryptography repos, `YFex/src/Cqrs` + `YFex/src/Messaging`, the Validation VM emitter, the
+and under `other` the Authorization and Cryptography repos, `YFex.Cqrs` + `YFex.Messaging`, the Validation VM emitter, the
 Offline file and the design folders). No new NuGet package.
 
 **Built:**

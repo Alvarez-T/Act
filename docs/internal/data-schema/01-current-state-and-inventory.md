@@ -90,10 +90,10 @@ Tests: `YFex.Data.EntityFramework.Tests` (8, EF Core + SQLite): LINQ, raw SQL, S
 |---|---|---|---|
 | `YFex.Offline/src/YFex.Offline.Data/OfflineSqlSchema.cs` | own `enum SqlEngine { Sqlite, PostgreSql, SqlServer }` | 3 | 7 type variables (`binary`, `text`, `longText`, `id`, `key`, `number`, `small`) chosen by `switch`, then interpolated into 12 tables + 6 indexes |
 | `YFex.Authentication/src/YFex.Authentication.Data/AuthenticationSqlSchema.cs` | **another** `enum SqlEngine` (same values, different namespace) | 3 | 9 tables + 10 indexes; 8 type variables plus an engine-specific index: SQL Server gets `… where operator_code is not null`; a second inline `engine == SqlServer ? "nvarchar(12)" : "text"` |
-| `YFex/src/Validation/YFex.Rules.Data/SqlRuleStore.cs` `CreateTableScript` | `RuleStoreDatabase` | 4 (adds Oracle) | 5-tuple of types from a `switch`, one table + index |
+| `YFex.Rules/src/YFex.Rules.Data/SqlRuleStore.cs` `CreateTableScript` | `RuleStoreDatabase` | 4 (adds Oracle) | 5-tuple of types from a `switch`, one table + index |
 | `YFex.Security/.../Storage/Migrations/MigrationRunner.cs` | none (SQLite only, Dapper) | 1 | own `_migrations` table + `CREATE TABLE IF NOT EXISTS` |
 | `YFex.Data/src/YFex.Data/Schema/VersionTable.cs` | none ("ANSI") | — | one fixed script |
-| `YFex/src/Persistence/YFex.Persistence.Sqlite/*` | — | SQLite | **out of scope** (local app-state storage, AGENTS.md) |
+| `YFex.Persistence/src/YFex.Persistence.Sqlite/*` | — | SQLite | **out of scope** (local app-state storage, AGENTS.md) |
 
 Usages of the two `Statements(SqlEngine)` methods: tests (`DataTests`, `SqlStoreTests`, `SqlExternalStoreTests`),
 both AOT smoke apps, and `YFex.Offline.Benchmarks`. No host runs them yet, so no deployed database depends on the

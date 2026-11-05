@@ -1,7 +1,7 @@
 # 02 — YFex.Validation (runtime core)
 
 > Load for: **Phase 1**. Also referenced by every other phase.
-> Project: `YFex/src/Validation/YFex.Validation` — references **YFex core** (`YFex/src/YFex`) only;
+> Project: `YFex.Validation/src/YFex.Validation` — references **YFex core** (`YFex/src/YFex`) only;
 > `net11.0`, `LangVersion preview`, `IsAotCompatible`, `AllowUnsafeBlocks`, generator bundled as
 > analyzer (copy `YFex.State.csproj`). Root namespace: `YFex.Validation`.
 > Sections marked **[YFex core]** describe base types that Phase 1 adds to **YFex core**

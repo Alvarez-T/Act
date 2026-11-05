@@ -98,7 +98,7 @@ one schema generator in that engine's package. No consumer changes.
   discovery, and it is still a TODO ([01 §1](01-current-state-and-inventory.md#1-yfexdata-where-it-stands)).
 - Replace EF Core migrations for apps that already use them. [05](05-entity-framework-integration.md) plugs YFex
   modules *into* EF migrations.
-- Cover local app-state storage (`YFex/src/Persistence`, e.g. `SqliteKeyValueStore`). AGENTS.md keeps that out of the
+- Cover local app-state storage (`YFex.Persistence`, e.g. `SqliteKeyValueStore`). AGENTS.md keeps that out of the
   SQL layer.
 - Auto-diff a desired model against a live database in the first phases (⚑DS2). Verification against the live
   database comes later (DS-P7).

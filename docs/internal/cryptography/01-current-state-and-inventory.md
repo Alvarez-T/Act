@@ -18,15 +18,15 @@ Every use falls in one of three classes. The class decides what happens to it ([
 
 | # | Where | What it does | Class | Notes |
 |---|---|---|---|---|
-| I1 | `YFex/src/Persistence/YFex.Persistence.Encryption/AesGcmValueProtector.cs` | AES-256-GCM, layout `0x01 ‖ nonce(12) ‖ ct ‖ tag(16)`, one cached `AesGcm`, **no associated data** | S | F2, C1, C10 |
+| I1 | `YFex.Persistence/src/YFex.Persistence.Encryption/AesGcmValueProtector.cs` | AES-256-GCM, layout `0x01 ‖ nonce(12) ‖ ct ‖ tag(16)`, one cached `AesGcm`, **no associated data** | S | F2, C1, C10 |
 | I2 | `…/Persistence.Encryption/DataProtectionKeyProvider.cs` | key = HKDF(randomized `IDataProtector.Protect(seed)`) | S | **F1** |
 | I3 | `…/Persistence.Encryption/ProvidedKeyProvider.cs`, `IKeyProvider.cs`, `IValueProtector.cs` | caller-supplied 32-byte key; contracts | S | |
 | I4 | `…/Persistence.Encryption/EncryptedKeyValueStore.cs` | `IKeyValueStore` decorator, value → `Protect`, `null` on any failure | S | C10 |
 | I5 | `…/Persistence.Encryption/EncryptionServiceExtensions.cs` | `AddYFexStorageEncryption`, enum `EncryptionKeySource {OsKeyStore, Provided}`, `ActivatorUtilities.CreateInstance` | S | F12 (duplicate enum), C8 |
-| I6 | `YFex/src/Messaging/YFex.Messaging.Rpc/YFexMessagingRpcClientOptions.cs:4-5,18-19` | enums `EncryptionMode {None, AesGcm}` + duplicate `EncryptionKeySource`, options `Encryption`, `EncryptionKeySource` | S | **C3** (never read) |
-| I7 | `YFex/src/Messaging/YFex.Messaging.Rpc/EventChannel.cs:37-40,96,154-175` | audience tokens `"{scope}.{base64url HMAC-SHA256(scope)}"`, random per-process key | S | **C4** |
-| I8 | `YFex/src/Validation/YFex.Rules/Approvals/OverrideTokens.cs` | `OverrideToken` canonical payload (`:29-44`), `HmacOverrideTokens` key ring by string key id (`:103-137`), `DeviceOverrideTokenIssuer` ECDsa P-256 (`:158-167`), `DeviceOverrideTokenVerifier` (`:174-208`), `IDeviceKeyStore` (`:146-150`) | S | C5, C6; moves to Authorization (⚑Z12) |
-| I9 | `YFex/src/Validation/YFex.Rules/Engine/Evaluator.cs:738-774` | decision fingerprint = `StableHash64` (XXH64) over the outcome; the approval token binds to it | N used as S | **C5** |
+| I6 | `YFex.Messaging/src/YFex.Messaging.Rpc/YFexMessagingRpcClientOptions.cs:4-5,18-19` | enums `EncryptionMode {None, AesGcm}` + duplicate `EncryptionKeySource`, options `Encryption`, `EncryptionKeySource` | S | **C3** (never read) |
+| I7 | `YFex.Messaging/src/YFex.Messaging.Rpc/EventChannel.cs:37-40,96,154-175` | audience tokens `"{scope}.{base64url HMAC-SHA256(scope)}"`, random per-process key | S | **C4** |
+| I8 | `YFex.Rules/src/YFex.Rules/Approvals/OverrideTokens.cs` | `OverrideToken` canonical payload (`:29-44`), `HmacOverrideTokens` key ring by string key id (`:103-137`), `DeviceOverrideTokenIssuer` ECDsa P-256 (`:158-167`), `DeviceOverrideTokenVerifier` (`:174-208`), `IDeviceKeyStore` (`:146-150`) | S | C5, C6; moves to Authorization (⚑Z12) |
+| I9 | `YFex.Rules/src/YFex.Rules/Engine/Evaluator.cs:738-774` | decision fingerprint = `StableHash64` (XXH64) over the outcome; the approval token binds to it | N used as S | **C5** |
 | I10 | `YFex.Web/src/Web/YFex.Web.Data/Security/AesSecretProtector.cs` + `SecretProtectionOptions.cs` | AES-GCM `nonce ‖ ct ‖ tag` base64, new `AesGcm` per call; `TenantSalt` documented | S | **C2**, no AAD |
 | I11 | `YFex.Web/src/Web/YFex.Web/Credentials/ISecretProtector.cs` | `string Protect(string)` / `Unprotect` contract | S | |
 | I12 | `YFex.Web/src/Web/YFex.Web.Refit/Tokens/OAuthTokenSource.cs:78-80` | SHA-256 of a type name as a cache-key part | N | fine |

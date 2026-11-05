@@ -6,7 +6,7 @@
 > "Domain-agnostic refactor (D35–D38)" for the full rename map.
 
 > Load for: **Phase 4**. Tables & runtime editing: file 05. Trace: file 06. Full example: file 12.
-> Projects: `YFex/src/Validation/YFex.Rules` (runtime; refs YFex core for `Money`, `Percentual`,
+> Projects: `YFex.Rules/src/YFex.Rules` (runtime; refs YFex core for `Money`, `Percentual`,
 > `EnumCode`, and YFex.Validation) + `YFex.Rules.Generator` (netstandard2.0, bundled as analyzer).
 > Namespace: `YFex.Rules`. **Must not reference** YFex.State, YFex.Cqrs, YFex.Authorization
 > (permissions are carried as strings, mapped by Cqrs/UI).

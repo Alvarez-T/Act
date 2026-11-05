@@ -17,10 +17,10 @@
 | Concern | Owner |
 |---|---|
 | Primitives, shared value types, core contracts | `src/YFex` |
-| Reactive state, MVVM, navigation, UI contracts | `src/State`, `src/UI`, `src/Navigation` |
-| Validation and pure rules | `src/Validation`; gather I/O into an immutable situation before sync evaluation |
-| Commands, queries, messaging, offline RPC | `src/Cqrs`, `src/Messaging` |
-| Local app-state storage | `src/Persistence` |
+| Reactive state, MVVM, navigation, UI contracts | siblings `YFex.State`, `YFex.Mvvm`, `YFex.NavigatR`, `YFex.UI` |
+| Validation and pure rules | siblings `YFex.Validation`, `YFex.Rules`, `YFex.Expressions`; gather I/O into an immutable situation before sync evaluation |
+| Commands, queries, messaging, offline RPC | siblings `YFex.Cqrs`, `YFex.Messaging` |
+| Local app-state storage | sibling `YFex.Persistence` |
 | Database access and migration | sibling `YFex.Data` |
 | Keys, signatures, sealed bytes | sibling `YFex.Cryptography` |
 | Caller permissions and capability discovery | siblings `YFex.Authorization`, `YFex.Capabilities` |

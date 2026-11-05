@@ -1,9 +1,9 @@
 # 09 — Server side: YFex.Cqrs & YFex.Messaging
 
 > Load for: **Phase 3** (sections 1–5, 7, 9–11) and **Phase 4** (sections 6, 8 — rules enforcement).
-> Existing code: `YFex/src/Cqrs/YFex.Cqrs/Configuration/*ConfigurationBuilder.cs`, `Runtime/CommandPolicy.cs`,
+> Existing code: `YFex.Cqrs/src/YFex.Cqrs/Configuration/*ConfigurationBuilder.cs`, `Runtime/CommandPolicy.cs`,
 > `Runtime/QueryPolicy.cs`, `CompiledMessagingRegistry.cs`, `Error.cs`, `ErrorType.cs`, `ConflictPolicy.cs`;
-> `YFex/src/Messaging/YFex.Messaging.Rpc/LocalDispatcher.cs`, `FusionMessageBus.cs`, `HandlerInterfaces.cs`,
+> `YFex.Messaging/src/YFex.Messaging.Rpc/LocalDispatcher.cs`, `FusionMessageBus.cs`, `HandlerInterfaces.cs`,
 > `OutboxReplayer.cs`. Read `docs/internal/cqrs-internals.md` and `messaging-internals.md` first.
 > **Phase 3 implementers:** read the "Phase 3 handoff" at the end of 13 first — the as-built code differs from what
 > this file assumes (the server does not validate RPC calls today, the Fusion client drops the server `Error`,

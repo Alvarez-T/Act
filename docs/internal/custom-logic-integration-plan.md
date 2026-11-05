@@ -473,8 +473,8 @@ what the scoped `IKeyValueStore` already partitions. OD2 ("optional, off by defa
 
 ### 11.1 Cqrs — `YFex.Cqrs.Tenancy` (I2c, part 1) — ✅ DONE (2026-09-28)
 
-`src/Cqrs/YFex.Cqrs.Tenancy` (`TenancyCacheScopeContext`, `QueryCacheScopeOptions`, `t.IsolateQueryCache(..)`) and
-`src/Cqrs/YFex.Cqrs.Tenancy.Tests` 11/11, both in `yfex.slnx` `/Cqrs/`. YFex.Cqrs gained only a lambda-free
+`YFex.Cqrs/src/YFex.Cqrs.Tenancy` (`TenancyCacheScopeContext`, `QueryCacheScopeOptions`, `t.IsolateQueryCache(..)`) and
+`YFex.Cqrs/tests/YFex.Cqrs.Tenancy.Tests` 11/11, both in `yfex.slnx` `/Cqrs/`. YFex.Cqrs gained only a lambda-free
 `ScopedByTenant()`, which reads `ICacheScopeContext.TenantId` (the `CacheScope.Tenant` branch of `QueryCacheKey` was
 unreachable before). Compensation 17 and SourceGenerator 6 still green.
 

@@ -553,9 +553,9 @@ Intact and value-object-based: the per-ViewModel capability manifest references 
 - **`Role`/`ClaimType` canonicalization** locked as ordinal-ignore-case / short-name↔URI — confirm against the eventual JWT claim shapes.
 
 ### Critical files for implementation
-- `src/Cqrs/YFex.Cqrs/CompiledMessagingRegistry.cs` (Gate 1 adapter; `PolicyName`/`TypeRef` fix — lines 268/277/289)
-- `src/Messaging/YFex.Messaging.Rpc/LocalDispatcher.cs` (gate call sites 133/197; move to `IPrincipalAccessor`)
-- `src/Navigation/YFex.NavigatR/Navigator.cs` (Gate 2 insertion points 117/428)
+- `YFex.Cqrs/src/YFex.Cqrs/CompiledMessagingRegistry.cs` (Gate 1 adapter; `PolicyName`/`TypeRef` fix — lines 268/277/289)
+- `YFex.Messaging/src/YFex.Messaging.Rpc/LocalDispatcher.cs` (gate call sites 133/197; move to `IPrincipalAccessor`)
+- `YFex.NavigatR/src/YFex.NavigatR/Navigator.cs` (Gate 2 insertion points 117/428)
 - `C:\Dev\YFex\YFex.Web\src\Web\YFex.Web.Refit\Handlers\EndpointAuthHandler.cs` (Gate 4 handler ordering; principal propagation)
 - `C:\Dev\YFex\YFex.Web\src\Web\YFex.Web\Tokens\ITokenStore.cs`, `Auth\OAuthToken` (→ `AccessToken`), `Credentials\ApiCredential.cs` (token/credential migration)
 - `src/YFex/Length.cs` (value-object convention exemplar)

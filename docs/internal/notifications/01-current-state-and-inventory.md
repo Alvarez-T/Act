@@ -37,10 +37,10 @@ References today: `YFex.Authentication.Delivery` → `YFex.Authentication.Public
 | `ApiEndpoint`, `IApiEndpointStore` (per-tenant credentials, protected secrets) | `YFex.Web/src/Web/YFex.Web/Stores/IApiEndpointStore.cs` | provider endpoint per scope (⚑N18) |
 | `YFex.Web.Refit` endpoint builder: `AddRateLimit`, `AddRetry` (Polly-free handlers, web 07) | `YFex.Web/src/Web/YFex.Web.Refit/Builder/CrossCuttingExtensions.cs:18, 29` | provider HTTP clients, handler retry off (⚑N5) |
 | `IResiliencePipelineFactory`, `ResilienceSpec` (+ `YFex.Resilience.Polly`) | `YFex.Resilience` (built) | dispatcher retries, breaker per provider |
-| `IEventChannel<T>`, `EventChannelHost<T>`, `EnableServerPushedEvents()` (opt-in exists, **flag never read**: `YFexMessagingRpcClientOptions.cs:76-83`) | YFex `src/Messaging/YFex.Messaging.Rpc/` | in-app push; wiring is a Messaging prerequisite (05 §3) |
+| `IEventChannel<T>`, `EventChannelHost<T>`, `EnableServerPushedEvents()` (opt-in exists, **flag never read**: `YFexMessagingRpcClientOptions.cs:76-83`) | YFex `YFex.Messaging/src/YFex.Messaging.Rpc/` | in-app push; wiring is a Messaging prerequisite (05 §3) |
 | `IOutbox`, `IOutboxCallerCapture` (offline RPC outbox, captures the caller) | `YFex.Messaging.Rpc/IOutbox.cs:61, 79` | terminal-queued sends carry the caller to central |
-| `IDurableQueue<T>`, `SqliteDurableQueue<T>` | YFex `src/Persistence/` | host outbox (`.Persistence`) |
-| `IQueueable` | YFex `src/Cqrs/YFex.Cqrs/Markers.cs` | `Notifications.Commands.Send` |
+| `IDurableQueue<T>`, `SqliteDurableQueue<T>` | YFex `YFex.Persistence/` | host outbox (`.Persistence`) |
+| `IQueueable` | YFex `YFex.Cqrs/src/YFex.Cqrs/Markers.cs` | `Notifications.Commands.Send` |
 | `[PermissionCatalog]` | `YFex.Authorization.Public/Attributes.cs` | ⚑N12 |
 | `ActorIdentity` and actor types | today `YFex.Authorization.Public/Actor.cs`; **moving to YFex core** (⚑RA8, decided 2026-11-04, not built) | `Recipient.Actor`, log actor |
 | Approvals: `ApprovalEvent` / `ApprovalEvents`, `ServerApprovalTokens`, `DeviceApprovalTokenIssuer` | `YFex.Authorization/src/YFex.Authorization/Approvals/`, `YFex.Authorization.Installations` | approval notices (bridge) |

@@ -46,7 +46,7 @@ streaming; the exchange layer (polling, stable-file detection, claim, ledger, zi
 declared encoding, retry through YFex.Resilience, scheduling through YFex.Jobs, audit events, metrics); AOT smoke and benchmarks.
 
 **Out:**
-- **Local app-state storage** → `YFex/src/Persistence` (`IKeyValueStore`, `IDurableQueue`). Different job: app state on this machine.
+- **Local app-state storage** → `YFex.Persistence` (`IKeyValueStore`, `IDurableQueue`). Different job: app state on this machine.
 - **HTTP APIs** → YFex.Web. A partner that exposes REST is not a file store.
 - **File servers** (FTP/SFTP server) → later packages (⚑F17). **Mounting** drives, sync clients (Dropbox-style), file watching of
   remote stores in real time (polling only; cloud event notifications are an app integration).

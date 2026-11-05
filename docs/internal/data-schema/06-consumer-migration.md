@@ -85,7 +85,7 @@ Identifier check for Oracle < 12.2 / 30 characters: `ix_authentication_external_
 are fine on Oracle ≥ 12.2 (128) and PostgreSQL (63). YFSCH001 uses the dialect's configured limit
 (`OracleDialect` option `LegacyIdentifierLength`, default off).
 
-## 3. YFex.Rules.Data (`YFex/src/Validation`)
+## 3. YFex.Rules.Data (`YFex.Validation`)
 
 `SqlRuleStore.CreateTableScript(RuleStoreDatabase, table)` takes the table name as a parameter. That means the module
 is built per table name: `RuleStoreSchema.Module(string table = "yfex_rule_data")` returns a `SchemaModule` named

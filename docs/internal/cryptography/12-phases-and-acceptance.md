@@ -576,7 +576,7 @@ spike (question 8).
 
 **Done (by task):**
 
-- **0.0 goldens** with the code as it was: `YFex/src/Persistence/YFex.Persistence.Encryption.Tests/Golden/persistence-v2.tsv` (4 values of
+- **0.0 goldens** with the code as it was: `YFex.Persistence/tests/YFex.Persistence.Encryption.Tests/Golden/persistence-v2.tsv` (4 values of
   the interim `0x02` layout, key `0xA0…0xBF`, sealed by offline Phase 0's `AesGcmValueProtector`). `0x01` values are rebuilt in tests
   with the BCL (that code no longer existed). Backups of every file touched: `C:\Temp\cryptography-backup\phase0`.
 - **0.1 core** (`YFex/src/YFex`): `Cryptography/KeyId.cs`, `Cryptography/Signatures.cs` (`SignatureAlgorithm`, `DetachedSignature`),
@@ -683,7 +683,7 @@ Automation's stores (open question 3) are **not** implemented now; Payment (I18)
 - `.Windows`: `CngSigningKeyStore` (persisted ECDsa P-256, `ExportPolicy None`, TPM → software KSP, sign/verify round trip at
   creation, key id = public-key fingerprint). `.Testing`: `InMemorySigningKey`, `InMemorySigningKeyStore`, RFC 4231 / RFC 5869 /
   RFC 7914 vectors.
-- **Step 1.0 goldens:** `YFex/src/Validation/YFex.Rules.Tests/Golden/approval-token-v1.tsv` (L3) generated with the unchanged
+- **Step 1.0 goldens:** `YFex.Rules/tests/YFex.Rules.Tests/Golden/approval-token-v1.tsv` (L3) generated with the unchanged
   `OverrideTokens.cs` of 2026-09-30: 3 server + 2 device tokens, fixed HMAC key and fixed device scalar. `ApprovalTokenGoldenTests`
   (Rules) proves the current code reproduces it; `ApprovalTokenVersion1GoldenTests` (crypto) proves the library verifies it with
   `MessageDomain.Raw`. The L2 Web.Data golden is **not** generated yet (it belongs to the Web.Data consumer step).

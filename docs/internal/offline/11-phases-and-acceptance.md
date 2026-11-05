@@ -296,7 +296,7 @@ Removed: SAS pairing, provisional certificates, the site issuing CA, the hardwar
 
 ## 4. Docs to update when the phases land
 
-`YFex/CLAUDE.md` (solution map row for `YFex.Offline`), `YFex/src/Messaging/docs/03-rpc-and-offline.md` (modes, envelopes, `.Offline`),
+`YFex/CLAUDE.md` (solution map row for `YFex.Offline`), `YFex.Messaging/docs/03-rpc-and-offline.md` (modes, envelopes, `.Offline`),
 `docs/public/messaging.md`, `authorization-consolidation/05` and `06` (signed snapshot, site approvals, as-of checks), `installations/06 §3`
 (what Offline actually took), `time/README §8` (site time table built), `privacy/05 §5` (sealed intake), `validation/13` (D34 refinement),
 `docs/index.md` row status. Logging 05 §6 and audit 05 §6 no longer depend on Offline (relay = Installations `relay` channel).
@@ -312,7 +312,7 @@ same morning; it re-read every file listed below before its own edits). Backups:
 
 | Task | Done | Where |
 |---|---|---|
-| 0.1 F1 storage key | Random 32-byte key generated once, stored only wrapped: `WrappedKeyProvider` (file `<KeyDirectory>\<KeyName>.storage-key`, temp-file + move so concurrent first starts agree, never regenerates silently → `StorageKeyUnavailableException`), `IKeyWrapper` + `KeyProtection {Hardware, Software, DataProtection}`, `CngKeyWrapper` (RSA-OAEP-SHA256 under a persisted non-exportable CNG key, TPM first with a verified round trip, software KSP fallback, user or machine scope), `DataProtectionKeyWrapper` (cross-platform, Protect/Unprotect of the key — not a KDF), `StorageEncryptionOptions` (`StoreName`, `KeyName` = entry assembly, `KeyDirectory`, `MachineScope`, `PreferHardwareKey`). `DataProtectionKeyProvider` (internal) deleted | `YFex/src/Persistence/YFex.Persistence.Encryption/` |
+| 0.1 F1 storage key | Random 32-byte key generated once, stored only wrapped: `WrappedKeyProvider` (file `<KeyDirectory>\<KeyName>.storage-key`, temp-file + move so concurrent first starts agree, never regenerates silently → `StorageKeyUnavailableException`), `IKeyWrapper` + `KeyProtection {Hardware, Software, DataProtection}`, `CngKeyWrapper` (RSA-OAEP-SHA256 under a persisted non-exportable CNG key, TPM first with a verified round trip, software KSP fallback, user or machine scope), `DataProtectionKeyWrapper` (cross-platform, Protect/Unprotect of the key — not a KDF), `StorageEncryptionOptions` (`StoreName`, `KeyName` = entry assembly, `KeyDirectory`, `MachineScope`, `PreferHardwareKey`). `DataProtectionKeyProvider` (internal) deleted | `YFex.Persistence/src/YFex.Persistence.Encryption/` |
 | 0.2 F2 associated data | `IValueProtector.Protect(plaintext, associatedData)` / `TryUnprotect(…) → UnprotectStatus {Opened, OpenedLegacyLayout, AuthenticationFailed, UnsupportedVersion, Malformed}` (old one-argument calls kept). Layout `0x02`; `0x01` still read (`OpenedLegacyLayout`) and re-sealed on the next write; a `0x02` blob relabelled `0x01` fails. `EncryptedKeyValueStore(inner, protector, storeName, logger)`: AAD `"yfex.store|" + store + "|" + key`, `ReadFailed` event, `UnreadableValues`/`LegacyValuesRead` counters, first failure of each kind logged once as `StorageKeyMismatch` (keys never logged) | same project |
 | 0.3 F3 idempotency | Client: `yfex-idempotency` header on every command dispatch (`Guid.CreateVersion7()`), replay re-sends the entry's key (`OutboxReplayContext`). Server: `IIdempotencyStore` + `InMemoryIdempotencyStore` (24 h) + `IdempotentExecution`, run by `ValidatingHandlerInvoker` **before** validation/rules/authorization; key = business key (`.IdempotencyKey(…)`) or header, bound to message type + scope header; only successful executions are remembered; concurrent duplicates await the first | `YFex.Messaging.Rpc/Idempotency.cs`, `ValidatingHandlerInvoker.cs`, `FusionMessageBus.cs`, `RpcMessagingExtensions.cs` |
 | 0.4 F4 (interim) | `OutboxEntry(…, Subject, Scope, Sequence)` captured at enqueue by `IOutboxCallerCapture` (`DefaultOutboxCallerCapture`: `IPrincipalAccessor` + `IScopeContext`) inside the outbox implementations (so `LocalDispatcher`'s enqueue is covered too); replay sends the **captured** scope; a different signed-in subject → warning + `SyncStatus.ReplaysUnderAnotherSubject` | `IOutbox.cs`, `InMemoryOutbox.cs`, `StorageBackedOutbox.cs`, `OutboxReplayer.cs`, `SyncStatus.cs` |
@@ -328,7 +328,7 @@ same morning; it re-read every file listed below before its own edits). Backups:
 (public InvokeAsync → idempotency → renamed `InvokeValidated*`), `RpcMessagingExtensions.cs` (client outbox block, server idempotency
 registration), `YFexMessagingRpcClientOptions.cs`, new `Idempotency.cs`, `OutboxPair.cs`. Tests — Messaging.Tests
 `Rpc/OutboxTtlTests.cs` (opts out explicitly + new kept-by-default test), new `Rpc/OutboxPhase0Tests.cs`; Messaging.Rpc.Tests new
-`IdempotencyTests.cs`. Docs — `src/Messaging/docs/03-rpc-and-offline.md`, `04-storage-and-backends.md` (rewritten: it described
+`IdempotencyTests.cs`. Docs — `YFex.Messaging/docs/03-rpc-and-offline.md`, `04-storage-and-backends.md` (rewritten: it described
 extensions that do not exist), `docs/public/messaging.md` (client example + encryption section), `YFex/CLAUDE.md`.
 
 **Deviations from §3 (with reason)**
@@ -547,7 +547,7 @@ Rules.Admin and YFex.Rules (read directly where RoselYn shows no constructors or
 | `OfflineBundleKinds.Publishers`, `.RuleData`, `.PublishedByOffline`, `.Gossiped`; `OfflineCanonicalText` | `YFex.Offline` |
 | **new project `YFex.Offline.Central`**: `SitePermissions.Configure` (`sites.configure`), `Sites.Commands.Configure` + `SitesConfiguration` gate + `SiteConfiguration` (refuses unknown/out-of-bounds limits, unmarked feed commands, foreign sites), `OfflineLimitCatalog` (admin → `IOfflineLimitProvider` → app default → library default), `SiteFeedCatalog`, `SiteManifestPublisher`, `AllowancePublisher` (+ `IAllowanceAmountSource`, `IAllowanceCap`), `OfflinePublisherEndorsement`, `IOfflineSigningKeys` (`KeyRingOfflineSigningKeys` ring `offline/bundles`), `IOfflinePublicationStore`/`ISiteSettingsStore`/`IDeliveryReceiptStore` (in memory), `DeliveryReceiptVerifier`/`Consumer`, `RuleVersionCheck`, `OfflineCentral`, `AddYFexOfflineCentral`, `central.PullableOfflineBundles()` | `src/YFex.Offline.Central` |
 | **new project `YFex.Offline.Rules`** (references YFex.Rules only): `OfflineFacts` (`IRawValue`, one situation field), `IOfflineFactsSource`/`OfflineFactsSource`, `RuleDataBundleCodec` (golden-pinned), `RuleDataBundleSigner` (`IRuleDataSigner`), `RuleDataBundleVerifier` (`IRuleDataVerifier`, signatures + floors), `AddYFexOfflineRules()`, `AddYFexOfflineRuleSigning(...)` | `src/YFex.Offline.Rules` |
-| Rules hooks (additive, logged in validation 13): contracts in YFex.Rules, `GetSignedRuleData`, signing in `RulePublisher`, verification in `RuleSetSync` and `KeyValueRuleDataCache` | `YFex/src/Validation` |
+| Rules hooks (additive, logged in validation 13): contracts in YFex.Rules, `GetSignedRuleData`, signing in `RulePublisher`, verification in `RuleSetSync` and `KeyValueRuleDataCache` | `YFex.Validation` |
 | `OfflineTestPublisher`, `OfflineHarnessMember` | `YFex.Offline.Testing` |
 
 **Deviations (with reason)**
@@ -624,7 +624,7 @@ No other session was running (no shared source file changed since 2026-10-16 noo
 
 | Item | Where |
 |---|---|
-| `MessageFeatures` (typed feature slot, one value per type, last configuration wins); `Feature<T>()`/`GetFeature<T>()` on both command builders; `CommandRegistrationMetadata.Features`; `CommandPolicy.Features` (optional last parameter) | `YFex/src/Cqrs/YFex.Cqrs` (additive) |
+| `MessageFeatures` (typed feature slot, one value per type, last configuration wins); `Feature<T>()`/`GetFeature<T>()` on both command builders; `CommandRegistrationMetadata.Features`; `CommandPolicy.Features` (optional last parameter) | `YFex.Cqrs/src/YFex.Cqrs` (additive) |
 | `ErrorKind.Unavailable = 8`, `UnavailableReason {CentralRequired, CoordinatorRequired, AllowanceExhausted}`, `Unavailable` case, `Error.Unavailable(reason, message?)` | `YFex.Cqrs/Error.cs` |
 | Wire format **v6** (`Unavailable` + reason byte; v1–v5 still read) | Messaging.Rpc `RpcResultFormatters` |
 | Offline dispatch of a central-only command returns `Unavailable(CentralRequired)` instead of `Fail("No network connectivity.")` | `FusionMessageBus`, `LocalDispatcher` |

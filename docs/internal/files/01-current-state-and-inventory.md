@@ -17,7 +17,7 @@ No app or library has to migrate. Nothing to `[Obsolete]`.
 
 | Library | What it does | Why it is not the home |
 |---|---|---|
-| `YFex/src/Persistence` — `IKeyValueStore` (`YFex.Persistence/IKeyValueStore.cs:15`), `IDurableQueue<T>` (`IDurableQueue.cs:14`), `FileSystemKeyValueStore` | local app state, offline durability, caches | keyed values on this machine, no listing by folder, no partner protocols. Exchange may **use** it for a single-machine ledger (⚑F14) |
+| `YFex.Persistence` — `IKeyValueStore` (`YFex.Persistence/IKeyValueStore.cs:15`), `IDurableQueue<T>` (`IDurableQueue.cs:14`), `FileSystemKeyValueStore` | local app state, offline durability, caches | keyed values on this machine, no listing by folder, no partner protocols. Exchange may **use** it for a single-machine ledger (⚑F14) |
 | YFex.Web — Refit clients, per-scope endpoints, `ISecretProtector` sealed credentials | outbound HTTP APIs | a partner REST API is a Web concern; a partner bucket/server is a file store |
 | YFex.Networking — probes, DNS, TLS check, Telnet, SNMP | network mechanics | protocol *clients for diagnostics*; a file store with credentials, trust, streaming and partner workflow is a product-sized feature (agreed 2026-10-29) |
 | YFex.Authentication / YFex.Authorization | who / what | consumers of a future server only (⚑F17) |

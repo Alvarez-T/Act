@@ -13,29 +13,29 @@
 
 | File | What it is |
 |---|---|
-| `src/State/YFex.State/Validation/IValidator.cs` | `IValidator<T> { static abstract ValidationResult Validate(T value); }` and `IAsyncValidator<T> { static abstract ValueTask<ValidationResult> ValidateAsync(T, CancellationToken); }` |
-| `src/State/YFex.State/Validation/ValidationResult.cs` | `readonly struct` with `Message`, `PropertyName`, `Severity`; success = `Message is null` |
-| `src/State/YFex.State/Validation/ValidationSeverity.cs` | `Info, Warning, Error` |
-| `src/State/YFex.State/Validation/ValidationBag.cs` | `Dictionary<string, ValidationResult>` — **one** result per property, `ValidationChanged` event, `GetErrors` for INDEI |
-| `src/State/YFex.State/Attributes.cs` | `[ValidateWith(Type)]`, `[ValidateAsync(Type)]` (AllowMultiple) |
-| `src/State/YFex.State/StateObject.cs:82-92` | lazy `Validation` bag + `ValidationIfCreated` |
-| `src/State/YFex.State.Mvvm/MvvmStateObject.cs:67-101` | `INotifyDataErrorInfo` bridge (`HasErrors`, `GetErrors`, `ErrorsChanged`) |
-| `src/State/YFex.State.Generator/ObservableParser.cs:124-126, 403-414` | resolves validator types |
-| `src/State/YFex.State.Generator/ObservableEmitter.cs:162-171, 233-235, 263-298` | emits `Validate_X` / `Validate_X_Async` helpers and the setter call |
-| `src/State/YFex.State.Generator/DiagnosticDescriptors.cs:67-73` | `YFEX0301` "Validator must implement static abstract interface" |
-| `src/State/YFex.State.Tests/Validation/*` | tests for bag/result/severity/contract — **no generator emission tests** |
+| `YFex.State/src/YFex.State/Validation/IValidator.cs` | `IValidator<T> { static abstract ValidationResult Validate(T value); }` and `IAsyncValidator<T> { static abstract ValueTask<ValidationResult> ValidateAsync(T, CancellationToken); }` |
+| `YFex.State/src/YFex.State/Validation/ValidationResult.cs` | `readonly struct` with `Message`, `PropertyName`, `Severity`; success = `Message is null` |
+| `YFex.State/src/YFex.State/Validation/ValidationSeverity.cs` | `Info, Warning, Error` |
+| `YFex.State/src/YFex.State/Validation/ValidationBag.cs` | `Dictionary<string, ValidationResult>` — **one** result per property, `ValidationChanged` event, `GetErrors` for INDEI |
+| `YFex.State/src/YFex.State/Attributes.cs` | `[ValidateWith(Type)]`, `[ValidateAsync(Type)]` (AllowMultiple) |
+| `YFex.State/src/YFex.State/StateObject.cs:82-92` | lazy `Validation` bag + `ValidationIfCreated` |
+| `YFex.State/src/YFex.State.Mvvm/MvvmStateObject.cs:67-101` | `INotifyDataErrorInfo` bridge (`HasErrors`, `GetErrors`, `ErrorsChanged`) |
+| `YFex.State/src/YFex.State.Generator/ObservableParser.cs:124-126, 403-414` | resolves validator types |
+| `YFex.State/src/YFex.State.Generator/ObservableEmitter.cs:162-171, 233-235, 263-298` | emits `Validate_X` / `Validate_X_Async` helpers and the setter call |
+| `YFex.State/src/YFex.State.Generator/DiagnosticDescriptors.cs:67-73` | `YFEX0301` "Validator must implement static abstract interface" |
+| `YFex.State/tests/YFex.State.Tests/Validation/*` | tests for bag/result/severity/contract — **no generator emission tests** |
 
 ### 1.2 Other validation result types
 
 | Type | File | Problems |
 |---|---|---|
-| `YFex.Cqrs.ValidationResult` + `ValidationError` (class record) | `src/Cqrs/YFex.Cqrs/ValidationResult.cs` | allocates a list of records; duplicate of State's; name clash |
-| `ICommandValidator<T>`, `IQueryValidator<T>` (instance, async) | `src/Cqrs/YFex.Cqrs/Configuration/Interfaces.cs` | resolved from DI by `Type` |
-| `CommandConfigurationBuilder.Validate(...)`, `Validate<T>()`, `UseFluentValidator<T>()` | `src/Cqrs/YFex.Cqrs/Configuration/CommandConfigurationBuilder.cs:35-61` | **FluentValidation hard dependency in core Cqrs**; LINQ `Select`; `(TCommand)c` casts |
-| `CommandPolicy.Validate : Func<object, CancellationToken, ValueTask<ValidationResult>>` | `src/Cqrs/YFex.Cqrs/Runtime/CommandPolicy.cs:20` (+ `QueryPolicy`) | object-typed → boxes struct commands |
-| `ValidatorDescriptor` (`Inline`, `TypeRef`, `FluentTypeRef`) | `src/Cqrs/YFex.Cqrs/Registration/Descriptors.cs:11-29` | — |
-| `LocalDispatcher.FormatErrors` | `src/Messaging/YFex.Messaging.Rpc/LocalDispatcher.cs:66-70, 132, 200, 348-360` | **flattens all violations into one `"; "`-joined string** → UI cannot map errors to fields |
-| `Error` / `ErrorDetail` | `src/Cqrs/YFex.Cqrs/Error.cs` | `default(Error).Details` is `null` → `Details.FirstOrDefault()` throws NRE; LINQ |
+| `YFex.Cqrs.ValidationResult` + `ValidationError` (class record) | `YFex.Cqrs/src/YFex.Cqrs/ValidationResult.cs` | allocates a list of records; duplicate of State's; name clash |
+| `ICommandValidator<T>`, `IQueryValidator<T>` (instance, async) | `YFex.Cqrs/src/YFex.Cqrs/Configuration/Interfaces.cs` | resolved from DI by `Type` |
+| `CommandConfigurationBuilder.Validate(...)`, `Validate<T>()`, `UseFluentValidator<T>()` | `YFex.Cqrs/src/YFex.Cqrs/Configuration/CommandConfigurationBuilder.cs:35-61` | **FluentValidation hard dependency in core Cqrs**; LINQ `Select`; `(TCommand)c` casts |
+| `CommandPolicy.Validate : Func<object, CancellationToken, ValueTask<ValidationResult>>` | `YFex.Cqrs/src/YFex.Cqrs/Runtime/CommandPolicy.cs:20` (+ `QueryPolicy`) | object-typed → boxes struct commands |
+| `ValidatorDescriptor` (`Inline`, `TypeRef`, `FluentTypeRef`) | `YFex.Cqrs/src/YFex.Cqrs/Registration/Descriptors.cs:11-29` | — |
+| `LocalDispatcher.FormatErrors` | `YFex.Messaging/src/YFex.Messaging.Rpc/LocalDispatcher.cs:66-70, 132, 200, 348-360` | **flattens all violations into one `"; "`-joined string** → UI cannot map errors to fields |
+| `Error` / `ErrorDetail` | `YFex.Cqrs/src/YFex.Cqrs/Error.cs` | `default(Error).Details` is `null` → `Details.FirstOrDefault()` throws NRE; LINQ |
 | Fiscal `ResultadoValidacao` / `ViolacaoRegra` / `Severity {Info, Alarm, Blocking}` | `YFex.Fiscal/src/YFex.NFe.Public/Validation/ResultadoValidacao.cs` | separate on purpose (see MIGRATION-NOTES) — to be adapted, not deleted |
 | Fiscal rule engine `IRegraNFe`, `RegraNFeBase`, `NFeRuleContext`, `FaixaNt`, `NtVersao`, `IConjuntoRegras` | `YFex.Fiscal/src/YFex.NFe/Rules/` | **the pattern YFex.Rules generalizes** (D5) |
 | `XsdValidation` + `XsdValidator` facets | `src/XML/YFex.Xml/Facets/XsdValidation.cs` | single message, low-level; keep, add conversion |

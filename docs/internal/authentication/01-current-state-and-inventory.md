@@ -49,7 +49,7 @@ library must plug into — they define its outputs.
 
 | What | Where | Relevance |
 |---|---|---|
-| `ICallTokenValidator.ValidateAsync(AccessToken, ScopeIdentity requestedScope, ct) → CallIdentity?` — "registered by the app; the token format is the host's business" | `YFex/src/Messaging/YFex.Messaging.Rpc/CallContext/CallContextOptions.cs:28` | **`YFex.Authentication.Rpc` implements it** (07 §8) |
+| `ICallTokenValidator.ValidateAsync(AccessToken, ScopeIdentity requestedScope, ct) → CallIdentity?` — "registered by the app; the token format is the host's business" | `YFex.Messaging/src/YFex.Messaging.Rpc/CallContext/CallContextOptions.cs:28` | **`YFex.Authentication.Rpc` implements it** (07 §8) |
 | `ICallIdentitySource`, `FromConnection()` captures `HttpContext.User` + bearer **once at WebSocket connect** | same file `:14`, `:49-58` | why sign-in runs over HTTP first (⚑AN20) |
 | `CallContext.SubjectOf(principal)` = `NameIdentifier ?? "sub"`; `ExpiryOf` reads the `exp` claim | `CallContext/CallContext.cs:72-76,146-149` | our principal carries both |
 
@@ -78,7 +78,7 @@ library must plug into — they define its outputs.
 |---|---|---|
 | `Email` (lower-cased, `[Sensitive(Personal, contact, {email})]`, span validation) | `YFex.Domain/src/YFex.Entity.Public/Email.cs:31` | good implementation, **wrong home** for an infrastructure library (domain repo) → core `EmailAddress` (⚑AN3) |
 | `Telefone` (Brazil only: `+55`, DDD, 9-prefixed mobile) | `YFex.Domain/src/YFex.Entity.Public/Telefone.cs:8-15` | **not reusable** for SMS/WhatsApp to other countries → core `PhoneNumber` (E.164), `Telefone` converts |
-| Validation rule `Email : ITextRule` | `YFex/src/Validation/YFex.Validation/BuiltIn/Checks.cs:39` | validation rule, not a value object; keep |
+| Validation rule `Email : ITextRule` | `YFex.Validation/src/YFex.Validation/BuiltIn/Checks.cs:39` | validation rule, not a value object; keep |
 | `ValidityPeriod`, `TrustedInstant`, `Hash256`, `KeyId`, `InstallationId` | YFex core | reused as-is |
 
 ### 2.8 Delivery

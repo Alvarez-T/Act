@@ -18,7 +18,7 @@
 | `IPermissionProvider` / `IScopedPermissionProvider` / `DefaultPermissionProvider` (role map + token claims + `scoped_role`/`scoped_permission` claims per `ScopeIdentity`) | `src/YFex.Authorization/PermissionProviders.cs` | done |
 | Inbound HTTP gate (JWT + endpoint filter, 401/403/200 test) | `src/YFex.Authorization.AspNetCore` | done |
 | Outbound token propagation + `ITokenStore` | `src/YFex.Authorization.Http`, `YFex.Web.Refit/Builder/PrincipalPropagationExtensions.cs` | done |
-| NavigatR gate before VM construction | `YFex/src/Navigation/YFex.NavigatR/Navigator.cs:66-93` | done (good) |
+| NavigatR gate before VM construction | `YFex.NavigatR/src/YFex.NavigatR/Navigator.cs:66-93` | done (good) |
 | Search/AI filter-before-rank | `YFex.Capabilities`, `YFex.Search.Capabilities` | done, **with one permission per capability (D12)** |
 
 Consumers already on `YFex.Authorization.Public`: Cqrs, NavigatR, Messaging.Rpc (runtime project), Capabilities, Search,
@@ -43,12 +43,12 @@ YFex.Web.AspNetCore       → YFex.Tenancy (+ Cqrs through YFex.Web)
 
 | Item | Location |
 |---|---|
-| `IQueryAuthorizer<TQuery>.Authorize(ClaimsPrincipal, TQuery)`, `ICommandAuthorizer<TCommand>.Authorize(ClaimsPrincipal, TCommand)` | `YFex/src/Cqrs/YFex.Cqrs/Configuration/Interfaces.cs:22-29` |
+| `IQueryAuthorizer<TQuery>.Authorize(ClaimsPrincipal, TQuery)`, `ICommandAuthorizer<TCommand>.Authorize(ClaimsPrincipal, TCommand)` | `YFex.Cqrs/src/YFex.Cqrs/Configuration/Interfaces.cs:22-29` |
 | `AuthorizerKind {RequireAuthenticated, Roles, PolicyName, Inline, TypeRef, Permission}`, `AuthorizerDescriptor` (roles as `string[]`, policy as `string`) | `Registration/Descriptors.cs:12-40` |
 | Builder verbs `.RequireAuthenticated/.RequireRoles(string[] and Role[])/.RequirePermission/.RequireAuthorization(string)/.Authorize(Func<ClaimsPrincipal,T,bool>)/.Authorize<TAuthorizer>()` | `Configuration/CommandConfigurationBuilder.cs:134-176, 513-552`, `QueryConfigurationBuilder.cs:113-155` |
 | Compiled gate `Func<ClaimsPrincipal, object, bool>? Authorize` | `Runtime/CommandPolicy.cs:28`, `Runtime/QueryPolicy.cs:11` |
 | Compilation `BuildCompositeAuthorizer` (inline role loop, evaluator fold) | `CompiledMessagingRegistry.cs:346-421` |
-| `CompiledMessagingRegistry.Build(..., IPolicyEvaluator?, Func<ClaimsPrincipal, IAuthContext>?)` and a second build in `AddYFexCqrsAuthorization` | `CompiledMessagingRegistry.cs:70-76`; `YFex/src/Messaging/YFex.Messaging.Rpc/RpcMessagingExtensions.cs:233-256` |
+| `CompiledMessagingRegistry.Build(..., IPolicyEvaluator?, Func<ClaimsPrincipal, IAuthContext>?)` and a second build in `AddYFexCqrsAuthorization` | `CompiledMessagingRegistry.cs:70-76`; `YFex.Messaging/src/YFex.Messaging.Rpc/RpcMessagingExtensions.cs:233-256` |
 | `CqrsCapabilityInfo.RequiredPermission` = first permission only | `CompiledMessagingRegistry.cs:140-184` |
 | `IApproverDirectory.HasPermissionAsync(string userId, string permission)` | `Runtime/RulesStage.cs:248-255`, used at `:149-163` |
 | `ErrorType` has `Unauthorized` only (no forbidden vs unauthenticated) | `ErrorType.cs` |
@@ -73,7 +73,7 @@ sync evaluator always denies (`CompiledMessagingRegistry.cs:383-391, 334-345`). 
 
 | Item | Location |
 |---|---|
-| `ApprovalDirective(string Permission, …)`, `LimitDirective.ApprovalPermission : string?` | `YFex/src/Validation/YFex.Rules/Directives/Directive.cs:56,75` |
+| `ApprovalDirective(string Permission, …)`, `LimitDirective.ApprovalPermission : string?` | `YFex.Rules/src/YFex.Rules/Directives/Directive.cs:56,75` |
 | `TableSchema.PublishPermission`, row `ApprovalPermission` (strings) | `Tables/TableContracts.cs:40,64,218-230` |
 | `ApprovedBy(string UserId, string Permission)` | `Decisions/Adjustments.cs:13` |
 | `OverrideToken` (+ `OverrideTokenKind Server/Device`), `IOverrideTokenIssuer/Verifier`, `HmacOverrideTokens`, `DeviceOverrideTokenIssuer/Verifier` (ECDsa), `OfflineApprovalCap`, `CompositeOverrideTokenVerifier` | `Approvals/OverrideTokens.cs:9-230` (validation D34) |

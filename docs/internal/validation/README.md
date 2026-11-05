@@ -65,7 +65,7 @@ channel** (`IValidationSource`), so auto-binding handles both.
 ## Projects
 
 ```
-YFex/src/Validation/
+YFex.Validation/
   YFex.Validation              runtime core (refs YFex core only)
   YFex.Validation.Generator    netstandard2.0 incremental generator (bundled as analyzer of YFex.Validation)
   YFex.Rules                   rules engine (refs YFex core for Money/Percentual/EnumCode + YFex.Validation)
@@ -76,7 +76,7 @@ YFex/src/Validation/
   YFex.Rules.Data              SQL IRuleStore over YFex.Data (C:\Dev\YFex\YFex.Data) — SQLite/Postgres/SQL Server/Oracle
   YFex.Validation.Testing      assertion helpers + rule scenario helpers
   YFex.Validation.Tests / YFex.Rules.Tests / *.Generator.Tests
-YFex/src/Cqrs/
+YFex.Cqrs/
   YFex.Cqrs.FluentValidation   optional adapter (the ONLY place FluentValidation is referenced)
 YFex/src/YFex/                 (existing YFex core) — receives the reusable base types listed below
 ```
@@ -142,7 +142,7 @@ all rule-engine types. (`FieldConstraints` depends on `OptionSet`/`RawValue` fro
    (`GetCustomAttributes`, `Activator`, `MakeGenericType`), no `Expression<>`/`Expression.Compile`,
    no `dynamic`. All metadata comes from generators.
 2. **Unions:** use the **`[Union]` attribute + `IUnion` tagged struct** pattern (as in
-   `YFex/src/Cqrs/YFex.Cqrs/Result.cs`, `QueueableResult.cs`), **not** the native `union` keyword
+   `YFex.Cqrs/src/YFex.Cqrs/Result.cs`, `QueueableResult.cs`), **not** the native `union` keyword
    (it stores cases as `object` → boxes value-type cases). Pattern:
 
    ```csharp

@@ -7,14 +7,14 @@ Use this file only when a task crosses package or repository boundaries. This is
 | Need | Implementation owner | First document |
 |---|---|---|
 | Reusable types named by several libraries | `YFex/src/YFex` | [`docs/public/core.md`](../public/core.md) |
-| Local app-state storage, durable queues, caches | `YFex/src/Persistence` | [`src/Persistence/README.md`](../../src/Persistence/README.md) |
+| Local app-state storage, durable queues, caches | `YFex.Persistence` | [`YFex.Persistence/README.md`](../../../YFex.Persistence/README.md) |
 | Database commands, SQL, mapping, bulk writes, data migration | `YFex.Data` | [`YFex.Data/README.md`](../../../YFex.Data/README.md) |
 | Scope identity and scoped overrides | `YFex.Tenancy` | [`YFex.Tenancy/AGENTS.md`](../../../YFex.Tenancy/AGENTS.md) |
 | Scope-specific implementation selection | `YFex.CustomLogic` | [`YFex.CustomLogic/AGENTS.md`](../../../YFex.CustomLogic/AGENTS.md) |
-| Shape validation, pure business-rule evaluation | `YFex/src/Validation` | [`validation/README.md`](../internal/validation/README.md) |
-| CQRS contracts and dispatch | `YFex/src/Cqrs` | [`docs/public/cqrs.md`](../public/cqrs.md) |
-| Event bus, offline outbox, RPC | `YFex/src/Messaging` | [`docs/public/messaging.md`](../public/messaging.md) |
-| Reactive state, navigation, framework-neutral UI contracts | `YFex/src/State`, `src/Navigation`, `src/UI` | [`docs/index.md`](../index.md) |
+| Shape validation, pure business-rule evaluation, expression language | `YFex.Validation`, `YFex.Rules`, `YFex.Expressions` | [`validation/README.md`](../internal/validation/README.md) |
+| CQRS contracts and dispatch | `YFex.Cqrs` | [`docs/public/cqrs.md`](../public/cqrs.md) |
+| Event bus, offline outbox, RPC, CQRS approvals, rules admin | `YFex.Messaging` | [`docs/public/messaging.md`](../public/messaging.md) |
+| Reactive state, navigation, MVVM base ViewModels, framework-neutral UI contracts | `YFex.State`, `YFex.NavigatR`, `YFex.Mvvm`, `src/UI` | [`docs/index.md`](../index.md) |
 | Accounts, sign-in (password, PIN, codes by e-mail/SMS/WhatsApp; Google/Microsoft/OIDC), sessions and tokens; the app-side client (`.Client`) and offline bridge (`.Offline`) | `YFex.Authentication` (P1–P4 built) | [`YFex.Authentication/README.md`](../../../YFex.Authentication/README.md), [`authentication/README.md`](../internal/authentication/README.md) |
 | Permission evaluation and actor identity | `YFex.Authorization` | [`YFex.Authorization/README.md`](../../../YFex.Authorization/README.md) |
 | Discoverable actions for search and AI | `YFex.Capabilities` | [`YFex.Capabilities/README.md`](../../../YFex.Capabilities/README.md) |
