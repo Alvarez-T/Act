@@ -87,7 +87,7 @@
       "docs": ["YFex/docs/internal/installations"] },
     { "id": "YFex.Privacy", "name": "Privacy", "group": "identity", "status": "building", "progress": 38,
       "summary": "Data classification on value-object types ([Sensitive], DataSensitivity in core), masks, scrubbing; later consent by purpose, pseudonyms, crypto-shredding and data-subject rights.",
-      "next": "TextScrubber + logging Redaction and the Web credential leak done 2026-11-05. PortableSecretStore sealed 2026-11-05. Tier 1 remainder: value-object detectors (Cpf/Telefone TryFindIn), Profiling scrubber/hashing, UI mask presenter. Tier 2 is built with the features that need it (health, loyalty, rights, AI). Runtime types live in core; the repo holds only the generator.",
+      "next": "TextScrubber + logging Redaction and the Web credential leak done 2026-11-05. PortableSecretStore sealed and IExtractable (Cpf/Telefone, TextScrubber.Add<T>) built 2026-11-05. Tier 1 remainder: Profiling scrubber/hashing, UI mask presenter. Tier 2 is built with the features that need it (health, loyalty, rights, AI). Runtime types live in core; the repo holds only the generator.",
       "docs": ["YFex/docs/internal/privacy", "YFex.Privacy/README.md"] },
     { "id": "YFex.Licensing", "name": "Licensing", "group": "identity", "status": "proposed", "progress": 0,
       "summary": "Vendor-signed licences on top of Installations: products, modules (= permission sets), seats, activation lists, trusted-time expiry and grace, Authorization masking.",

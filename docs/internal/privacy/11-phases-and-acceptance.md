@@ -203,3 +203,37 @@ capability assertion flipped), Ai.Api.Tests 9, Platform.Windows.Tests 11 unchang
 **Next (Tier 1 remainder):** value-object detectors (`Cpf`/`Telefone` `TryFindIn` + `Add<T>()`), Profiling `PrivacyScrubber` →
 `TextScrubber`, UI mask presenter.
 
+### Tier 1 remainder, part 4 — `IExtractable<TSelf>`: value objects find themselves in text (2026-11-05)
+
+User decisions: finding a value in text is a core contract shared by Privacy, Profiling, scraping and Search (not a member of
+`IClassifiedData<T>`); name `IExtractable<TSelf>`, spans only (one interface; a UTF-8 sibling only when a consumer needs it), the method
+returns the parsed value and its position (06 §4).
+
+**Done**
+
+- YFex core `Values/IExtractable.cs`: `static abstract bool TryExtract(ReadOnlySpan<char> text, out TSelf value, out int start,
+  out int length)`. Types only.
+- YFex.Domain: `Cpf.TryExtract` (hand-written span scan, no regex: `11144477735`, `111.444.777-35`, `111444777-35`, check digits,
+  not glued to digits/letters or to a number separator followed by a digit), `Telefone.TryExtract` (generated regex, DDD required;
+  unformatted only as an 11-digit mobile or with 55; country code dropped). No allocation without a match (Telefone allocates its
+  digit string on a match).
+- YFex.Privacy: `ExtractableDetector<T>` (`T : IExtractable<T>, IClassifiedData<T>`; label = type name in lower case; masks with the
+  type's own `TryWriteMasked`, so `***.444.777-**` like a typed Cpf), `TextScrubberBuilder.Add<T>(label, prefilter)`,
+  `ITextDetector.TryWriteMask` default member (custom detectors may supply their own mask).
+- YFex.Logging: `RedactionBuilder.Detect<T>(label, prefilter = LongDigitRun)`.
+
+**Deviation:** the plan said "logging drops `LongDigitRuns` by default". Logging is domain-agnostic and cannot register `Cpf` itself,
+so the default stays fail-closed; an app that registers its documents drops the fallback:
+`.Redaction(r => r.Detect<Cpf>().Detect<Telefone>().BuiltInDetectors(BuiltInDetectors.All))`.
+
+**Gotcha:** allocation gates were flaky: tier-0/OSR code of the scan loops allocates for several rounds while tiering up. Both gates
+(Entity.Public, Privacy) now measure in a helper method and repeat until a round allocates 0 B (max 20 rounds); a real allocation never
+settles.
+
+**Counts:** YFex.Tests 234, YFex.Entity.Public.Tests 35 (+29), YFex.Privacy.Tests 55 (+14), YFex.Privacy.Generator.Tests 18,
+YFex.Logging.Tests 66 (+1), YFex.Logging.Generator.Tests 16. AOT: Privacy smoke (+3 extraction checks) and Logging smoke, 0 IL
+warnings, exit 0. `yfex.slnx` does not restore (pre-existing: it lists the missing `YFex.System.Tests.csproj`).
+
+**Next (Tier 1 remainder):** Profiling `PrivacyScrubber` → `TextScrubber` (+ `Add<Cpf>()`); UI mask presenter. Later implementers of
+`IExtractable`: `Rg`, `Cnpj` (public, not registered for redaction), EAN, NCM, NF-e key for Search and scraping.
+

@@ -88,6 +88,23 @@ with `Regex.EnumerateMatches(ReadOnlySpan<char>)` (a `ValueMatchEnumerator`, no 
 
 ## 4. Country-specific documents come from the value objects (⚑P18)
 
+> **Decided 2026-11-05 (supersedes `TryFind` on `IClassifiedData<T>` and `TryFindIn` below):** finding a value in text is not a
+> privacy concept, so it gets its own contract in YFex core (types only), used by Privacy, Profiling, DataMining (scraping) and
+> Search alike:
+>
+> ```csharp
+> public interface IExtractable<TSelf> where TSelf : IExtractable<TSelf>
+> {
+>     /// The first valid occurrence in text: the parsed value and where it is.
+>     static abstract bool TryExtract(ReadOnlySpan<char> text, out TSelf value, out int start, out int length);
+> }
+> ```
+>
+> `Cpf`, `Telefone` (and later `Rg`, `Cnpj`, EAN, NCM, NF-e key) implement it in YFex.Domain. Privacy adds
+> `TextScrubber.Add<T>() where T : IExtractable<T>, IClassifiedData<T>`; non-personal types (EAN, NCM, CNPJ) implement only
+> `IExtractable<T>`. Returning the parsed value lets scraping and Search use it directly and lets the scrubber mask (later
+> pseudonymize) with the type's own rules. The sketches below keep the old names for history.
+
 The library is domain-agnostic, so it does not know CPF. `Cpf`, `Telefone`, `Rg` and `Cnpj` in YFex.Domain **already know how to
 parse and validate themselves**. They expose detection through the contract (02 §6). The scrubber calls it through a generic detector:
 
