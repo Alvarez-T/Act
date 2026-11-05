@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection;
 using YFex.Authorization.Public;
 
 namespace YFex.NavigatR;
@@ -16,6 +16,17 @@ public sealed class Navigator : IDisposable
     private readonly IViewModelPolicyProvider? _authPolicies;
     private readonly IPolicyEvaluator? _authEvaluator;
     private readonly IPrincipalAccessor? _authPrincipal;
+
+    // Optional re-check (authorization-consolidation 04 §3): when IAuthorizationSignals is registered, a change of the caller's
+    // permissions re-checks the active page on the navigator's synchronization context; a page that became forbidden is closed.
+    private readonly IAuthorizationSignals? _authSignals;
+    private readonly SynchronizationContext? _authContext;
+
+    /// <summary>
+    /// Raised when an authorization re-check (<see cref="RecheckAuthorizationAsync"/>, or a signalled permission change) closed the
+    /// active page because its route became forbidden. The navigator already moved back to the nearest page still allowed.
+    /// </summary>
+    public event Action<NavigationDenied>? ActivePageDenied;
 
     internal Guid Id { get; } = Guid.NewGuid();
     public NavigationHistoryPolicy HistoryPolicy { get; internal set; } = NavigationHistoryPolicy.PruneForwardOnBranch;
@@ -67,6 +78,13 @@ public sealed class Navigator : IDisposable
         _authPolicies = scope.ServiceProvider.GetService<IViewModelPolicyProvider>();
         _authEvaluator = scope.ServiceProvider.GetService<IPolicyEvaluator>();
         _authPrincipal = scope.ServiceProvider.GetService<IPrincipalAccessor>();
+        if (_authPolicies is not null && _authEvaluator is not null && _authPrincipal is not null
+            && scope.ServiceProvider.GetService<IAuthorizationSignals>() is { } signals)
+        {
+            _authSignals = signals;
+            _authContext = SynchronizationContext.Current;
+            signals.Changed += OnAuthorizationChanged;
+        }
 
         // Optional scope context — present only when YFex.Tenancy is wired. Drives per-tenant/org/user
         // route overrides (design §4). Absent → base route resolution, unchanged.
@@ -76,19 +94,85 @@ public sealed class Navigator : IDisposable
     private readonly YFex.Tenancy.IScopeContext? _scopeContext;
 
     // Gate 2 — sync visibility check run after the ViewModel TYPE is resolved and BEFORE the
-    // ViewModel is constructed, so a denied route never builds (or prefetches) its VM. Returns true
-    // (allowed) when authorization is not wired or the VM has no navigation policy.
-    private bool IsNavigationAllowed(Type viewModelType, out string? deniedReason)
+    // ViewModel is constructed, so a denied route never builds (or prefetches) its VM. Returns null
+    // (allowed) when authorization is not wired or the VM has no navigation policy; otherwise the
+    // denial with the evaluator's verdict and its default text.
+    private NavigationDenied? CheckNavigation(Type viewModelType)
     {
-        deniedReason = null;
-        if (_authPolicies is null || _authEvaluator is null || _authPrincipal is null) return true;
-        if (!_authPolicies.TryGetPolicy(viewModelType, out var policy)) return true;
-        if (_authEvaluator.IsVisible(policy, _authPrincipal.Current)) return true;
+        if (_authPolicies is null || _authEvaluator is null || _authPrincipal is null) return null;
+        if (!_authPolicies.TryGetPolicy(viewModelType, out var policy)) return null;
+        var caller = _authPrincipal.Current;
+        if (_authEvaluator.IsVisible(policy, caller)) return null;
 
-        deniedReason = policy.FirstRequiredPermission.Value is { Length: > 0 } permission
-            ? $"Requires {permission}"
-            : "Not authorized.";
-        return false;
+        var verdict = _authEvaluator.Authorize(policy, caller);           // hidden: name the reason (sync, no resource)
+        if (verdict.IsAllowed) verdict = AuthorizationVerdict.Forbidden(new Denial(DenialKind.ResourceDenied));
+        return new NavigationDenied(DenialText(verdict), verdict);
+    }
+
+    /// <summary>Default denial text from the verdict: "Requer: {catalog display name}" when a permission is missing.</summary>
+    internal static string DenialText(in AuthorizationVerdict verdict)
+    {
+        if (verdict.TryGetValue(out Denial denial)
+            && denial.Kind is DenialKind.MissingPermission or DenialKind.RestrictedWhileImpersonating
+            && denial.Missing.Value.Length > 0)
+            return "Requer: " + PermissionCatalogs.DisplayText(denial.Missing.Key);
+        return verdict.Describe();
+    }
+
+    private void OnAuthorizationChanged(AuthorizationChange change)
+    {
+        if (_authPrincipal is null || !change.Concerns(_authPrincipal.Current.Actor.Subject)) return;
+        if (_authContext is null || SynchronizationContext.Current == _authContext) _ = RecheckAuthorizationAsync();
+        else _authContext.Post(static state => _ = ((Navigator)state!).RecheckAuthorizationAsync(), this);
+    }
+
+    /// <summary>
+    /// Re-checks the active page against its route policy (authorization-consolidation 04 §3). When it became forbidden the page
+    /// is closed: the navigator moves back to the nearest earlier page that is still allowed (entries after it are released), or
+    /// clears the history when none is; the nav pane gets <c>OnNavigationDenied</c> and <see cref="ActivePageDenied"/> is raised.
+    /// Called automatically on <see cref="IAuthorizationSignals"/> changes of the current caller when signals are registered.
+    /// </summary>
+    /// <returns>The denial when the active page was closed; null when it is still allowed (or there is none).</returns>
+    public async Task<NavigationDenied?> RecheckAuthorizationAsync(CancellationToken ct = default)
+    {
+        if (_cursor < 0 || _cursor >= _history.Count) return null;
+        var active = _history[_cursor];
+        var denied = CheckNavigation(active.ResolvedViewModelType ??= ResolveViewModelType(active.Route));
+        if (denied is null) return null;
+
+        int target = -1;
+        for (int i = _cursor - 1; i >= 0; i--)
+        {
+            var candidate = _history[i];
+            if (CheckNavigation(candidate.ResolvedViewModelType ??= ResolveViewModelType(candidate.Route)) is null) { target = i; break; }
+        }
+
+        if (target >= 0)
+        {
+            await MoveToIndexAsync(target, ct);                          // fires OnClosed of the closed entries
+            for (int i = _history.Count - 1; i > target; i--)
+            {
+                var closed = _history[i];
+                closed.OnClosed?.Invoke();
+                closed.OnClosed = null;
+                _pool.Remove(closed);
+                if (closed.State != NavigationEntryState.Released) closed.Release();
+            }
+            _history.RemoveRange(target + 1, _history.Count - target - 1);
+        }
+        else
+        {
+            foreach (var closed in _history)
+            {
+                closed.OnClosed?.Invoke();
+                closed.OnClosed = null;
+            }
+            ClearHistory();
+        }
+
+        _navPane?.OnNavigationDenied();
+        ActivePageDenied?.Invoke(denied);
+        return denied;
     }
 
     public NavigationTask NavigateTo(IRoute route, CancellationToken ct = default)
@@ -151,7 +235,7 @@ public sealed class Navigator : IDisposable
                 var vmType = ResolveViewModelType(route);
 
                 // Gate 2 — do not prefetch (construct the VM for) a route the user may not open.
-                if (!IsNavigationAllowed(vmType, out _))
+                if (CheckNavigation(vmType) is not null)
                 {
                     token.Cancel();
                     _activePrefetches.Remove(token);
@@ -468,10 +552,10 @@ public sealed class Navigator : IDisposable
         var vmType = prefetchedEntry?.ResolvedViewModelType ?? ResolveViewModelType(route);
 
         // Gate 2 — sync permission check before the ViewModel is resolved/created.
-        if (!IsNavigationAllowed(vmType, out var denyReason))
+        if (CheckNavigation(vmType) is { } authorizationDenied)
         {
             _navPane?.OnNavigationDenied();
-            return NavigationResult.Deny(denyReason);
+            return authorizationDenied;
         }
 
         var navigable = prefetchedEntry?.NavigableInstance ?? ResolveNavigable(vmType);
@@ -514,10 +598,10 @@ public sealed class Navigator : IDisposable
         var vmType = prefetchedEntry?.ResolvedViewModelType ?? ResolveViewModelType(route);
 
         // Gate 2 — sync permission check before the ViewModel is resolved/created.
-        if (!IsNavigationAllowed(vmType, out var denyReason))
+        if (CheckNavigation(vmType) is { } authorizationDenied)
         {
             _navPane?.OnNavigationDenied();
-            return NavigationResult.Deny(denyReason);
+            return authorizationDenied;
         }
 
         var navigable = prefetchedEntry?.NavigableInstance ?? ResolveNavigable(vmType);
@@ -588,10 +672,10 @@ public sealed class Navigator : IDisposable
         var vmType = prefetchedEntry?.ResolvedViewModelType ?? ResolveViewModelType(route);
 
         // Gate 2 — sync permission check before the ViewModel is resolved/created.
-        if (!IsNavigationAllowed(vmType, out var denyReason))
+        if (CheckNavigation(vmType) is { } authorizationDenied)
         {
             _navPane?.OnNavigationDenied();
-            return new NavigationDenied(denyReason);
+            return authorizationDenied;
         }
 
         var navigable = prefetchedEntry?.NavigableInstance ?? ResolveNavigable(vmType);
@@ -753,6 +837,7 @@ public sealed class Navigator : IDisposable
 
     private INavigable ResolveNavigable(Type viewModelType)
     {
+        NavigatorLocator.Set(this);
         var instance = _scope.Resolve(viewModelType)
             ?? throw new InvalidOperationException(
                 $"DI scope could not resolve '{viewModelType.FullName}'.");
@@ -797,6 +882,7 @@ public sealed class Navigator : IDisposable
 
     public void Dispose()
     {
+        if (_authSignals is not null) _authSignals.Changed -= OnAuthorizationChanged;
         ClearHistory();
         _scope.Dispose();
     }

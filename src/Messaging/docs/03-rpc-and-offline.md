@@ -129,6 +129,22 @@ Implement your own for domain-specific merges.
 
 `RpcEventBus` composes the local `DefaultEventBus` with an `IRemoteEventBus`. `Publish`/`PublishAsync` deliver locally **and** forward across the wire; a server listener delivers inbound remote events into the local bus. Cross-process event records must be `[MemoryPackable]` (generator diagnostic **YFRPC0001** flags omissions).
 
+## Offline-capable commands with YFex.Offline (sibling repo)
+
+The outbox above queues a command and replays it later as the **current** caller. YFex.Offline (offline Phase 3, 2026-10-17/19) builds
+on hooks this library exposes, without Messaging knowing it:
+
+- `.Offline(o => o.RecordsFact().Consumes(…).ClaimsUnique(…))` in aggregate configuration (stored in the Cqrs `MessageFeatures` slot);
+  a central-only command dispatched without central returns `ErrorKind.Unavailable` (wire v6) instead of a generic failure.
+- `IOfflineAdmission` runs before an offline handler (budget reservation, unique claim; `Abandon` when the handler throws);
+  `IOutboxEnqueueObserver` turns each queued entry into a **signed envelope** (installation, sequence, actor of the offline sign-in,
+  trusted time, cited bundle versions); `IOutboxReplayRoute` replays it through `IOfflineIntake` (`UseRpc()`), so central runs it **as the
+  envelope's actor, as of the decision time**, exactly once (receipts kept ≥ 30 days by `YFex.Offline.Data`).
+- Server side, `IIdempotencyStore` can be durable and shared by central nodes: `services.AddYFexOfflineData(connections).UseSqlIdempotency()`
+  (results kept by type through `IdempotencyResultCodecs`).
+
+Design: `docs/internal/offline` (README, 08, 11 §5).
+
 ---
 
 ## Rules of thumb

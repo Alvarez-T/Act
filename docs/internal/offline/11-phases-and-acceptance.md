@@ -236,7 +236,7 @@ without the broker each one spends only its own share (06 §4.1).
 | **4b** ✅ 2026-10-29 | Site sessions: the sealed `authentication.verifiers` bundle (D7.2, newest version only), broker verification of code + PIN/secret with lockout and TPM re-wrap (D7.1), broker-signed sessions, D1 flag + per-site "offline profile only", D8 step-up records, terminal sign-in through the broker in `Site` mode; D7.3/D7.4 on terminals | S2 site column (sign-in part); verifier file useless off the PC |
 | **4c** ✅ 2026-10-30 | Custody: site journal, signed receipts R1, R2 relayed down, forwarding in site-sequence order, hand-over from `Standalone`, backup copy until R2, failover of the terminal between `Site` and `Standalone` | S1; broker lost mid-outage → terminals re-send to central, nothing twice |
 | **4d** ✅ 2026-10-30 | Coordination: reservations from the site grant, broker-signed slices, unique claims, `ApprovalTokenKind.Site` + daily cap, `IFactReconciler<T>` (D5) | S8, S9 |
-| **4e** | Site feed: broker ordering, `ISiteFeedProjection<T>`, peer-to-peer latest-wins without the broker (D2) | S11 |
+| **4e** ✅ 2026-10-30 | Site feed: broker ordering, `ISiteFeedProjection<T>`, peer-to-peer latest-wins without the broker (D2) | S11 |
 | **4f** | Broker choice (ranking on diagnostics, `Active`/`Standby` in the roster, pinning, hysteresis), site time table + `time.*` findings, `YFex.Hosting` with the architecture test, 30-terminal benchmark, TLS negative tests on the channels | S10 and the Phase 4 acceptance list below |
 
 - **⚑O31 ✅ decided 2026-10-19: Installations peer channels** `offline.session`, `offline.coordination`, `offline.custody`,
@@ -1131,3 +1131,57 @@ central raises the High duplicate; R1 v2 names the claim).
 | YFex.Offline.AotSmoke | 0 warnings | **0** IL warnings, exit 0 (+ reserve/claim/bind/slice/approve over `offline.coordination`, R1 v2, slice verify, `OfflineFactFindings`, `AddSiteCoordination` + `KeyValueSiteCoordinationStore` resolved); `-p:SmokeData=true` exit 0 (its 14 IL warnings are all inside MemoryPack, pulled by YFex.Data) |
 
 **Next:** the rest of 4e (feed), then 4f; both in their own sessions.
+
+### Phase 4e — DONE 2026-10-30 (Claude; the user said "continue the next phase of Offline", on top of the committed 4c/4d `cba0e8c`)
+
+**Built** (the rest of 4e; the ordering key, the ranking snapshot and factor B were built in "Phase 4e (part)")
+
+| Item | Where |
+|---|---|
+| `offline.feed` wire v1 (golden): `SiteFeedMessage` = envelope bytes · session? · R1? (`SiteFeedCodec`, strict); push topics `SiteFeedTopics.Entry` (stream `entry/{installation}/{key}`) and `Ranking` (stream `ranking`) | `YFex.Offline/Feed/SiteFeedProtocol.cs` |
+| Feed key: `.SharedWithSite<TProjection>(key: c => …)` (`SiteFeedShare.Key`); without a key every change is its own key and applies once, in feed order. `SiteFeedEntry.DecidedWithoutCoordinator` | `Commands/` |
+| Terminal `SiteFeed`: checks (command marked **and** switched on in the manifest; origin in the signed roster, not revoked, envelope signed by its roster key; session = the envelope's, of the origin, signed by the origin or a roster broker, valid at the decision; R1 signed by a roster broker over these bytes; without R1 only from the origin itself on `Mesh = AllInstallations`), decode through `ISiteFeedCommandReader`, order, project; `Refused` event, `Shown(command, key)`; the broker's ranking through `AcceptRanking` (roster `Active` broker's key, new `SiteFeedRankingHolder.Accept(…, evidencePublicKey)`) | `Feed/SiteFeed.cs` |
+| Winner per key (a function of the set, so every terminal converges): latest entry per installation (installation sequence); among changes decided **with** the coordinator (`Site` + R1) the highest site sequence; that one and the changes decided **without** it go through `SiteFeedOrdering.TryWinner` (trusted time, ranking inside the margin, lower id). The origin's own change is not projected unless it wins back its key after another change was applied | same |
+| `SiteFeedPublisher` (from `OfflineEnvelopes.CreateAsync`, best effort): notes the terminal's own change; with no usable coordinator on a mesh site pushes the entry (no R1) to every other roster terminal on `offline.feed`. `SiteFeedChannel`: the terminal's `offline.feed` handler (coordinator pushes → its link → the feed, in order; other terminals' entries → the feed) | `Feed/SiteFeedPublisher.cs`, DI (`AddYFexOffline`) |
+| `OutboxSiteFeedCommandReader`: decodes the payload with the generated outbox delegate and a dispatcher that only keeps the command (no reflection); registered by `UseRpc()`, which also passes the publisher to `OfflineEnvelopes` | `YFex.Offline.Rpc/OfflineTerminal.cs` |
+| Broker `SiteFeedService` + `AddSiteFeed()`: `SiteCustodyService.Taken` hook → pushes shared envelopes with R1 and the session (from the hand-over, an earlier one, or the journal); signs and pushes the ranking at start and every 5 min when the scores changed (`SiteFeedOptions.RankingInterval`, `HardwareEvidenceKey` until Installations carries it) | `YFex.Offline.Broker/SiteFeed.cs`, `SiteCustody.cs`, DI |
+| Central: Low finding `feed.decided-without-coordinator` for a shared command decided in `Standalone` (D2 review) | `OfflineFindings.cs`, `OfflineReconciliation.cs` |
+
+**Closes:** S11 (the override applied by its handler on CAIXA-01; R1 and the push; CAIXA-02 applies it in seconds; a later change wins on every terminal; CAIXA-03 catches up in site order and ends on the same price; replays change nothing) and its variant (forged R1, tampered payload, missing or foreign session, relayed entry without R1, broker-only roster, unshared command: all refused, nothing applied). D2: three changes with the broker off converge on the same winner in all six arrival orders; inside the margin the ranking ties and the lower id decides; when the broker returns, the relayed entries (now with R1) keep the winner; central raises one review finding per change.
+
+**Deviations**
+1. The terminal does not re-check that the actor's snapshot holds the command's permission (it would need the app's command → permission map on the feed path): it checks the session; the projection repeats the app's guardrails, and central re-checks the permission as of the decision.
+2. Feed state on the terminal is in memory: after a restart the broker's catch-up brings the entries again (projections apply by key, so a repeat changes nothing). Entries pushed terminal to terminal have no catch-up of their own; the broker relays them with R1 when it returns.
+3. The broker's push store keeps one push per entry (capacity 100 000 in memory); the feed key is the app's, so the broker cannot compact by it.
+4. The broker pushes a shared envelope even when its session cannot be found (logged); terminals refuse it (`NoSession`). Sessions are re-sent with every hand-over until delivered, so this needs a session central accepted and the journal forgot before the envelope arrived.
+5. `SiteFeedPublisher`'s terminal-to-terminal push is tested through `SiteFeed.ReceiveAsync`, not over a real peer connection (`FriendConnection` has no test double); the TLS/LAN path is 4f's channel tests.
+6. Factor A (time health) still waits for 4f; the ranking carries factor B only.
+
+**Tests**
+
+| Suite | Before | After |
+|---|---|---|
+| YFex.Offline.Tests | 139 | **144** (+5 `ReplayTests` feed: S11 end to end; forged and foreign entries; D2 convergence, ranking inside the margin, broker return and central's review; mesh origin-only and no push in `Site` mode; golden feed-entry wire + strict decoding) |
+| YFex.Offline.AotSmoke | 0 warnings | **0** IL warnings, exit 0 (+ feed wire, `SiteFeedService` push, ranking against the roster key, `SiteFeed` refusal, `AddSiteFeed` resolved); `-p:SmokeData=true` not re-run (Data untouched) |
+
+**Next:** 4f (broker choice, site time table and factor A, `YFex.Hosting` with the architecture test, 30-terminal benchmark, TLS negative tests on the channels); waits for the user's go.
+
+### 2026-10-31 — First Linux run: Raspberry Pi 3, 32-bit ARM (Claude; tests only, no code)
+
+User: run the pending tests on another machine. Same Pi and method as installations 08 §5 (Raspbian 13 trixie, armv7l, 1 GB, OpenSSL
+3.5.7, no TPM; .NET 11 preview.4; `YFex.Offline.Tests` built `-c Release` on Windows with the uncommitted 4e code, copied, `dotnet vstest`
+on the Pi). Closes the "Linux/macOS runs not done" note of Phase 1 for 32-bit Linux.
+
+| Machine | Result | Duration |
+|---|---|---|
+| Windows (development PC) | **144/144** | 8 s |
+| Raspberry Pi 3, Linux arm32 | **143/144** | 10 min 20 s |
+
+- The one failure is `ProxyGoldenTests` and only because the build was copied: it finds the source through `[CallerFilePath]` (a Windows path)
+  and the ActualLab generator through a Windows path in assembly metadata. It checks generated code, not platform behaviour; it needs the
+  repository on the machine that runs it.
+- Everything platform-sensitive passed: SQLite stores of `YFex.Offline.Data` (`libe_sqlite3.so` linux-arm), the encrypted verifier store and
+  lockouts across a restart (file modes on Unix), signatures and the hash chain on OpenSSL, the property test (8 seeds × 80 steps, 2 min 36 s
+  on the Pi), the D2 convergence and the feed tests. No timing budget failed.
+- Not covered: x64/arm64 Linux, macOS, Native AOT on Linux (.NET has no AOT for 32-bit ARM; `linux-x64` can run in WSL), the TPM store, and
+  the `offline.*` channels over a real LAN (4f channel tests; `YFex.Installations.LanProbe` covers the transport only).

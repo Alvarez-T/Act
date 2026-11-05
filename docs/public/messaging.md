@@ -680,6 +680,11 @@ if (result.IsQueued)
     ShowToast("Saved offline. Will sync when connected.");
 ```
 
+**Decisions made offline (YFex.Offline).** When a command must be *decided* on the terminal while central is unreachable — a sale, a
+retained prescription — declare it with `.Offline(o => o.RecordsFact()…)` from the sibling YFex.Offline library. The outbox entry then
+becomes a signed envelope that central replays as the person who signed in offline, as of the time of the decision, exactly once; your view
+models do not change. See `docs/internal/offline/README.md`.
+
 ### Sync Failure Handling
 
 ```csharp

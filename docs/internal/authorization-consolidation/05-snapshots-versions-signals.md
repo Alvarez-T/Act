@@ -50,6 +50,10 @@ key, its subject matches the logged-in user and `Validity` contains `now`. Editi
 `Until`) breaks the signature, and the client falls back to anonymous. *How* the file is stored (OS key store / DPAPI, device binding,
 clock-tampering defence) and how a shop LAN "store server" re-issues snapshots while the cloud is unreachable are decided by the
 separate **`docs/internal/offline/`** design; this design only fixes the format and the verification hook.
+**As used by Offline (Phase 3, 2026-10-17/19):** offline sign-in restores the signed snapshot (`SignedPermissionSnapshots.RestoreAndApplyAsync`,
+adapter `UseSignedSnapshots()` in YFex.Offline.Rpc) and caps the offline session by its validity; the session uploads the exact snapshot it
+started with, and central re-checks it with `PermissionSnapshotSigner.VerifyAsync(wire, audience, at)` at the decision time before replaying
+the envelopes as that actor. The site authorization bundle for the broker is Offline Phase 4.
 
 ## 3. Client side: server-granted permissions drive the UI (new)
 

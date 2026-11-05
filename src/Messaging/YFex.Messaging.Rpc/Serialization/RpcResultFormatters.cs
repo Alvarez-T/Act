@@ -32,7 +32,10 @@ public static class RpcResultFormatters
     // v1/v2 payloads are still read (legacy kinds mapped by RawValueLegacy).
     // v4 (authorization-consolidation Phase 2b): Error = [Union] kind tag + case payload (Forbidden carries the Denial).
     // v5 (authorization-consolidation Phase 4b, decision A5): ApprovalRequired also carries the decision digest (32 bytes).
-    internal const byte Version = 5;
+    // v6 (offline Phase 3, ⚑O13): Error kind 8 Unavailable carries its reason byte.
+    // v7 (authentication P5, request R2): Error kind 9 ReauthenticationRequired carries max age (ticks, int64) + minimum assurance (byte).
+    // v8 (authorization-consolidation ⚑Z20, request R8): Error kind 10 SitePresenceRequired carries max age (ticks, int64).
+    internal const byte Version = 8;
     private static int s_registered;
 
     /// <summary>Registers the non-generic formatters (idempotent; also run by the module initializer).</summary>
@@ -104,6 +107,18 @@ public static class RpcResultFormatters
                 writer.WriteUnmanaged(approval.DecisionFingerprint);
                 Hash256Formatter.Write(ref writer, approval.DecisionDigest);
                 break;
+            case ErrorKind.Unavailable:
+                error.TryGetValue(out Unavailable unavailable);
+                writer.WriteUnmanaged((byte)unavailable.Reason);
+                break;
+            case ErrorKind.ReauthenticationRequired:
+                error.TryGetValue(out ReauthenticationRequired reauthentication);
+                writer.WriteUnmanaged(reauthentication.Requirement.MaxAge.Ticks, (byte)reauthentication.Requirement.Minimum);
+                break;
+            case ErrorKind.SitePresenceRequired:
+                error.TryGetValue(out SitePresenceRequired presence);
+                writer.WriteUnmanaged(presence.Requirement.MaxAge.Ticks);
+                break;
         }
     }
 
@@ -136,6 +151,17 @@ public static class RpcResultFormatters
                 ulong fingerprint = reader.ReadUnmanaged<ulong>();
                 Hash256 digest = version >= 5 ? Hash256Formatter.Read(ref reader) : default;
                 error = Error.ApprovalRequired(approvals, fingerprint, in digest, violations);
+                break;
+            case ErrorKind.Unavailable:
+                error = Error.Unavailable((UnavailableReason)reader.ReadUnmanaged<byte>(), message);
+                break;
+            case ErrorKind.ReauthenticationRequired when version >= 7:
+                long maxAge = reader.ReadUnmanaged<long>();
+                var minimum = (AssuranceLevel)reader.ReadUnmanaged<byte>();
+                error = Error.ReauthenticationRequired(TimeSpan.FromTicks(maxAge), minimum);
+                break;
+            case ErrorKind.SitePresenceRequired when version >= 8:
+                error = Error.SitePresenceRequired(TimeSpan.FromTicks(reader.ReadUnmanaged<long>()));
                 break;
             default: return default;
         }

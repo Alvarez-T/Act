@@ -128,7 +128,7 @@ No `Expression<>`, no reflection → the resilience layer is AoT-clean with no g
 
 ## 4. `YFex.Resilience.Polly`
 
-Translates a `ResilienceSpec` (+ resolved named resource) into a Polly **v8 `ResiliencePipeline`**, composed in order: **rate limiter → bulkhead → circuit breaker → timeout → retry → hedging → fallback** (outermost to innermost per Polly guidance). Caches one pipeline per `(spec, resource)`; stateful strategies built once per named resource. `<IsAotCompatible>true>`; validated like the existing `YFex.Messaging.Rpc.AotSample`. Polly types never appear on any public YFex surface — only inside this package.
+Translates a `ResilienceSpec` (+ resolved named resource) into a Polly **v8 `ResiliencePipeline`**, composed in order: **rate limiter → bulkhead → circuit breaker → retry → timeout → hedging → fallback** (outermost to innermost; the timeout sits inside the retry so it caps each attempt, matching the Timeout policy below). Which outcomes count as transient failures (results such as HTTP 503 included, with a `Retry-After` hint) is decided per call by an optional `IFailureClassifier<T>`; without one, every exception except cancellation is transient. Caches one pipeline per `(spec, resource)`; stateful strategies built once per named resource. `<IsAotCompatible>true>`; validated like the existing `YFex.Messaging.Rpc.AotSample`. Polly types never appear on any public YFex surface — only inside this package.
 
 ### The six policies (detail)
 - **Retry** — re-attempt transient failures; backoff (constant/linear/exponential) + jitter; caps attempts and total delay. Per-operation.

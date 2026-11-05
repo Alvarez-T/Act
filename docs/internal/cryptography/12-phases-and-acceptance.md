@@ -31,6 +31,8 @@
 | Privacy Tier 2 (pseudonyms, vault, intake sealing) | Tier 2 / Phase 4 | 1–2 |
 | Audit chains, anchors, Merkle proofs | 4–6 | 3 |
 | Authorization approval tokens v2 | Z12 phase | 2 |
+| Authentication C1 verify-only RSA, C5 imported P-256 key (⚑AN11) | AN-P3 | **done 2026-10-18** (§5) |
+| Authentication C2 `OneTimePassword` TOTP/HOTP (⚑AN12) | AN-P5 | **done 2026-10-19** (§5, 04 §13) |
 
 ## 3. Phases
 
@@ -103,24 +105,58 @@ primitives (architecture test).
 
 ### Phase 5 — post-quantum and platforms (⚑K10, ⚑K18)
 
-Fleet capability probe (installation registry) → hybrid recipient sealing `0x11` where every target supports ML-KEM. ChaCha20-Poly1305 path
+Per-recipient capability (published with the recipient's public key; no fleet survey, open question 1) → hybrid recipient sealing `0x11` when the recipient supports ML-KEM. ChaCha20-Poly1305 path
 for devices without AES-GCM. Android Keystore and Linux libsecret providers. Re-check `CompositeMLDsa` status. WASM storage encryption
 design (WebCrypto interop).
 
-**Platform signing-key stores (14, designed 2026-10-07, nothing built; requested by installations 09 §5):**
-- `FileSigningKeyStore` + `StoreSigningKeysInFiles` + the `FileKeyRingStore` permission fix F-P1 — **approved, waiting for the user's
-  go to code**. Acceptance: 14 §2.6 (Windows run + a Linux run; AOT 0 warnings; architecture test green).
-- `YFex.Cryptography.Apple` (`AppleSigningKeyStore`, later the Keychain root provider) — spike on a Mac (14 §5.4).
-- Linux TPM 2.0 through `tpm2-openssl` — needs approval of a native dependency (open question 8).
+**Status 2026-10-18 (§5):**
+- ✅ Hybrid recipient sealing `0x11` — **BUILT and tested** (Windows 11 with ML-KEM): `PostQuantumKeys` per ring (Automatic default),
+  automatic sealer choice with a forced overload, 96-byte hybrid ring keys, frozen golden + spec re-derivation test.
+- ✅ ChaCha20-Poly1305 path — built in Phase 0 (`SealingAlgorithm.ChaCha20Poly1305`, used only without AES-GCM).
+- ⏳ Linux libsecret root key (`SecretServiceRootKeyProvider`) and Linux TPM store — **WRITTEN, not run on Linux** (14 §8.1).
+- ⏳ Apple Keychain root key and Secure Enclave store — **WRITTEN, not run on macOS** (14 §8.3).
+- Open: Android Keystore (needs a .NET-for-Android project with Java interop, so not in a BCL-only package), WASM design, `CompositeMLDsa`
+  (still `[Experimental]` in .NET 11).
+- **2026-10-20:** Android Keystore **designed** as the variant package `YFex.Cryptography.Android` (⚑K19, 14 §9; requested by installations
+  11 for offline handhelds). Not coded; a real-device spike comes first (installations 09 §4 R7).
+- ✅ **2026-10-27:** `YFex.Cryptography.Android` **BUILT** (14 §9.4–9.5): 11/11 device tests on the Android 15 and 16 emulators;
+  real-handheld run pending (`androidKit test … --serial`).
+
+**Platform signing-key stores (14; requested by installations 09 §5):**
+- ✅ `FileSigningKeyStore` + `StoreSigningKeysInFiles` + the `FileKeyRingStore` permission fix F-P1 — **BUILT 2026-10-18** (§5). Acceptance
+  14 §2.6 met on Windows; the Linux run (Unix modes, direct `CopyWithPrivateKey`) is still pending.
+- ✅ Generic `ISecretStore` + `FileSecretStore` (open question 3) — **BUILT 2026-10-18**. Automation's adoption is Automation's step.
+- ✅ Certificate sources (open question 7) — **BUILT 2026-10-18** (§5): `ISigningCertificate`/`ISigningCertificateSource`,
+  `Pkcs12CertificateSource` (sealed secrets), `.Windows` `WindowsCertificateStoreSource` (A1 installed / A3 token), builder
+  `SigningCertificatesFrom*`. `.IcpBrasil` with Fiscal; PKCS#11 on demand.
+- ⏳ `YFex.Cryptography.Apple` (`AppleSigningKeyStore`, `KeychainRootKeyProvider`) — **WRITTEN 2026-10-18, verification pending on a Mac**
+  (14 §8.3, `scripts/verify-macos.sh`).
+- ⏳ Linux TPM 2.0 through `tpm2-openssl` (`YFex.Cryptography.Linux` `LinuxTpmSigningKeyStore`) — **WRITTEN 2026-10-18, verification pending
+  on Linux** (14 §8.1–8.2, `scripts/verify-linux.sh`; swtpm works).
 
 ## 4. Open questions for the user (not blocking Phase 0)
 
-1. **POS fleet:** what Windows versions and hardware run on pharmacy checkouts today (Windows 10 vs 11, TPM 2.0 present)? This decides how
-   often keys get `Hardware` protection and when post-quantum sealing can start.
+1. ✅ **Withdrawn 2026-10-18 (user): the library is generic, not built for one deployment.** There is no fleet survey to answer.
+   Protection and post-quantum use are decided **per host at run time**: `CryptographyCapabilities` reports what the OS supports, the
+   root-key ladder takes the best available level (`Hardware` → `OperatingSystem` → `File`/`Memory`), and a sender seals with `0x11` only
+   when the recipient's published capability says ML-KEM. An app that runs many hosts (e.g. through YFex.Installations) may record the
+   reported capabilities at enrollment, but that is the app's choice, not a library input. (Original question: Windows versions and TPM
+   presence on POS checkouts.)
+   **User 2026-10-18: "or manually configurable too".** Every automatic choice has an explicit override in the composition root:
+   root key `UseCngRootKey(preferHardware: false)` / `UseFileRootKey` / `UseEnvironmentRootKey` / `UseRootKey(custom)`; signing keys
+   `StoreSigningKeysInCng(preferHardware: …)` / `StoreSigningKeysInFiles` / `StoreSigningKeysIn(factory)`; secrets `StoreSecretsInFiles` /
+   `StoreSecretsIn(factory)`. When hybrid sealing `0x11` is built (Phase 5), the sender's algorithm gets the same treatment: automatic from
+   the recipient's capability by default, forced classic or hybrid by configuration.
 2. ✅ **Answered 2026-10-05: nothing uses storage encryption yet.** So there is no F1 history to report, and `yfex-storage report`
    is dropped. (Original question:) **F1 history:** has any store already used `AddYFexStorageEncryption(OsKeyStore)` in production or pilots? If so, Phase 0's
    `yfex-storage report` should run there before upgrading, and the deploy rule (09 §2) should be communicated.
-3. **Automation's DPAPI store:** keep `DpapiSecretStore` (package already in use there) or move Automation to the shared CNG root?
+3. ✅ **Decided 2026-10-18 (user: "go with the best approach … configurable, a good interface API that doesn't need to know its
+   implementation or how Automation is working so external can use it").** The library owns a generic, Automation-agnostic
+   **`ISecretStore`** (`GetAsync`/`SetAsync`/`DeleteAsync` + `GetTextAsync`/`SetTextAsync`) with `FileSecretStore` (sealed files under
+   the configured root key: TPM/CNG on Windows, 0600 file or environment key elsewhere) and `InMemorySecretStore` (.Testing); the app
+   picks the store with `StoreSecretsInFiles(…)` or `StoreSecretsIn(factory)` (a vault client later). Automation then implements its own
+   `ISecretStore` contract over it (or switches to it) and migrates `DpapiSecretStore`/plain-text `*.secret` files once (read old →
+   `SetAsync` → delete old). That step is Automation's, not done here. (Original question: keep `DpapiSecretStore` or move to the CNG root?)
 4. **Web.Data tenants with their own key lifecycle (10 §6):** needed at launch, or is the derived per-tenant key enough for now?
    *(2026-10-05: user "maybe"; benefits explained in chat. Nothing to build: `ScopedKeyRings.CreateDedicatedRingAsync` (Phase 1)
    already gives one tenant its own ring on demand, and `ApiEndpointSecretMigration` re-seals into it.)*
@@ -133,15 +169,385 @@ design (WebCrypto interop).
    TPM support). Recommendation: a P-256 root (128-bit security for a 10-year root; TPM 2.0 guarantees P-256 but not P-384). Otherwise
    P-384 must be added to `SignatureAlgorithm` (core) and to the signing stores. ✅ **User 2026-10-05: P-256.** Offline 03 §3 is
    amended by the Offline session (handoff in §5).
-7. **Certificate sources (13 §6):** approve the `ISigningCertificate` / `ISigningCertificateSource` abstraction and a
+7. ✅ **Approved 2026-10-18 (user: "agree"):** abstraction + PKCS#12 and Windows-store sources first; `YFex.Cryptography.IcpBrasil` when
+   Fiscal needs it; PKCS#11 when a real token/HSM case appears (13 §6). **Abstraction + PKCS#12 + Windows-store sources BUILT 2026-10-18**
+   (§5). (Original question:) **Certificate sources (13 §6):**
+   approve the `ISigningCertificate` / `ISigningCertificateSource` abstraction and a
    `YFex.Cryptography.IcpBrasil` satellite (CNPJ/CPF from OtherName, ICP-Brasil roots, LCR)?
    *(2026-10-07: a generic PKCS#11 signing store (14 §6 route B) is the natural shape for A3 tokens and HSMs on every OS. Consider it
    with this question.)*
 8. **Linux TPM 2.0 (14 §6):** approve a native dependency for a `.Linux` TPM store: distro packages `tpm2-openssl` + `tpm2-tss`, access to
    `/dev/tpmrm0` (the `tss` group), keys through the BCL `SafeEvpPKeyHandle.OpenKeyFromProvider` (route A, recommended; it also gives TLS
    with the TPM key)? Until then Linux keys are `FileSigningKeyStore` (`KeyProtection.File`).
+   ✅ **Approved 2026-10-18 (user): route A.** The dependency is optional at run time: the `.Linux` store reports `Hardware` only when the
+   `tpm2` provider loads and `/dev/tpmrm0` is accessible, otherwise the app falls back to `FileSigningKeyStore`. Spike per 14 §6
+   (swtpm in a container or a Linux PC with a TPM); not started — no Linux environment on the development PC yet.
+   **2026-10-18 (user: create it, keep the testing pending):** `YFex.Cryptography.Linux` written and compiled; run pending (14 §8).
 
 ## 5. Implementation log
+
+### 2026-10-27 — Named recipient keys (`IRecipientKeyStore`, installation key-agreement key) BUILT
+
+User: "yes" (build the CNG key-agreement key before Installations I5). Design and findings: 14 §10. Backup:
+`C:\Temp\cryptography-backup\recipient-keys-2026-10-27`.
+
+- Main library (additive): `IRecipientKeyStore`, `SealedRecipientKeyStore` (any `ISecretStore`, hybrid when ML-KEM), builder
+  `StoreRecipientKeysInFiles` / `StoreRecipientKeysIn` / `HasRecipientKeyStore`, `IRecipientKey.Protection` (default member, `Memory`).
+  IVT for `.Windows` (on-curve check).
+- `.Windows`: `CngRecipientKeyStore` + `Interop.NCrypt` (LibraryImport: import flags 0, secret agreement, raw `TRUNCATE`) and
+  `StoreRecipientKeysInCng()`. The BCL `ECDiffieHellmanCng` cannot agree with a TPM key (probe in 14 §10).
+- Tests: cryptography 241, Windows 20 (TPM case ran here), AOT smoke 0 IL warnings.
+- Seen again: the `KeyRingTests.Two_processes_creating_the_ring_at_once…` flake (`store.key` sharing violation) failed once in a
+  full run and passed on rerun. The `StoreKeyFile.UnwrapAsync` retry follow-up still stands.
+
+### 2026-10-27 — `YFex.Cryptography.Android` (⚑K19) BUILT
+
+User: "yes you can start it". Backup: `C:\Temp\cryptography-backup\android-2026-10-27` (docs, `RootKeyProviders.cs`,
+`cryptography.slnx`, README, installations 09/11).
+
+- **Design gaps closed first** (14 §9.4): Auto Backup → key folders under `NoBackupFilesDir` (`AndroidKeyPaths`); lost keys →
+  `AndroidKeystoreKeyLostException`, recovery = re-enroll; runtime → no assumption, trim-clean, NativeAOT evaluated with the app.
+- **Package** `src/YFex.Cryptography.Android` (`net11.0-android`, API 26+, `IsTrimmable`, analyzers on): `AndroidKeystoreSigningKeyStore`
+  (`ICertificateKeyStore`; digests NONE + SHA-256; `GetOrCreateAsync(name, attestationChallenge)`, `ReadAttestationChain`; TLS through an
+  in-memory `PrivateKeyEntry`, so the stored attestation chain stays), `AndroidKeystoreRootKeyProvider` (Keystore AES-256-GCM key wraps
+  each blob; StrongBox first), `AndroidKeyPaths`, builder `StoreSigningKeysInAndroidKeystore()` / `UseAndroidKeystoreRootKey()`.
+- **Main library (additive):** `RootKeyFormat.AndroidKeystore = 8`; 05 §7 updated.
+- **Deviation from the 9.2 sketch:** no static `AndroidKeyAttestation`; attestation is on the store (callers never see aliases). The
+  root key wraps blobs itself instead of wrapping a root-key file (the key never leaves the Keystore).
+- **Solution:** own `cryptography.android.slnx` (needs the Android workload); `cryptography.slnx` unchanged, so it still builds on
+  Linux/macOS.
+- **Tests:** `tests/YFex.Cryptography.Android.DeviceTests` (11 instrumentation tests, `androidKit test`): **11/11 on Android 16 ATD and
+  Android 15 emulators**; Release build with trimming 0 warnings; Windows suite 235/235.
+- **Pending:** a real handheld (StrongBox/TEE protection, timing, Google attestation root, StrongBox with `DIGEST_NONE`), then
+  installations I6 adopts it (`YFex.Installations.Android`).
+
+### 2026-10-27 — Wycheproof and NIST ACVP test vectors (⚑K14 data, approved by the user)
+
+The user asked what the pending vectors were and approved the download from trustworthy sources only. Sources: Project Wycheproof
+at `github.com/C2SP/wycheproof` (its community home; `google/wycheproof` points there), commit `d17cc89f…` (2026-10-23),
+Apache-2.0; NIST `github.com/usnistgov/ACVP-Server`, commit `975de31e…` (2026-08-12), NIST software notice. Files were downloaded
+into an empty scratch folder, inspected, then copied to `tests/YFex.Cryptography.Tests/Vectors/` (4.1 MB; commit, licence and SHA-256
+of every original file in `Vectors/README.md`). Wycheproof files are unchanged; the ACVP files are trimmed to ML-KEM-768 (noted, as
+the NIST notice asks). Backup: `C:\Temp\cryptography-backup\test-vectors-2026-10-27`.
+
+**Rule kept:** a vector file is copied only when its inputs reach a library code path. HKDF, HMAC and PBKDF2 vectors would test only
+the BCL behind our own labels (the RFC KATs already cover the byte order), so they were not copied.
+
+| Test | Vectors | Library path |
+|---|---|---|
+| `WycheproofTests` signatures (7 files) | ECDSA P-256 SHA-256 P1363; RSA PKCS#1 v1.5 and PSS (MGF1-SHA-256, salt 32) at 2048/3072/4096 | `ExternalPublicKeys.TryCreate` (DER) and `TryCreateEcdsaP256` (same id) → `SignatureVerifier.VerifyHash` |
+| ECDH | `ecdh_secp256r1_ecpoint` (355: edge cases, invalid-curve points, compressed and twist points) | ring `IRecipientKey.TryDeriveSharedSecret` (the on-curve check) |
+| AES-GCM | the 256-bit key / 96-bit nonce / 128-bit tag groups (66, incl. modified tags) | `LegacyFormats.OpenPersistenceVersion2` |
+| ML-KEM-768 | `mlkem_768_test` (201: decapsulation from the seed, implicit rejection, wrong key/ciphertext lengths); `mlkem_768_encaps_test` (265, incl. modulus overflow) | hybrid 96-byte ring key (`PublicKey`, `TryDecapsulate`); `RecipientSealing.Seal` refuses a bad encapsulation key |
+| `AcvpMLKemTests` | keyGen (25), encapsulation-key check (10) | ring key publishes the FIPS 203 `ek` from d ‖ z; `Seal` accepts/refuses as ACVP says |
+| `AcvpMLKemTests` (platform) | keyGen `dk`, decapsulation (10), decapsulation-key check (10) | BCL `MLKem` only: the library never imports an expanded key. ACVP encapsulation with a fixed m is not testable (the BCL takes no m) |
+
+**Result:** all 15 new tests green on Windows 11 (ML-KEM available); no library change was needed. Cryptography tests **235**
+(before 220). The ML-KEM tests return early on a host without ML-KEM, like the hybrid tests. No product code or AOT surface changed.
+
+**Found (not caused by this work, not fixed):** `ArchitectureTests.Only_YFex_Cryptography_uses_the_cryptographic_primitives_it_owns`
+fails because it scans the whole `C:\Dev\YFex` tree and finds `ECDsa.Create()` in the R7 probe scratch app
+`_ignore/android-probe/Probe.cs` (2026-10-21). **Fixed the same day (user: skip it):** `_ignore` added to
+`ArchitectureTests.SkippedDirectories` (scratch spikes and probes, not shipped code). Cryptography tests 235/235 green.
+
+### 2026-10-19 — Authentication request C2 (`OneTimePassword`, TOTP/HOTP) BUILT
+
+Requested by authentication 14 §2.2 (⚑AN12) for AN-P5; built by the AN-P5 session (no cryptography session was running; the user allows
+changing other libraries with their docs aligned). Backup: `C:\Temp\authentication-backup\P5\other\YFex.Cryptography.tar`.
+
+- `Authentication/OneTimePassword.cs`: `OneTimePassword` (HOTP RFC 4226 §5.3 dynamic truncation, TOTP RFC 6238 with T0 = epoch,
+  floor steps before the epoch), `OneTimePasswordParameters` (default struct = 6 digits / 30 s / SHA-1 / window 1; validated `init`
+  properties), `OneTimePasswordCheck`, `OneTimePasswordAlgorithm`, RFC 4648 base32 `EncodeSecret`/`TryDecodeSecret` (case-insensitive,
+  spaces/hyphens/padding ignored, non-zero trailing bits refused). Shape in 04 §13.
+- Architecture test: `HMACSHA1.HashData` added to the banned APIs (regex `HMACSHA(1|256|384|512)\.HashData`); no allow-list entry.
+
+**Tests:** cryptography **220** (before 190; +30 `OneTimePasswordTests`): RFC 4226 appendix D (10 HOTP values), RFC 6238 appendix B (all
+18 SHA-1/SHA-256/SHA-512 vectors at 8 digits, plus the 6-digit default), window ±1 accepted and ±2 refused unless configured, step
+replay (`Replayed` for the same step and for an older step after a newer one was accepted), malformed codes (length, letters, spaces,
+non-ASCII digits), base32 RFC 4648 §10 vectors and round trips, parameter bounds. AotSmoke **37/37** (new: RFC 6238 vector + replay),
+0 IL warnings, exit 0.
+
+### 2026-10-18 — Authentication requests C1 (verify-only RSA for external keys) and C5 (fixed P-256 key from PKCS#8) BUILT
+
+Requested by authentication 14 §2.2 (⚑AN11) for AN-P3 (OpenID Connect). The user asked the Authentication session to build both here
+("add C1 … and C5 … to YFex.Cryptography with tests and the AOT check, then start AN-P3"); the cryptography sessions were idle.
+Backup: `C:\Temp\cryptography-backup\c1-c5-2026-10-18`. Golden generator: `C:\Temp\yfex-edits\rsa_golden.py`.
+
+**C1 — verify-only RSA:**
+- Core `SignatureAlgorithm.RsaPkcs1Sha256 = 2` (JWA RS256) and `RsaPssSha256 = 3` (PS256: MGF1-SHA-256, 32-byte salt). Documented as
+  verify-only; every signer (`SigningKeyRing`, file/CNG/TPM/Apple/in-memory stores) still throws `NotSupportedException` for them.
+- `SignatureVerifier` pools ECDsa **or** RSA per key id (the cache entry also matches the record's algorithm). RSA signature length
+  = modulus length (else `Malformed`); a value above the modulus → `Invalid`. Default allowed set unchanged (ES256 only), so no existing
+  verifier (Offline bundles, Installations enrollment, Messaging.Rpc central time) accepts RSA — those readers cast the algorithm byte
+  from the wire, and an RSA record now fails as `AlgorithmNotAllowed`.
+- New `ExternalPublicKeys`: `TryCreateRsa(n, e, algorithm, out record, validity?)`, `TryCreateEcdsaP256(x, y, …)`,
+  `TryCreate(algorithm, spki, …)`. Untrusted input → false, never throws. The SubjectPublicKeyInfo is re-encoded by the platform and
+  the id is `PublicKeyRecord.KeyIdOf` (a JWK `kid` is the caller's to map). Limits (internal `RsaKeys`): 2 048–8 192 bits, odd modulus,
+  odd exponent ≥ 3 and ≤ 32 bits; leading zero bytes of `n` ignored; off-curve P-256 points refused (Windows CNG throws
+  `PlatformNotSupportedException`, caught).
+- `CryptographyCapabilities.IsSupported` reports both RSA algorithms (not in the browser).
+
+**C5 — fixed imported signing key** (deviation from the request's "into a signing ring": rings rotate and a ring key id is ours,
+while an issuer's key must never rotate here, so it is a standalone key):
+- `ImportedSigningKey : ISigningKey` — `FromPkcs8(der)`, `FromPem(text)` (first `-----BEGIN PRIVATE KEY-----` block; Apple `.p8`),
+  unencrypted PKCS#8 P-256 only (P-384, RSA, encrypted PKCS#8, SEC1 `EC PRIVATE KEY`, trailing bytes → `ArgumentException`). Holds the
+  32-byte scalar, one pooled ECDsa; `Dispose` zeroes it and later signing throws `ObjectDisposedException`. `Id` = `KeyIdOf(SPKI)`,
+  `ToRecord()` for a verifier directory.
+- `ImportedSigningKeyExtensions` on `ISecretStore`: `ImportSigningKeyAsync(name, pem)` validates before storing the DER;
+  `GetSigningKeyAsync(name)` → key or null (`Protection` = the `FileSecretStore`'s; a corrupt secret → `CryptographicException`).
+
+**Tests:** cryptography **190** (before 175; +9 `ExternalKeyTests`, +6 `ImportedSigningKeyTests`), Windows 15, Xml 21 green;
+architecture test green with no new allow-list entry.
+- Independent RS256 and PS256 golden: a 2 048-bit key and signatures made in pure Python (EMSA-PKCS1-v1_5 / EMSA-PSS by hand, no
+  crypto library) over a JWS signing input. The RFC 7515 A.3 ES256 vector is read through `TryCreateEcdsaP256` from the JWK `x`/`y`.
+- Also covered: RSA refused by a default verifier and by a PS256-only verifier; padding confusion (a PS256 signature against an RS256
+  record); an RSA key mislabelled ES256; wrong signature lengths; a value above the modulus; 1 024-bit keys (through `ExternalPublicKeys`
+  and as a raw directory record); exponents 1, even and empty; a modulus over 8 192 bits; 2 048/3 072/4 096-bit platform signatures;
+  brainpool and off-curve EC points.
+- Imported keys: a PEM bundle with other blocks; a file secret store across a restart (the private scalar is absent from every file);
+  64 parallel signatures; double dispose.
+
+AotSmoke **36/36**, 0 IL warnings, exit 0 (new checks: an external RSA key verifies RS256 only when allowed; a PKCS#8 key is imported,
+sealed, reloaded and signs). Consumers still build: Authentication (112 tests green), Installations, Offline.
+
+| Benchmark (ShortRun, in-process, this PC) | Mean | Allocated |
+|---|---|---|
+| raw `RSA.VerifyHash` PKCS#1 2 048 | 11.83 µs | 0 B |
+| `SignatureVerifier` RS256 2 048, key cached | 11.87 µs (ratio 1.00) | 0 B |
+| `SignatureVerifier` PS256 2 048, key cached | 12.41 µs | 0 B |
+| `ExternalPublicKeys.TryCreateRsa` 2 048 (per key on a JWKS refresh) | 11.06 µs | 3.8 KB |
+| `ImportedSigningKey.SignHash` P-256 | 116 µs | 200 B |
+
+Not done: Linux/macOS runs (as for the rest of the library); RS384/RS512/ES384 are not requested (no provider in authentication 06
+needs them).
+
+### 2026-10-18 — Phase 5: hybrid recipient sealing `0x11` BUILT; `.Linux` and `.Apple` WRITTEN (run pending on those OSes)
+
+User: "continue next phase", then "for Linux/Mac … just create it and keep the testing pending on those platforms, so when possible I
+will test it", then the order "0x11 first (fully tested here), then .Linux, then .Apple, both opt-in with pending verify scripts and
+checklists". Backups: `C:\Temp\cryptography-backup\phase5-hybrid` (code, `docs\`, memory). Edit scripts `C:\Temp\yfex-edits\p5_*.py`.
+
+**Hybrid `0x11` (05 §3 as built, 08 §2 note):**
+- `RecipientSealing`:
+  - Writes and opens `0x11`. Header 1 171 bytes, overhead 1 187 (`HybridHeaderLength`, `HybridOverhead`).
+  - IKM = ECDH secret ‖ ML-KEM secret. Salt = header after the key id ‖ key id (the classic rule generalised; classic bytes are unchanged
+    and the 2026-10-05 golden still rebuilds).
+  - `ChooseAlgorithm(recipient)`: hybrid when the recipient published it and this host runs ML-KEM, else classic to the P-256 half.
+  - The forced overloads `Seal(…, algorithm)` and `Seal(…, destination, algorithm)` are the manual override (12 §4 question 1).
+    Forcing the hybrid needs a hybrid key and ML-KEM here.
+  - `GetSealedLength(recipient, n)` and an exact `GetPlaintextLength(sealedValue)`. The `int` overload is now an upper bound.
+  - `TryReadHeader` reads both algorithms.
+  - The sender's `[ThreadStatic]` cache also keeps the imported ML-KEM encapsulation key.
+- `RecipientPublicKey`:
+  - `MLKem768Length = 1184` and `HybridLength = 1249`.
+  - A hybrid key publishes P-256 point ‖ ML-KEM encapsulation key.
+- `IRecipientKey.TryDecapsulate` is a default interface member (false), so existing implementers are unaffected.
+- `RecipientKeyRing`:
+  - A 96-byte key is hybrid: one pooled ECDH and one pooled ML-KEM instance. It opens both `0x01` and `0x11`.
+  - On a host without ML-KEM it publishes only the P-256 half, so sealers never pick a format the host cannot open.
+- `SecretKey`:
+  - `KeyAgreement` accepts 32 or 96 bytes (`HybridKeyAgreementLength`).
+  - `Generate(KeyAgreement, 96)` = platform P-256 scalar ‖ **independent** random ML-KEM seed. Deriving the seed from the scalar would let
+    a quantum attacker who recovers the scalar break both halves.
+- `KeyRingOptions.PostQuantum(PostQuantumKeys)`:
+  - New enum, Automatic (the default) / Always / Never.
+  - `GeneratedKeyLength()` decides the size of new keys.
+  - Existing keys keep their kind; a ring turns hybrid at its next rotation.
+  - `Always` on a host without ML-KEM throws `PlatformNotSupportedException`.
+- `CryptographyCapabilities.IsSupported(Hybrid)` = AES-GCM + ML-KEM, and not the browser.
+- `AlgorithmUnavailable.RecipientAlgorithm`: an init property stored in the union's unused number field. It reports "this host lacks
+  ML-KEM" without a new union case, so existing exhaustive switches still compile.
+- **Behaviour change:** a `KeyAgreement` ring created on an ML-KEM host is now hybrid by default. No consumer uses recipient sealing yet
+  (grep 2026-10-18). Mixed server farms (some nodes without ML-KEM) should set `PostQuantum(Never)` or make every node ML-KEM capable.
+
+Tests: cryptography **174** (+9 `HybridRecipientSealingTests`; 1 updated expectation in `RecipientSealingTests`). The new tests cover:
+- a frozen value (2026-10-18) that must keep opening;
+- the layout re-derived with BCL primitives (ECDH, `MLKem.Decapsulate`, `HKDF`, `AesGcm`);
+- the automatic choice and the forced classic;
+- forced hybrid to a classic key, an invalid ML-KEM key, and wrong lengths;
+- tampering of the ephemeral key, the ML-KEM ciphertext (first/middle/last byte), the ciphertext and the tag; a wrong context;
+  truncation; a relabelled algorithm byte; a classic twin key with the same id;
+- ring policy classic → hybrid at the next rotation, with the old value reported `NeedsReseal`;
+- a hybrid key that survives a file-store restart;
+- key sizes and the unavailable-outcome round trip;
+- 16 threads × 2 recipients.
+
+The existing ring tests (rotation, destroy, file restart) now run with hybrid keys on this host and are green. AotSmoke **34/34**, 0 IL
+warnings (+3 hybrid checks; the existing classic check now pins `PostQuantum(Never)`). Measured (Windows 11, Release, Stopwatch over
+2 000 runs): seal 0.8–1.1 ms and open 0.6–0.8 ms for both algorithms. ML-KEM (≈ 11 µs encapsulation, 18 µs decapsulation, 15 µs key
+import) is lost in the ECDH noise; a sealed CPF is 1 198 bytes instead of 110.
+
+**`YFex.Cryptography.Linux` (14 §6 route A, 12 §4 question 8): WRITTEN, NOT RUN ON LINUX.**
+- `LinuxTpmSigningKeyStore : ICertificateKeyStore`:
+  - Creates P-256 keys in the TPM with non-variadic OpenSSL 3 calls in a private library context with `tpm2` + `default` loaded.
+  - Encodes them to a `TSS2 PRIVATE KEY` PEM (the TPM-wrapped blob) and stores the blob 0600 under `ProtectedFiles.NamedPath`; first
+    writer wins.
+  - Opens the blob with `SafeEvpPKeyHandle.OpenKeyFromProvider("tpm2", "object:<path>")` → `ECDsaOpenSsl`. That gives signing and
+    `CopyWithPrivateKeyAsync` for TLS. Protection `Hardware`.
+  - `IsAvailable()` checks Linux, `/dev/tpmrm0` read/write **or** `TPM2OPENSSL_TCTI` (swtpm), and that the tpm2 provider loads.
+- `SecretServiceRootKeyProvider : ProvidedRootKeyProvider` (id `0x06`, `OperatingSystem`):
+  - The 32-byte key is stored as base64 in the default collection through `secret_password_storev/lookupv/clearv_sync`.
+  - It uses a native `SecretSchema` (LP64 layout written by hand) and a `GHashTable` of attributes.
+  - The password buffers are wiped.
+- Builder: `StoreSigningKeysInLinuxTpm(dir)`, `UseSecretServiceRootKey(name)`.
+
+**`YFex.Cryptography.Apple` (14 §5): WRITTEN, NOT RUN ON macOS.**
+- `AppleSigningKeyStore : ISigningKeyStore`:
+  - Secure Enclave first; otherwise, when allowed, a non-extractable Keychain key.
+  - Keys are found by application tag. Uses `SecKeyCreateRandomKey`, `SecItemCopyMatching`, `SecKeyCreateSignature` (DER → P1363),
+    `SecKeyCopyExternalRepresentation` (→ SPKI) and `SecItemDelete`.
+  - Protection comes from the key's `kSecAttrTokenID`.
+  - `IsAvailable()` and `IsSecureEnclaveAvailable()` (the latter makes a non-permanent probe key).
+  - Signing only, not TLS (14 §5.3).
+- `KeychainRootKeyProvider` (id `0x07`): a generic password, login keychain by default or the data-protection keychain with an
+  entitlement; `Delete`.
+- Builder: `StoreSigningKeysInAppleKeychain(…)`, `UseKeychainRootKey(…)`.
+- CoreFoundation and Security go through `LibraryImport`. The `kSec…` constants are read from the frameworks' exports. A `CFHandle`
+  SafeHandle releases each object once.
+
+**Shared:**
+- `RootKeyFormat.SecretService = 6` and `AppleKeychain = 7`.
+- The `ProvidedRootKeyProvider(key, protection, id)` constructor changed from `private protected` to `protected`, so OS-keyring
+  providers in satellite packages can derive from it.
+- Core `InternalsVisibleTo` `.Linux`/`.Apple` for `ProtectedFiles`.
+- `cryptography.slnx` lists both packages and their test projects.
+- AotSmoke references both. Its platform checks run when the feature is present; `YFEX_REQUIRE_*=1` turns a missing feature into
+  `[FAIL]`.
+- Scripts `scripts/verify-linux.sh` and `scripts/verify-macos.sh`, checklist in 14 §8.
+
+Tests:
+- Linux.Tests 6 and Apple.Tests 7 pass on Windows. Only the guards, the builder registration, and the Apple DER → P1363 and SPKI
+  conversions (checked against the BCL) really ran. The TPM, keyring and Keychain tests return early here.
+- On their OS those tests fail instead of skipping when the matching `YFEX_REQUIRE_*` variable is set.
+- Both packages compile with `IsAotCompatible` (analyzers on), and the Windows AOT publish that references them has 0 IL warnings.
+- Windows 15 and Xml 21 are unchanged and green.
+- Consumers still build: Persistence.Encryption, Installations, Offline, Authentication, Authorization, Time.Cryptography, Web.Data.
+
+Found on the way (not fixed, not reproduced in 12 more runs): one run of `KeyRingTests.Two_processes_creating_the_ring_at_once…` failed
+with "store.key is being used by another process". The likely cause is a Windows sharing violation on a reader while another writer
+renames `store.key` into place (antivirus or `MoveFileEx`). A bounded retry on sharing violations in `StoreKeyFile.UnwrapAsync` would
+harden it. This is a follow-up.
+
+Not done / pending:
+- ML-KEM KAT: there are no NIST ACVP vectors offline. Adding them needs a download of the vector files; ask the user.
+  **✅ Done 2026-10-27** (user approved the download): see "2026-10-27 — Wycheproof and NIST ACVP test vectors" below.
+- The Linux and macOS runs (14 §8).
+- Android Keystore: needs a .NET-for-Android project, so it does not fit a BCL-only package.
+- WASM design.
+- `CompositeMLDsa` (still `[Experimental]`).
+
+### 2026-10-18 — signing-certificate sources (open question 7) BUILT
+
+Approved shape (13 §6, user 2026-10-18), built as the caller-facing syntax shown to the user before coding. Backups:
+`C:\Temp\cryptography-backup\certificate-sources` (same relative paths). Edit scripts: `C:\Temp\yfex-edits\certsrc_*.py`.
+
+Built:
+- `YFex.Cryptography/Certificates/SigningCertificates.cs`:
+  - `ISigningCertificate : IDisposable`: `Certificate` (private key attached when local), `PrivateKey` (`AsymmetricAlgorithm`, i.e. RSA
+    or ECDsa, owned by the handle), `Protection`.
+  - `ISigningCertificateSource.GetAsync(purpose, ct)` returns **null when nothing is configured** for the purpose (the same rule as
+    `ISecretStore.GetAsync`). A configured certificate that cannot be used throws `SigningCertificateException` (a `CryptographicException`).
+    Expired certificates are returned: validity is the caller's policy.
+  - `SigningCertificate`: the ready handle. `(certificate, protection)` takes the attached key. `(certificate, privateKey, protection)` is
+    for remote signers and checks that the key matches the certificate by its public parameters.
+  - `Pkcs12CertificateSource(ISecretStore, secretNamePrefix = "certificates/", storage = null)`: `ImportAsync(purpose, pkcs12, password)`
+    validates the file before storing it, plus `RemoveAsync` and `GetAsync`.
+  - Secret format (05 §7 family): version `0x01` · password (UTF-8 **bytes**, not `WriteText`, whose NFC would change a non-NFC password) ·
+    the original PKCS#12 bytes. Password and file are one secret, so a renewal replaces both in one write.
+  - Loads with `Pkcs12LoaderLimits.Defaults` and the password as a pooled `char[]` (zeroed). Keys report `KeyProtection.File`.
+  - `storage` overrides the key storage flags (default `CertificateFiles.DefaultStorage`, now `internal`). Use `DefaultKeySet` when the
+    certificate must be a Windows TLS credential (Schannel refuses ephemeral keys, 14 §2.5).
+- `CryptographyBuilder`: `SigningCertificatesFromSecrets(prefix, storage)` uses the configured `ISecretStore`, and gives a clear error
+  when no secret store was chosen. `SigningCertificatesFrom<TSource>(factory)` also registers `TSource` as itself, so callers reach
+  `Import`/`Add`. `HasSigningCertificateSource`. The last choice wins: the earlier source's concrete registration is removed too.
+  Nothing is registered by default.
+- `.Windows/WindowsCertificateStoreSource.cs` (`[SupportedOSPlatform("windows")]`):
+  - `Add(purpose, thumbprint, location = CurrentUser, storeName = My)` (adds or replaces) and `Remove(purpose)`, in a concurrent map, so
+    mappings can change at run time.
+  - Static `Open(thumbprint, …)` for apps that keep the mapping themselves.
+  - Thumbprints may be SHA-1 (40 hex digits, as certmgr shows them) or SHA-256 (64). Spaces, `:`, `-` and the invisible U+200E/U+200F/U+FEFF
+    copied from the certificate dialog are ignored.
+  - Errors: missing certificate (removed, or the middleware unpublished it with the token unplugged), certificate without a key, and a
+    key that cannot be opened all throw `SigningCertificateException`.
+  - Protection: the CNG `Impl Type` property (hardware or removable flag), else the provider name (Platform Crypto / Smart Card KSP),
+    gives `Hardware`; a CSP key uses `CspKeyContainerInfo.HardwareDevice || Removable`. Everything else is `OperatingSystem`.
+  - Builder: `SigningCertificatesFromWindowsStore(store => store.Add(…))`.
+- `.Xml`: `XmlSignature.SignEnveloped(referenced, ISigningCertificate, algorithm, parent)` overload (RSA only, `ArgumentException` otherwise).
+
+Tests:
+- **Cryptography 165** (+10, `SigningCertificateTests`):
+  - import/get/sign; restart over `FileSecretStore` (the bytes are sealed on disk); null and remove; renewal; wrong password, non-PKCS#12
+    and key-less files refused with nothing stored; non-NFC password and no-password files; ECDSA;
+  - tampered version, trailing or truncated record;
+  - handle key mismatch and remote handle;
+  - DI: last wins, the earlier concrete registration removed, nothing by default, clear error without a secret store.
+- **Windows 15** (+5, `WindowsCertificateStoreSourceTests`, unique names, certificates and keys removed afterwards):
+  - software CNG key by SHA-1 thumbprint as pasted from the dialog, and by SHA-256 thumbprint → `OperatingSystem`;
+  - **TPM** CNG key → `Hardware` (stands in for a token's hardware KSP);
+  - legacy **CSP** key (`PROV_RSA_AES`, the shape many A3 middlewares register) signs SHA-256;
+  - errors and run-time remapping; DI.
+- **Xml 21** (+5): a PKCS#12-source certificate signs byte-identically to the SignedXml goldens (4 cases); remote-signer handle; ECDSA refused.
+- `ArchitectureTests` green, no allow-list change.
+- AotSmoke **31/31**, 0 IL warnings. New checks: a PKCS#12 certificate from sealed file secrets through DI (reopened by a second provider)
+  signs and verifies an NF-e; an unconfigured purpose returns null; a Windows-store certificate by thumbprint through DI signs an NF-e.
+
+Measured (Windows 11, Release, Stopwatch over 200 runs, probe `C:\Temp\certprobe`): `Pkcs12CertificateSource.GetAsync` **3.6 ms**, of which
+`LoadPkcs12` (PBES2, 2 048 iterations) is 3.0 ms; plus an RSA-2048 signature, 4.0 ms. That is fine per document (NFC-e at the sale), so
+there is no cache. A caller signing a batch keeps one handle for the whole batch.
+
+Not verified / gotchas:
+- No real A3 token or smart card was available. The token path is covered by a TPM KSP key (hardware `Impl Type`) and a software CSP
+  key; a vendor middleware's PIN dialog and "token unplugged" behaviour were not exercised.
+- An old smart-card CSP of type `PROV_RSA_FULL` cannot sign SHA-256 (eSocial). NF-e's SHA-1 works. A minidriver (Smart Card KSP) does both.
+- `RSACng.Key` / `ECDsaCng.Key` return the instance the algorithm object itself uses. **Never dispose it** (a first draft did, and every
+  later operation threw `ObjectDisposedException`).
+- Python heredocs in bash turn `\u0301` into real characters (known gotcha); the test's non-NFC password is now written with escapes.
+
+Not in scope (unchanged): `YFex.Cryptography.IcpBrasil` (with Fiscal), PKCS#11 (on demand), cloud-provider adapters (each its own package,
+over `SigningCertificate(certificate, remoteRsa, protection)`). Possible follow-ups: an unattended PIN for A3 (CNG `SmartCardPin` /
+`CspParameters.KeyPassword` from an `ISecretStore`), and a per-purpose composite source (A1 for one emitter, A3 for another).
+
+### 2026-10-18 — `FileSigningKeyStore`, F-P1, generic `ISecretStore` (open questions 1, 3, 7, 8 answered)
+
+User answers: question 1 withdrawn (generic library, manual overrides everywhere), 3 → generic secret store, 7 → approved, 8 → approved
+(§4). User go: "YOU can start". Backups: `C:\Temp\cryptography-backup\file-stores-2026-10-18` (code) and `…\questions-2026-10-18` (docs).
+
+Built (all in `YFex.Cryptography` unless noted):
+- `Keys/ProtectedFiles.cs` (internal): owner-only directories (0700) and atomic 0600 writes (temp + write-through + flush + rename,
+  first-writer-wins variant), `TightenFile`, `NamedPath` (the shared `{readable}-{hash8}.ext` rule).
+- `Keys/StoreKeyFile.cs` (internal): the `store.key` create/unwrap shared by every file store (moved out of `FileKeyRingStore`;
+  bytes unchanged). **F-P1 fixed:** `FileKeyRingStore` writes 0600 files in a 0700 directory and narrows an older `store.key` when it opens
+  it; `FileRootKeyProvider` creates a missing directory 0700 (an existing one is the app's and is left alone) and narrows its key file.
+- `Signing/FileSigningKeyStore.cs`: `FileSigningKeyStore : ICertificateKeyStore, IDisposable` + `SigningKeyStoreException`, format 05 §7
+  (the algorithm enters the seal context as its byte in invariant decimal, so an enum rename cannot orphan files). Load checks in the
+  order of 14 §2.3. **Deviation:** each store instance caches the decrypted key and reuses it while the file's bytes are unchanged (the file
+  is still read and compared on every call); returned `ISigningKey` handles are cheap, disposing one only disables it, and they stop
+  working when the store is disposed. Reason: Windows CNG imports an ephemeral P-256 key in 400–550 µs, so an uncached open was 1.7 ms
+  against the 200 µs budget.
+- `Secrets/SecretStores.cs`: `ISecretStore`, `SecretStoreExtensions` (UTF-8 text, buffers zeroed), `FileSecretStore` (`*.sealedsecret`,
+  05 §7), `SecretStoreException`. `.Testing`: `InMemorySecretStore`.
+- `CryptographyBuilder`: `StoreSigningKeysInFiles(dir)`, `StoreSigningKeysIn(factory)`, `StoreSecretsInFiles(dir)`, `StoreSecretsIn(factory)`,
+  `HasSigningKeyStore`, `HasSecretStore`; the last choice wins; nothing is registered unless the app chooses. `.Windows`:
+  `StoreSigningKeysInCng(prefix, machineScope, preferHardware)`. The builder's constructor is now internal (only `BuilderOf` creates it;
+  no caller used it).
+
+Tests: cryptography **155** (+16: `FileStoreTests` — sign/verify, restart, delete/new id, `a/b` ≠ `a_b`, tamper version/ciphertext/tag/key
+id, copied to another name/store, other root, 8 parallel creates on two instances → one key, ring + signing store sharing one `store.key`,
+mutual TLS 1.3 with file keys, cache notices a changed file, secret round trip/restart/rename/tamper/delete, DI last-wins + nothing by
+default, Unix modes (runs only on Unix)), Windows 10, Xml 16; Installations 125 + Windows 6 and Persistence.Encryption 15 still green.
+AotSmoke **28/28**, 0 IL warnings (new: file signing key + file secret through DI, reopened by a second provider). Benchmarks (Windows 11,
+in-process, ShortRun): open an existing file signing key **145 µs** / 2.1 KB; read a 48-byte secret **134 µs** / 2.0 KB (both dominated by the
+file read).
+
+Found and fixed on the way:
+- `CertificateTests.Expiry_not_yet_valid_revocation_and_foreign_roots` failed (`InvalidExtension` instead of `PartialChain`):
+  `CurrentUser\CA` held 102 stale "CN=farmaviva installations" CAs (2026-10-13, from before Installations stopped passing intermediates,
+  §5 2026-10-14). Windows completed the chain through one of them. With the user's OK they were removed, and the test's issuing CA now has
+  a unique name per run.
+
+Pending: the Linux run (14 §4); Automation's adoption of `ISecretStore` (Automation repo); certificate sources (question 7, built the
+same day, entry above); Linux TPM
+spike (question 8).
 
 *(append per phase: date, what was done, deviations from this design, gotchas, test counts, benchmark numbers with the machine)*
 

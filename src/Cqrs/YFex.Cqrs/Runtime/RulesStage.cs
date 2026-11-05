@@ -49,6 +49,12 @@ public abstract class RulesStage
     public abstract Task? TryInvokeRuled<TCommand>(IServiceProvider services, TCommand command, object decision, CancellationToken ct)
         where TCommand : ICommand;
 
+    /// <summary>
+    /// The code-declared approval policy of <c>.RequireApproval</c> on this message, null when none (capabilities show such a
+    /// command as "needs approval"; an <c>IApprovalPolicySource</c> may still change it at run time).
+    /// </summary>
+    public virtual ApprovalPolicy? DeclaredApproval => null;
+
     /// <summary>Runs <paramref name="approvals"/> (<c>.RequireApproval</c>) after this stage accepted the message.</summary>
     internal virtual void AttachApprovals(RulesStage approvals)
         => throw new InvalidOperationException($"{GetType().Name} cannot be combined with another approval stage.");
@@ -80,6 +86,8 @@ public sealed class RulesStage<TMessage, TSituation> : RulesStage where TSituati
     public ApprovalStage<TMessage>? Approvals { get; private set; }
 
     internal override void AttachApprovals(RulesStage approvals) => Approvals = (ApprovalStage<TMessage>)approvals;
+
+    public override ApprovalPolicy? DeclaredApproval => Approvals?.Declared;
 
     public override async ValueTask<RulesOutcome> RunAsync(object message, IServiceProvider services, CancellationToken ct)
     {

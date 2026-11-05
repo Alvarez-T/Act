@@ -174,3 +174,9 @@ YFex.Cryptography** (user, 2026-10-04).
 
 All Phase 4 decisions are confirmed. **4b DONE 2026-10-16** (A9 re-confirmed by the user that day; files, deviations and counts in the 09
 log). Next: 4c (approval-policy table) and Phase 5.
+
+## Handheld decision — CONFIRMED 2026-10-20 (installations [11](../installations/11-mobile-handhelds.md), authentication request R8)
+
+| ⚑ | Decision | Details |
+|---|---|---|
+| **Z20** | **`RequireSitePresence(maxAge)`**: a new `Requirement` case that reads the caller's `presence_at` fact (the last witness-signed presence verified by central, or the local statement offline) and denies with **`DenialKind.SitePresenceRequired`** (carrying `maxAge`) when it is missing or older. Visible (not hidden), like `RecentAuthentication`. **Optional and configurable per command** (user, 2026-10-20). It never reads IP, SSID or network fingerprint. Unknown presence fails closed. | 03 §4 table, 09 Phase 7 |

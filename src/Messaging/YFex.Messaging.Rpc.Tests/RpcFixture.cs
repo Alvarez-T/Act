@@ -38,7 +38,8 @@ public class RpcFixture : IAsyncDisposable
 
     protected RpcFixture(string? connectionSubject, ScopeIdentity connectionTenant,
         Action<YFex.Authorization.AuthorizationConfigurator>? serverAuthorization = null,
-        Action<IServiceCollection>? configureServer = null)
+        Action<IServiceCollection>? configureServer = null,
+        Action<CallContextServerBuilder>? callContext = null)
     {
         ConnectionUser = () => connectionSubject is null ? Users.Anonymous() : Users.Principal(connectionSubject);
         ConnectionTenant = connectionTenant;
@@ -69,7 +70,8 @@ public class RpcFixture : IAsyncDisposable
         server.AddSingleton<WhoAmIHandler>();
         server.AddSingleton<IQueryHandler<ShopAggregate.Queries.WhoAmI, string>>(sp => sp.GetRequiredService<WhoAmIHandler>());
         // D25 validation decorator + D29 call context (the approved syntax).
-        server.UseYFexMessagingRpcServer(rpc => rpc.CallContext(ctx => ctx.FromConnection().OrFromHeader("Authorization").WithTenant()));
+        server.UseYFexMessagingRpcServer(rpc => rpc.CallContext(callContext
+            ?? (ctx => ctx.FromConnection().OrFromHeader("Authorization").WithTenant())));
         server.AddFusion().AddShopAggregateRpcServer();
         configureServer?.Invoke(server);
         _server = server.BuildServiceProvider();

@@ -27,13 +27,23 @@ internal sealed class FakePrincipalAccessor : IPrincipalAccessor
     public IAuthorizationContext Current { get; } = new FakeAuthContext();
 }
 
+// Allows or denies everything; a denial names the policy's first permission (like the real evaluator for a one-permission policy).
 internal sealed class FakeEvaluator(bool allow) : IPolicyEvaluator
 {
-    public bool IsVisible(CompiledPolicy policy, IAuthorizationContext caller) => allow;
+    public bool Allow { get; set; } = allow;
+    public bool IsVisible(CompiledPolicy policy, IAuthorizationContext caller) => Allow;
     public AuthorizationVerdict Authorize(CompiledPolicy policy, IAuthorizationContext caller, object? resource = null)
-        => allow ? AuthorizationVerdict.Allowed : AuthorizationVerdict.Forbidden(new Denial(DenialKind.PolicyDenied));
+        => Allow ? AuthorizationVerdict.Allowed : AuthorizationVerdict.Forbidden(Denial.MissingPermissionOf(policy.FirstRequiredPermission));
     public ValueTask<AuthorizationVerdict> AuthorizeAsync(CompiledPolicy policy, IAuthorizationContext caller, object? resource,
         CancellationToken cancellationToken = default) => new(Authorize(policy, caller, resource));
+}
+
+internal sealed class FakeSignals : IAuthorizationSignals
+{
+    public void PermissionsChanged(string subject) => Changed?.Invoke(new AuthorizationChange(AuthorizationChangeKind.PermissionsChanged, subject));
+    public void AllPermissionsChanged() => Changed?.Invoke(new AuthorizationChange(AuthorizationChangeKind.AllPermissionsChanged, null));
+    public ValueTask RevokedAsync(string subject, CancellationToken cancellationToken = default) => default;
+    public event Action<AuthorizationChange>? Changed;
 }
 
 internal sealed class FakePolicyProvider(Type vmType, CompiledPolicy vmPolicy) : IViewModelPolicyProvider
@@ -50,19 +60,38 @@ internal sealed class FakePolicyProvider(Type vmType, CompiledPolicy vmPolicy) :
 
 public sealed class AuthorizationGateTests
 {
+    private static readonly PermissionKey SettingsView = DeclareSettingsView();
+
     private static readonly CompiledPolicy SettingsPolicy = CompiledPolicy.Compile(
-        PolicyKey.Route(typeof(SettingsViewModel)), [Requirement.Require(new Permission(PermissionKey.Declare("settings.view")))]);
+        PolicyKey.Route(typeof(SettingsViewModel)), [Requirement.Require(new Permission(SettingsView))]);
+
+    // A catalog entry gives the permission its display name ("Requer: Abrir configurações").
+    private static PermissionKey DeclareSettingsView()
+    {
+        var key = PermissionKey.Declare("settings.view");
+        PermissionCatalogs.Register(new AuthorizationManifest([new PermissionEntry(key, "Abrir configurações", null, "Test.SettingsView")]));
+        return key;
+    }
 
     private static (Navigator navigator, FakeNavigation navPane) CreateGated(bool allow)
     {
+        var (navigator, navPane, _, _) = CreateGated(allow, signals: null);
+        return (navigator, navPane);
+    }
+
+    private static (Navigator navigator, FakeNavigation navPane, FakeEvaluator evaluator, FakeSignals? signals) CreateGated(
+        bool allow, FakeSignals? signals)
+    {
+        var evaluator = new FakeEvaluator(allow);
         var (navigator, navPane, _) = NavigatorFactory.Create(services =>
         {
             services.AddSingleton<IViewModelPolicyProvider>(
                 new FakePolicyProvider(typeof(SettingsViewModel), SettingsPolicy));
-            services.AddSingleton<IPolicyEvaluator>(new FakeEvaluator(allow));
+            services.AddSingleton<IPolicyEvaluator>(evaluator);
             services.AddSingleton<IPrincipalAccessor>(new FakePrincipalAccessor());
+            if (signals is not null) services.AddSingleton<IAuthorizationSignals>(signals);
         });
-        return (navigator, navPane);
+        return (navigator, navPane, evaluator, signals);
     }
 
     [Fact]
@@ -86,7 +115,79 @@ public sealed class AuthorizationGateTests
         var result = await navigator.NavigateTo(new SettingsRoute());
 
         var denied = Assert.IsType<NavigationDenied>(result.Value);
-        Assert.Contains("settings.view", denied.Reason);
+        Assert.Equal("Requer: Abrir configurações", denied.Reason);          // catalog display name, from the verdict
+    }
+
+    [Fact]
+    public async Task Denial_carries_the_verdict()
+    {
+        var (navigator, _) = CreateGated(allow: false);
+
+        var denied = Assert.IsType<NavigationDenied>((await navigator.NavigateTo(new SettingsRoute())).Value);
+
+        Assert.True(denied.IsAuthorizationDenial);
+        Assert.True(denied.Verdict.TryGetValue(out Denial denial));
+        Assert.Equal(DenialKind.MissingPermission, denial.Kind);
+        Assert.Equal(SettingsView, denial.Missing.Key);
+    }
+
+    [Fact]
+    public void Denial_text_falls_back_to_the_verdict_description()
+    {
+        Assert.Equal("Authentication required.", Navigator.DenialText(AuthorizationVerdict.Unauthenticated));
+        Assert.Equal("Requer: undeclared.permission",
+            Navigator.DenialText(AuthorizationVerdict.Forbidden(new Denial(DenialKind.MissingPermission, Permission.Parse("undeclared.permission")))));
+    }
+
+    [Fact]
+    public async Task Recheck_closes_a_page_that_became_forbidden_and_returns_to_the_previous_one()
+    {
+        var (navigator, navPane, evaluator, _) = CreateGated(allow: true, signals: null);
+        await navigator.NavigateTo(new HomeRoute());
+        await navigator.NavigateTo(new SettingsRoute());
+        NavigationDenied? raised = null;
+        navigator.ActivePageDenied += d => raised = d;
+
+        Assert.Null(await navigator.RecheckAuthorizationAsync());          // still allowed: nothing happens
+        evaluator.Allow = false;                                           // permission revoked
+        var denied = await navigator.RecheckAuthorizationAsync();
+
+        Assert.NotNull(denied);
+        Assert.Same(denied, raised);
+        Assert.Equal("Requer: Abrir configurações", denied!.Reason);
+        Assert.IsType<HomeViewModel>(navPane.LastView);                    // back on the page that has no policy
+        Assert.Single(navigator.Breadcrumb);                               // the forbidden page is gone (no forward to it)
+        Assert.Equal(1, navPane.DeniedCount);
+    }
+
+    [Fact]
+    public async Task Recheck_clears_the_history_when_no_earlier_page_is_allowed()
+    {
+        var (navigator, _, evaluator, _) = CreateGated(allow: true, signals: null);
+        await navigator.NavigateTo(new SettingsRoute());
+        evaluator.Allow = false;
+
+        Assert.NotNull(await navigator.RecheckAuthorizationAsync());
+        Assert.Empty(navigator.Breadcrumb);
+    }
+
+    [Fact]
+    public async Task A_signalled_permission_change_of_the_caller_rechecks_the_active_page()
+    {
+        var (navigator, _, evaluator, signals) = CreateGated(allow: true, signals: new FakeSignals());
+        await navigator.NavigateTo(new HomeRoute());
+        await navigator.NavigateTo(new SettingsRoute());
+        var closed = new TaskCompletionSource<NavigationDenied>(TaskCreationOptions.RunContinuationsAsynchronously);
+        navigator.ActivePageDenied += d => closed.TrySetResult(d);
+
+        evaluator.Allow = false;
+        signals!.PermissionsChanged("someone-else");                       // another subject: ignored
+        Assert.Equal(2, navigator.Breadcrumb.Count);
+        signals.PermissionsChanged("nav-test");                            // the caller of FakePrincipalAccessor
+
+        var denied = await closed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.Equal(DenialKind.MissingPermission, denied.Verdict.Denial.Kind);
+        Assert.Single(navigator.Breadcrumb);
     }
 
     [Fact]

@@ -215,6 +215,10 @@ At build time, creates `FrozenDictionary<Type, Delegate>` for O(1) dispatch. `Fu
 ### Event Channels
 
 Server-side `EventChannelHost<TEvent>`:
+
+> **⚠ Known gap (2026-10-04, still open 2026-11-04):** no `Add…` registers `EventChannelHost<TEvent>` in DI, so server push does not
+> reach clients. Needed by the Jobs Hub transport and the Notifications in-app channel (notifications 05 §1). Messaging task.
+
 - `Append(TEvent)` increments sequence counter, stores event, calls `Computed.Invalidate()`
 - `[ComputeMethod] GetEventsAsync(filter, sinceSeq, ct)` returns events since the given sequence
 

@@ -38,6 +38,12 @@ public enum OfflineFlags : uint
 
     /// <summary>The actor signed in with the app's minimal offline profile (offline 05 §5).</summary>
     OfflineProfile = 1 << 8,
+
+    /// <summary>The operation used more than the terminal's allowance (<c>.WhenExhausted(AllowAndFlag | RequireApproval)</c>, offline 06 §4.1).</summary>
+    OverAllowance = 1 << 9,
+
+    /// <summary>A store-wide unique value was claimed provisionally on a lone terminal (offline 06 §4.3): central is the final authority.</summary>
+    ProvisionalClaim = 1 << 10,
 }
 
 /// <summary>

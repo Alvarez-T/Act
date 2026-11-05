@@ -167,6 +167,10 @@ services.AddYFexOfflineCentral(central => central
 
 Phase 2 builds `AllowanceKey`, the grant computation at central and the signed `offline.allowance` bundle (one per key and site,
 golden-pinned); Phase 3 adds `.Consumes(...)`/`.WhenExhausted(...)` and the per-terminal grants; Phase 4 the broker's slices.
+**As built (Phase 3e, 2026-10-19):** `AllowancePublisher.GrantTerminalsAsync(key, site, holders, subjects)` splits the site amount evenly
+(rounded down to 4 decimals; counts with the remainder to the first holders), one bundle per holder (stream `key/site/holder`, audience the
+holder) that only that installation pulls with its roster. Central keeps every published version and checks spending against the version an
+envelope cited (`AllowancePublisher.IsOverGrantAsync`, wired by `AddYFexOfflineIntake`).
 
 ### 4.2 Caps without budgets
 

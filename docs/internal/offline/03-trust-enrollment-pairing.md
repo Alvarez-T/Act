@@ -6,6 +6,10 @@
 > the build that this file never covered: a TPM key works as a TLS **client** credential but Schannel refuses it as a **server**
 > credential (⚑I25, open), and a macOS listener cannot do TLS 1.3 in .NET 11 (installations 09, ⚑I22 TLS 1.2 fallback).
 >
+> **2026-10-20 (⚑O32):** Android handhelds enroll by a QR on a trusted terminal and work offline as ordinary terminals:
+> installations [11](../installations/11-mobile-handhelds.md) (QR link, sponsor + SAS, offline pairing path through the broker, presence,
+> revocation from any site terminal).
+>
 > **2026-10-05 (⚑N6):** §2–§7 of this file are superseded by the YFex.Installations design ([../installations](../installations/README.md):
 > 02 core types, 04 keys/certificates/enrollment/revocation/pairing/assertion, 05 friends and peer channels). The goals (§1) and
 > alternatives (§8) still hold. Changes: `Site` → `Scope` (roaming installations), `urn:yfex:site:` → `urn:yfex:scope:`, root P-256

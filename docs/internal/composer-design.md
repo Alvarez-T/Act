@@ -691,7 +691,7 @@ already follows.
 | **P3 — Rules & governance** | Live decisions (§8.6, needs `ISituation.Build<TReader>` + non-generic `Evaluate`), Approval/Explain steps, **Rules panel** (dynamic rules, tables, parameters via Rules.Admin; promote-to-rule), scoped definitions, **`YFex.Revisions` extraction + Rules.Admin Enact rename** (C4/C5, §11.1), screen revision kind, extension fields, IR upgraders, device sync, composed screens as capabilities, WPF renderer | P2; Rules.Admin | A tenant authors a screen *and* a dynamic discount rule. The rule is enforced server-side, previewed client-side, and audited; tenant B is unaffected |
 | **P4 — AI** | `ScreenSpecJsonSchema`, MCP tools, generate → check → preview → approve; combined rule + screen proposals | P3 | Natural-language request → validated, previewed, user-approved screen + rule |
 | **P5 — Compiled tier** | Emitter, eject, server build, signing, ALC loader, differential tests (fingerprints) | Benchmarks | Justified by measurements; differential tests green |
-| **P6 — Automations** | Event/schedule-triggered flows (`ComposedFlowJob`), compensation via Orchestration | P3 | Scheduled flow runs under tenant scope with audit |
+| **P6 — Automations** | Event/schedule-triggered flows (a `composer.flow.run` Jobs template, YFex.Jobs Plan D), compensation via Orchestration | P3 | Scheduled flow runs under tenant scope with audit |
 
 Rules' remaining Phase 5 (Avalonia) and Composer P1/P2 share their UI prerequisites. Schedule them
 together so the projection and grid are built once.
@@ -716,7 +716,7 @@ together so the projection and grid are built once.
 | **YFex.Tenancy** | Scoped most-specific lookup still lives in `CustomLogicRegistry` (Rules doc 04 §9 also asked for `ScopedTable<TKey,TEntry>`; not found in source; the `ScopedTableBuilder` in YFex.Data.Tenancy is RLS, a different concern) | Extract the generic scoped lookup into Tenancy; CustomLogic + Composer use it |
 | **Rules.Admin / Rules.Data** (+ Composer) | Revision lifecycle is rules-specific; "publish" naming clashes | Extract **`YFex.Revisions`** (+ `.Data`, `.Sync`) at Composer P3 and rename Publish → Enact (C4/C5, §11.1) |
 | **YFex.Cqrs** | Extension-field carrier | `IExtensible` + pipeline behavior hook (validated with the Validation violation model) |
-| **YFex.Jobs** | Static, generator-registered jobs | Generic `ComposedFlowJob` (payload = flow key + args) |
+| **YFex.Jobs** | ~~Static, generator-registered jobs~~ Plan D templates exist (built 2026-11-03) | Composer registers one template `composer.flow.run` (parameters: flow key + args from the flow's input schema; permission `composer.flow.<key>.run`); admins schedule instances. No one-off `ComposedFlowJob`; AI access via `YFex.Jobs.Capabilities` |
 
 ---
 

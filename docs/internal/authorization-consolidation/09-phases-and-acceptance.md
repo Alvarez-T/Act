@@ -122,7 +122,7 @@ option remap honoured; undeclared table permission fails startup.
 **Acceptance:** ~~golden test of v1 tokens~~ (dropped by A9); `.RequireApproval` round-trip incl. offline device token flagged; refusals
 of 06 scenarios (other decision, other bound value, other scope, expired, tampered). All met — log below.
 
-## Phase 5 — Capabilities, Search, NavigatR, view-model commands (⚑Z19)
+## Phase 5 — Capabilities, Search, NavigatR, view-model commands (⚑Z19) — ✅ DONE 2026-10-29
 
 - Capabilities on `CompiledPolicy` per `PolicyKey`; `ActionGate` `[Union]` + `NeedsApproval`; remove reflection; search filters.
 - NavigatR: verdict-based denial text; optional re-check on signals.
@@ -131,7 +131,7 @@ of 06 scenarios (other decision, other bound value, other scope, expired, tamper
 **Acceptance:** Capabilities 28 / 7 / 5 ≥, NavigatR 129 passed (+ new), State tests unchanged + hook tests; D12 regression test (a
 capability whose message needs two permissions is hidden from a caller holding one); AotSmoke clean.
 
-## Phase 6 — Impersonation (⚑Z14)
+## Phase 6 — Impersonation (⚑Z14) — ✅ DONE 2026-10-29
 
 - `PolicyTenantImpersonationGate`, `ImpersonationRestrictions`, `ActorContext` relation on HTTP; RPC `AllowImpersonation()`;
   `ImpersonationStarted` event.
@@ -144,6 +144,11 @@ denied with `RestrictedWhileImpersonating`; real actor visible in `ActorContext`
 Temporary grants service + store (⚑Z13), justification requirement, Audit core-contract emission of the authorization events (⚑Z17),
 `YFex.Authorization.Data` (⚑Z18), user impersonation, Privacy reveal integration (07). Each lands with its feature and its own
 acceptance tests.
+
+- **Site presence (⚑Z20, 2026-10-20):** `Requirement.SitePresence(maxAge)`, `DenialKind.SitePresenceRequired`, Cqrs `ErrorKind` + RPC
+  mapping (like `ReauthenticationRequired`), `.RequireSitePresence(TimeSpan)`, `IAuthorizationContext.PresenceAt` reading the
+  `presence_at` claim. **✅ Built 2026-10-29** ahead of its producer (authentication AN-P7 / installations I6), tested with a fake claim. **Acceptance:** fresh presence allows; missing, old or
+  unparseable presence denies with the typed reason; visibility unchanged; AOT 0 warnings.
 
 ## Documentation updates (end of each phase)
 
@@ -640,6 +645,248 @@ Additive hook in Messaging.Rpc for YFex.Installations.Rpc, made while no Authori
 - **Server side:** the installation middlewares wrap `CallContextMiddleware` (priority ±5) and refuse through `RpcErrorResults<T>`
   (`Unauthenticated`, or `Forbidden(Denial(ResourceDenied, "installation.scope"))`).
 - **Backup:** `C:\Temp\installations-backup\I2-review-2026-10-09\messaging-rpc`. Details in installations 08 §5.
+
+
+### 2026-10-19 — Note from authentication AN-P4 (request R4, additive)
+
+- `AuthorizationContext` now derives `RealActor` + `ActorRelation.UserImpersonation` from the principal's `ClaimsIdentity.Actor` when
+  the caller did not pass them (`AuthorizationContext.RealActorOf`): an impersonation token's `act` reaches audit, logging and the
+  gate without host code. Same subject as the actor = none.
+- `ActorScope.From(caller)` carries the principal's `sid` claim as `SessionId`, so desktop hosts (`AmbientPrincipalAccessor`) publish
+  the session in `ActorContext.Session` like the server adapters.
+Test `Claims_identity_actor_becomes_the_real_actor_of_an_impersonation`. Authorization 151 tests green. R1–R3, R6 (P5) and R7 stay open.
+
+
+### 2026-10-19 — Note from authentication AN-P5 (requests R1–R3, R6; R7 still open)
+
+The user allows changing other libraries while they are not in production, with their design docs aligned. Backups:
+`C:\Temp\authentication-backup\P5\other` (tar of this repo and of `YFex/src/Cqrs` + `YFex/src/Messaging` before the change).
+
+- **R1:** `Requirement` case `RecentAuthentication` (`RequirementKind = 8`, payload `RecentAuthenticationRequirement(MaxAge, Minimum)`,
+  `Requirement.RequireRecentAuthentication`), compiled as an identity requirement (needs authentication, kept in `Remaining`, sync).
+  `PolicyEvaluator(handlers, TimeProvider? time)` checks it against `IAuthorizationContext.AuthenticatedAt`/`Assurance`
+  (`AuthenticationFacts` reads `auth_time`/`acr` of the authenticated primary identity). Visibility ignores it. `AssuranceLevel` moved
+  here from Authentication.Public (03 §4 note).
+- **R2:** `DenialKind.ReauthenticationRequired = 8`, `Denial.RecentAuthentication` + `Denial.ReauthenticationRequiredOf(…)`. Cqrs:
+  `ErrorKind.ReauthenticationRequired = 9`, case `ReauthenticationRequired(RecentAuthenticationRequirement)`, `Error.ReauthenticationRequired(maxAge,
+  minimum)`; `Error.From(verdict)` and `new Forbidden(denial)` of that kind give the new case (payload = the boxed `Denial`). RPC
+  `RpcResultFormatters` v7. HTTP: `AuthorizationEndpointFilter.Problem` answers 401 with the RFC 9470 challenge. Validation's VM
+  generator maps it to `server.reauthenticate`; Offline central counts it as `Unauthorized` when a fact is forced.
+- **R3:** `.RequireRecentAuthentication(TimeSpan, AssuranceLevel)` on `RequirementBuilder<T>` and the Cqrs command/query configuration
+  builders. `TestCallerBuilder.AuthenticatedAt(at, assurance)` for tests.
+- **R6:** `IRoleDirectory.IsInAnyRoleAsync(subject, scope, roles)` answering `PermissionDirectoryAnswer` (no default implementation,
+  like `IPermissionDirectory`); `FakeRoleDirectory` in `.Testing`.
+
+Tests: Authorization **156** (+5: `RecentAuthenticationTests` 4, AspNetCore step-up challenge 1), Messaging.Rpc 81 (+1 wire v7),
+Messaging 185 + 2 skipped (+1 Cqrs gate), Cqrs.Approvals 12 — all green.
+
+### Phase 6 + Z20 site presence — DONE 2026-10-29
+
+Started early because they unblock YFex.Authentication (R7 security gap; R8 needed by AN-P7). 4c and Phase 5 not started. Backups:
+`C:\Temp\authz-backup\phase6\`; edit scripts `C:\Temp\yfex-edits\z14_*.py`, `z20_*.py`. No touched code file had changed that day
+(checked mtimes) — no other session in Cqrs/Messaging/Web/Tenancy.
+
+**Caller syntax and consumer effect (public API changes)**
+
+```csharp
+// Z20 — per command, optional; the claim producer (presence_at) comes with AN-P7 / I6
+b.Command<OpenCashDrawer>().RequirePermission(PosPermissions.DrawerOpen).RequireSitePresence(TimeSpan.FromMinutes(10));
+b.ForEndpoint<OpenDrawerRequest>().RequireSitePresence(TimeSpan.FromMinutes(10));
+case ErrorKind.SitePresenceRequired when error.TryGetValue(out SitePresenceRequired p): await presence.ProveAsync(p.Requirement.MaxAge); break;
+
+// Phase 6 — nothing to call for HTTP (AddYFexAuthorization replaces the Tenancy gate); apps may add restrictions
+services.AddYFexAuthorization(a => a.RestrictWhileImpersonating(SalesPermissions.RefundIssue));
+// RPC parity is opt-in
+services.UseYFexMessagingRpcServer(rpc => rpc.CallContext(ctx => ctx.FromConnection().OrFromHeader().AllowImpersonation()));
+```
+
+Consumer effect: `Denial` gained a trailing optional `SitePresence` (positional callers unchanged); `CallIdentity` ctor gained an
+optional `impersonation`; `ErrorKind` gained 10, `RequirementKind` 9, `DenialKind` 9 (exhaustive switches over them should add the
+case — Offline central and the Validation VM generator were updated); RPC wire **v8** (v7 still read); `YFex.Authorization` now
+references `YFex.Tenancy.Resolution` (contracts only; no cycle). Hosts that relied on `PermissionTenantImpersonationGate` get the
+policy gate automatically (a custom gate registered by the app is kept). AOT: no reflection; `.Public` stays a leaf.
+
+| File | Change |
+|---|---|
+| Authorization `.Public/RecentAuthentication.cs` | `AuthenticationFacts.PresenceAtClaimType` (`presence_at`), `PresenceAtOf` (shared Unix-seconds parser); `SitePresenceRequirement(MaxAge)` (1 min future skew, unknown fails closed) |
+| `.Public/Requirement.cs` | case `SitePresence = 9`: ctor, `TryGetValue`, implicit, `RequireSitePresence(TimeSpan)`, `SitePresence` accessor |
+| `.Public/AuthorizationVerdict.cs` | `DenialKind.SitePresenceRequired = 9`; `Denial.SitePresence`; `SitePresenceRequiredOf`, `RestrictedWhileImpersonatingOf` |
+| `.Public/IAuthorizationContext.cs` | default members `PresenceAt`, `Restricted` |
+| `.Public/AuthorizationBuilder.cs`, `CompiledPolicy.cs` | `.RequireSitePresence`; compiled as an identity requirement (needs authentication, kept in `Remaining`, sync) |
+| `.Public/Impersonation.cs` (new) | `AuthorizationPermissions` catalog (hand-written generated shape: `tenant.impersonate`, `user.impersonate`, `authorization.grants.issue`, `authorization.roles.manage`); `ImpersonationRestrictions` (ids, lazy `Resolve()`, `Default`/`None`/`With`) |
+| Authorization `PolicyEvaluator.cs` | presence check (visible); a missing permission that is in `caller.Restricted` while `Relation != None` → `RestrictedWhileImpersonating` (denial path only) |
+| `AuthorizationContext.cs` | `PresenceAt`, `Restricted` (ctor `restricted`), `ForTenantImpersonation(caller, homeScope, restrictions)` |
+| `PolicyTenantImpersonationGate.cs` (new) | `tenant.impersonate` through `AuthorizationContextCache` in the scope in effect (home); refuses a caller already acting for someone |
+| `AuthorizationEvents.cs` | `ImpersonationEvent`, `ImpersonationStarted` (`authorization.impersonation.started`, never rate-limited), `EmitImpersonationStarted` |
+| `ServiceCollectionExtensions.cs`, csproj | registers restrictions + policy gate (removes `PermissionTenantImpersonationGate` registrations before/after); `RestrictWhileImpersonating`, `UseImpersonationRestrictions`; reference `YFex.Tenancy.Resolution` |
+| `.AspNetCore` middleware, `HttpContextPrincipalAccessor`, endpoint filter | `TenantImpersonation` feature → impersonating caller for the whole request + event `http`; 403 `SitePresenceRequired` with `maxAge` |
+| `.Testing/TestCaller.cs` | `PresentAt(at)` |
+| Tenancy.Resolution `TenantImpersonation.cs` (new) | host-neutral record of a successful switch (real user, target, home tenant, home scope) |
+| Web `TenantResolutionMiddleware.cs` | home tenant set before the gate is asked; records the `TenantImpersonation` feature (home scope from `IScopeContext`) |
+| Messaging.Rpc `CallContext.cs`, `CallContextConnections.cs`, `CallContextOptions.cs`, `CallContextMiddleware.cs` | `CallIdentity.Impersonation`; captured from the upgrade request; `AllowImpersonation()` (implies `WithTenant`); resolver asks the gate in the home scope, else runs in the home scope; event `rpc` per resolved identity |
+| Messaging.Rpc `RpcResultFormatters.cs` | wire v8: `SitePresenceRequired` + max age ticks |
+| Cqrs `Error.cs`, `Command/QueryConfigurationBuilder.cs` | `ErrorKind.SitePresenceRequired = 10`, case `SitePresenceRequired`, `Error.SitePresenceRequired(maxAge)`; `.RequireSitePresence` on the three builders |
+| Validation.Generator `Emitter.Vm.cs` | `server.presence` |
+| Offline `OfflineCentralRpc.cs` | `SitePresenceRequired` counts as `Unauthorized` |
+| Authentication `AotSmoke/Program.cs` | presence allow/deny + impersonation restriction checks |
+
+**Deviations**
+
+1. 06 §3 sketch had `contexts.GetCached(actor)`; the gate uses `AuthorizationContextCache.GetAsync` (completes synchronously on a hit).
+2. Restrictions are carried on the caller (`IAuthorizationContext.Restricted`), not given to the evaluator, so every surface (HTTP,
+   RPC, desktop) reports `RestrictedWhileImpersonating` without configuration. Restricted = withheld ∩ what the caller held; a
+   permission the caller never had still reports `MissingPermission`.
+3. The home scope reaches the real actor through the `TenantImpersonation` feature (`HomeScope` text), because the Authorization
+   middleware runs after the tenant switch.
+4. "Issuing approvals" is not in `ImpersonationRestrictions.DefaultIds`: `YFex.Cqrs.Approvals` already refuses `Approve` while
+   impersonating (4b deviation 6).
+5. RPC impersonation is opt-in (`AllowImpersonation()`): without it an impersonating identity runs in its home scope (fail closed).
+6. A future `presence_at` beyond 1 min skew fails closed (`SitePresenceRequirement.ClockSkew`).
+
+**Acceptance:** Tenancy.Tests 27 (≥ 27), Web.Data.Tests 52 (≥ 30); role-granted `tenant.impersonate` passes (theory, both
+registration orders), legacy claim canonicalizes, chained `act` refused; restricted permission → `RestrictedWhileImpersonating`
+(unit, HTTP 403, RPC round-trip); real actor + home scope in `ActorContext` after an `await` in an HTTP endpoint and in the RPC
+handler; RPC parity incl. gate refusal and `AllowImpersonation()` absent. Z20: fresh presence allows; missing/old/unparseable/negative/
+far-future denies with `SitePresenceRequired` (+ max age; Cqrs, RPC v8, HTTP 403); visibility unchanged. AOT:
+`YFex.Authentication.AotSmoke` publishes native win-x64 with 0 IL2xxx/IL3xxx warnings and passes.
+
+| Suite | Before | After |
+|---|---|---|
+| YFex.Authorization.Tests | 93 | **101** (+3 `SitePresenceTests`, +5 `ImpersonationTests`) |
+| YFex.Authorization.AspNetCore.Tests | 9 | **12** |
+| YFex.Messaging.Rpc.Tests | 81 | **87** (+4 impersonation, +2 wire) |
+| YFex.Messaging.Tests | 185 (+2 skipped) | **186** (+2 skipped) |
+| YFex.Web.Data.Tests | 51 | **52** |
+| Authorization.Generator 10, Authorization.Installations 44, Tenancy 27, Cqrs.Approvals 12, Validation 62, Validation.Generator 50 | = | = |
+
+**Open items:** the `presence_at` producer (AN-P7 / I6); user impersonation (Phase 7, with its feature); a Web `IScopeContext`-aware
+`HomeScope` is only filled when the host registers one (YFex.Web does).
+
+### Phase 5 — DONE 2026-10-29
+
+Backups: `C:\Temp\authz-backup\phase5\` (tars of YFex.Capabilities, YFex.Search, YFex.Authorization + the single YFex files below);
+edit scripts `C:\Temp\yfex-edits\p5_*.py`. No touched code file had changed since the Phase 6 session the same afternoon (checked mtimes).
+
+**Caller syntax and consumer effect (public API changes)**
+
+```csharp
+// Capabilities — before: one permission per key
+reg.Authz.TryGet(key, out Permission required);
+var agent = new CapabilityAgentApi(reg.Describe, reg.Authz, evaluator, localizer);
+if (agent.CanInvoke(key, caller).Value is ActionDenied d) Show(d.Missing);
+
+// after: the compiled policy per key, the gate is a [Union] struct with a NeedsApproval case
+reg.Policies.TryGet(key, out CompiledPolicy policy);                     // PoliciesFor(identity) replaces AuthzFor
+var agent = new CapabilityAgentApi(reg.Describe, reg.Policies, evaluator, localizer);
+var gate = agent.CanInvoke(key, caller);
+if (gate.TryGetValue(out ActionDenied denied)) Show(denied.Missing);     // denied.Verdict: Unauthenticated | Forbidden(Denial)
+if (gate.TryGetValue(out ActionNeedsApproval approval)) AskApprover(approval.Permission);
+
+// Registry build takes the policy table (DI does it: AddYFexCapabilities reads IPolicyRegistry from AddYFexAuthorization)
+CompiledCapabilityRegistry.Build(sources, context, policies: authorizationRegistry);
+
+// View-model commands (⚑Z19) — the dev code is unchanged; the host installs the gate once
+using var gate = provider.UseYFexViewModelAuthorization();
+
+// NavigatR — NavigationDenied gained the verdict; text is "Requer: {display name}"
+if (result.Value is NavigationDenied { IsAuthorizationDenial: true } d) toast(d.Reason);   // d.Verdict for custom text
+navigator.ActivePageDenied += d => toast(d.Reason);                                        // signalled re-check closed the page
+```
+
+Consumer effect: `IAuthorizationView`/`AuthorizationView`, `CompiledCapabilityRegistry.Authz`/`AuthzFor` and
+`CapabilitySourceBase.ReadRequirePermissionAttribute` are deleted (only Capabilities/Search used them — grep); `ActionGate` changed from
+a native `union` of records to a `[Union]` struct (case types are now `readonly record struct`s; `ActionDenied(Permission)` →
+`ActionDenied(AuthorizationVerdict)` with `Missing`/`Denial` accessors; `.Value` still boxes for pattern-matching code);
+`CapabilityDescriptor` gained trailing optional `PolicyKey`/`Approval`, `SearchEntry` a trailing optional `Policy`, `NavigationDenied` a
+trailing optional `Verdict` (positional callers unchanged); `CompiledCapabilityRegistry.Build` now **fails** for a permission hint no
+catalog declares (all ids listed); the State generator emits two private members per command (hook + raise helper). AOT: no
+reflection added (the attribute reflection is removed), the gate is static + weak references, no `MakeGenericType`.
+
+| File | Change |
+|---|---|
+| Authorization `.Public/ViewModelAuthorization.cs` (new) | `IPolicyRegistry` (`TryGetPolicy(in PolicyKey)`), `IViewModelAuthorization` (`IsVisible`, `Changed`), static `AuthorizationGate` (`Install` → restoring `IDisposable`, `IsVisible`, weak `Watch<TOwner>` posting to the watcher's `SynchronizationContext`, `NotifyChanged`) |
+| Authorization `ViewModelAuthorization.cs` (new) | default gate: command policy of `IPrincipalAccessor.Current` via the evaluator; `Changed` on signals concerning the caller and on `AmbientPrincipalAccessor.Changed` |
+| Authorization `CompiledAuthorizationRegistry.cs` | implements `IPolicyRegistry` (method already existed) |
+| Authorization `ServiceCollectionExtensions.cs` | registers `IPolicyRegistry`, `ViewModelAuthorization`/`IViewModelAuthorization`; `UseYFexViewModelAuthorization()` |
+| Authorization `AmbientPrincipalAccessor.cs` | `event Action? Changed` raised by `SignIn`/`SetCurrent`/`SignOut` |
+| Authorization.Generator `AuthorizationGenerator.cs`, `Model.cs`, `AuthorizationSymbols.cs` | pipeline C: per view model, `__OnCanExecute_<Command>` implementations (`AuthorizationGate.IsVisible(in key)`), static `PolicyKey` fields, weak `Watch` on first ask → `__RaiseCanExecuteChanged_<Command>()`; only for `[StateCommand]`+`[RequirePermission]` on a top-level, non-generic, partial type deriving from `StateObject` **of the YFex.State assembly** (`IsStateLibraryViewModel`) |
+| State.Generator `CommandEmitter.cs` | per command: `partial void __OnCanExecute_<Name>(ref bool)` + `__RaiseCanExecuteChanged_<Name>()`; async and sync `CanExecute()`/`Execute` ask the hook (a refused command does not run or change `Status`); sync commands gained `NotifyCanExecuteChanged` |
+| Capabilities `ActionGate.cs` | `[Union]` struct: `ActionGateKind`, cases `ActionAllowed`/`ActionNeedsConfirmation`/`ActionNeedsApproval(ApprovalPolicy)`/`ActionDenied(AuthorizationVerdict)`, typed `TryGetValue` |
+| Capabilities `Agent.cs` | `CanInvoke` = `IsVisible(policy)` (hidden → `Authorize` for the reason) → declared approval → irreversible confirm → allow; fixed ctor takes `ICapabilityPolicies` |
+| Capabilities `Registries.cs`, `Sources.cs`, `CompiledRecords.cs`, `CapabilityScope.cs` | `ICapabilityPolicies` replaces `IAuthorizationView`; `SearchEntry.Policy`; `CapabilityDescriptor.PolicyKey`/`Approval` |
+| Capabilities `CompiledCapabilityRegistry.cs` | `Build(sources, context, IPolicyRegistry? policies)`: registered policy of the key wins, else the hint compiled as a one-permission policy, resolved once per descriptor (base + scoped) and reused by `PoliciesFor`; undeclared hints listed in one `CapabilityConfigurationException` |
+| Capabilities `ViewModelCapabilitySource.cs` | views → `PolicyKey.Route(vm)`, commands → `PolicyKey.Command(vm, method without Async)` |
+| Capabilities `Sources/CapabilitySourceBase.cs` | `ReadRequirePermissionAttribute` (reflection) deleted; `policyKey`/`approval` parameters |
+| Capabilities `Search/CapabilitySearchService.cs` | filter = `IsVisible(entry.Policy)` (hand-built entries without a policy: hint) |
+| Capabilities `DependencyInjection/CapabilityServiceCollectionExtensions.cs` | `Build(…, sp.GetService<IPolicyRegistry>())`; `Policies` projection registered instead of `Authz` |
+| Capabilities.Cqrs `CqrsCapabilitySource.cs`, `CqrsCapabilityServiceCollectionExtensions.cs` | `PolicyKey.Message(type)`; hint = builder permission else first permission of the message policy (no attribute reflection); `Approval` = `command.Rules?.DeclaredApproval` |
+| Cqrs `Runtime/RulesStage.cs`, `Runtime/ApprovalStage.cs` | `virtual ApprovalPolicy? DeclaredApproval` (approval stage: `Declared`; rules stage: attached approvals) |
+| Search.Capabilities `CapabilityCatalogProvider.cs` | filter = `IsVisible(entry.Policy)` |
+| NavigatR `Navigator.cs` | `CheckNavigation` → `NavigationDenied(DenialText(verdict), verdict)` ("Requer: {catalog display name}", else `Describe()`); optional `IAuthorizationSignals` subscription (captured `SynchronizationContext`) → `RecheckAuthorizationAsync()` closes a forbidden active page (back to the nearest allowed entry, forward entries released; none → history cleared), `ActivePageDenied` event; unsubscribe on `Dispose` |
+| NavigatR `NavigationResult.cs` | `NavigationDenied(Reason, Verdict = default)` + `IsAuthorizationDenial` |
+| NavigatR `UnionSupport.cs` (deleted) | stale public `UnionAttribute`/`IUnion` polyfill: collided (CS0433) with System.Runtime's in every assembly that references NavigatR and declares a `[Union]` |
+| Capabilities `samples/YFex.Capabilities.AotSmoke` (`Program.cs`, csproj) | real registry + evaluator, generated catalog/rows/hook, search hidden/visible, agent allowed/denied, command gate disabled/enabled; exits 1 on mismatch |
+| Tests | Authorization `ViewModelGateTests.cs` (3); Authorization.Generator `GeneratorDriverTests.cs` (+2: hook with an in-memory `YFex.State` assembly, none for source stand-ins); State `Commands/CanExecuteHookTests.cs` (3); Capabilities `PolicyGateTests.cs` (5, collection `AuthorizationGate`), `TestPermissions.cs` (catalog), `Fakes.cs` (real evaluator, permission set), `Fixtures.cs` (`Saves` counter), `GeneratorAndBuildTests.cs`/`ScopedCapabilityTests.cs` (`Policies`), csproj (+ Testing, generator); Capabilities.Cqrs `CqrsCapabilitySourceTests.cs` (+3: **D12**, unauthenticated, NeedsApproval; catalog; authorization registry), csproj; Search `TestFakes.cs`, `CapabilityCatalogProviderTests.cs` (+1 D12); NavigatR `AuthorizationGateTests.cs` (+5) |
+| Docs | this entry, README of YFex.Authorization (status + §13) and YFex.Capabilities (consume section) |
+
+**Deviations**
+
+1. The gate sketch `AuthorizationGate.IsVisible(this, key)` became `IsVisible(in key)` + `Watch(this, …)`: view models are built without
+   DI, so the gate is process-wide (like the desktop caller) and the owner is only needed for the change subscription. **No gate
+   installed = visible** (like NavigatR without authorization services); the message gate stays authoritative.
+2. The re-check trigger is `AuthorizationGate.Watch` (weak reference, first `CanExecute` subscribes, callbacks posted to that
+   `SynchronizationContext`), not a `[ReactsTo]`-style mechanism — `[ReactsTo]` is an attribute without generator support today.
+3. The Authorization generator emits the hook only for view models of the real YFex.State assembly: projects that use source stand-ins
+   (its own tests) or no State generator would otherwise get CS0759. Nested and generic view models keep the (empty) State default.
+4. `ActionGate.NeedsApproval` comes from the code-declared `.RequireApproval` (`RulesStage.DeclaredApproval`): approvals ride the rules
+   slot (4b deviation 1), so the verdict has no approval case. An `IApprovalPolicySource` that changes the policy at run time is not seen.
+   Order: denied → needs approval → needs confirmation (irreversible) → allowed.
+5. The agent asks the **visibility** question (`IsVisible`, then `Authorize` only for the reason), like `IMessageAuthorization.QuickCheck`:
+   no message exists yet, so named policies hide and resource requirements use `VisibleWith`; a hidden-but-allowed answer reports
+   `ResourceDenied` (NavigatR too).
+6. Policies resolve from the descriptor's `PolicyKey` (message / route / command); a capability without a registered policy is gated by
+   its permission hint compiled into a one-permission policy (profiles' `.Requires(...)`, hosts without the runtime). Undeclared hints now
+   fail `Build` — consistent with D5.
+7. `BuildParameters` (property reflection for messages without a validation shape) stays: it is not an authorization path; only the
+   attribute reflection was removed.
+8. NavigatR's stale `UnionSupport.cs` polyfill was deleted (needed for `[Union] ActionGate`); `YFex.UI.Abstractions/UnionSupport.cs` has
+   the same polyfill and was left alone (no conflict seen in these builds) — follow-up.
+9. Known limitation (pre-existing, not fixed): the Capabilities generator cannot read `[RequirePermission(Catalog.Ids.X)]` when the catalog
+   is generated in the same compilation (generators do not see each other's output) → `RawPermission` null → "mutating without
+   permission" build error; fixtures keep string literals. The policy itself is unaffected (it comes from the authorization registry).
+
+**Acceptance:** Capabilities 28 → 33, Capabilities.Cqrs 7 → 10, Capabilities.Generator 5 = 5; **D12** —
+`D12_capability_whose_message_needs_two_permissions_is_hidden_from_a_caller_holding_one` (search hides it, agent denies naming the missing
+`billing.transfer.large`; holding both shows/allows it), plus the VM-command and Search variants; NavigatR 129 → 134 passed (+ the same 5
+known failures); State 357 → 360 (hook tests) and State.History 60 =; Authorization 101 → 104, Authorization.Generator 10 → 12.
+
+**AOT:** `YFex.Capabilities.AotSmoke` (now on the real registry, evaluator, generated catalog/rows/hook) and `YFex.Validation.Smoke`
+publish native win-x64 with 0 IL2xxx/IL3xxx warnings and run OK (`ok=True`; `PublishAot` set temporarily in the AotSmoke csproj only,
+restored byte-identical — `cmp`; Validation.Smoke already has it). Script `C:\Temp\yfex-edits\p5_aot.sh`, logs
+`C:\Temp\authz-testlogs\phase5-aot\`.
+
+**Other consumers of the State generator change** (every `[StateCommand]` now declares the hook): YFex.Mvvm, YFex.State.Smoke and
+YFex.Avalonia.Gallery build. `YFex.Persistence.Tests` does not compile — pre-existing: its csproj (2026-08-12) references
+`..\YFex.State\…` under `src/Persistence` (paths that do not exist); no error involves the hook.
+
+All runs `-c Release --artifacts-path C:\Temp\authz-art -p:NuGetAudit=false` (runner `C:\Temp\yfex-edits\run-tests-r.sh`, logs
+`C:\Temp\authz-testlogs\phase5-before|phase5-after\`).
+
+| Suite | Before | After |
+|---|---|---|
+| YFex.Capabilities.Tests | 28 | **33** |
+| YFex.Capabilities.Cqrs.Tests | 7 | **10** (incl. the D12 regression test) |
+| YFex.Capabilities.Generator.Tests | 5 | 5 |
+| YFex.Search.Tests | 57 | **58** |
+| YFex.NavigatR.Tests | 129 + 5 known failures | **134** + the same 5 known failures |
+| YFex.State.Tests | 357 | **360** |
+| YFex.Authorization.Tests | 101 | **104** |
+| YFex.Authorization.Generator.Tests | 10 | **12** |
+| State.History 60, AspNetCore 12, Authorization.Installations 44, Messaging 186 (+2 skipped), Messaging.Rpc 87, Rules 65, Rules.Admin 29, Validation 62, Validation.Generator 50, Cqrs.Approvals 12, Cqrs.Tenancy 11, Tenancy 27, Web.Data 52, Core 234 | = | = |
+
+**Open items:** 4c (Rules.Admin approval-policy table) is the last consolidation item. Follow-ups outside this phase:
+`YFex.UI.Abstractions/UnionSupport.cs` (same stale polyfill as NavigatR's); the Capabilities generator vs generated `Ids` constants
+(deviation 9); `YFex.Persistence.Tests` project references; hosts must call `UseYFexViewModelAuthorization()` for the VM command gate.
 
 ### 2026-10-30 — Site approval tokens accepted (additive, for Offline Phase 4d)
 

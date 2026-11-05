@@ -62,6 +62,12 @@ public readonly struct ReplayOutcome
     /// <summary>The command was rejected; act on <paramref name="policy"/>.</summary>
     public static ReplayOutcome Rejected(ConflictPolicy policy, Error error, Type commandType, object command)
         => new(true, policy, error, commandType, command);
+
+    /// <summary>
+    /// The command was rejected and the materialized command is not at hand (an <see cref="IOutboxReplayRoute"/>): act on
+    /// <paramref name="policy"/>; no optimistic effect is undone.
+    /// </summary>
+    public static ReplayOutcome Rejected(ConflictPolicy policy, Error error) => new(true, policy, error, null, null);
 }
 
 /// <summary>

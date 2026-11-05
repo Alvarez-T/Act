@@ -7,15 +7,14 @@ using YFex.Helpers;
 
 namespace YFex.Rules.Data;
 
-/// <summary>Database engine of a <see cref="SqlRuleStore"/> — only the DDL and a few column types differ.</summary>
-public enum RuleStoreDatabase : byte { Sqlite = 0, Postgres = 1, SqlServer = 2, Oracle = 3 }
-
 /// <summary>Options of <see cref="SqlRuleStore"/>.</summary>
 public sealed class SqlRuleStoreOptions
 {
-    public RuleStoreDatabase Database { get; set; }
-    /// <summary>Table name (default <c>yfex_rule_data</c>; the dialect normalizes its casing, e.g. upper-case on Oracle).</summary>
-    public string TableName { get; set; } = "yfex_rule_data";
+    /// <summary>
+    /// Table name (default <see cref="RuleStoreSchema.DefaultTable"/>; the dialect normalizes its casing, e.g. upper-case on Oracle). Its
+    /// schema module is <see cref="RuleStoreSchema.ForTable"/>.
+    /// </summary>
+    public string TableName { get; set; } = RuleStoreSchema.DefaultTable;
     /// <summary>Retries of an append that lost a race for the next version number (unique key collision).</summary>
     public int MaxAppendAttempts { get; set; } = 5;
 }
@@ -31,7 +30,8 @@ public sealed class SqlRuleStoreOptions
 /// <item>Dates as ISO text (<c>yyyy-MM-dd</c>, round-trip UTC timestamps) — sortable and identical on every engine.</item>
 /// </list>
 /// Commands are plain ADO.NET on the <see cref="YFexConnection"/> (no reflection); the dialect supplies the parameter prefix
-/// and identifier casing. Create the table with <see cref="EnsureSchemaAsync"/> or <see cref="CreateTableScript"/>.
+/// and identifier casing. The table is the portable schema module <see cref="Schema"/> (<see cref="RuleStoreSchema"/>): apply it with
+/// <see cref="EnsureSchemaAsync"/> or <c>ApplySchemaAsync</c>, or script it with <c>dialect.ScriptSchema(store.Schema)</c>.
 /// </summary>
 public sealed class SqlRuleStore : IRuleStore
 {
@@ -44,68 +44,24 @@ public sealed class SqlRuleStore : IRuleStore
         _connections = connections ?? throw new ArgumentNullException(nameof(connections));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _clock = clock ?? TimeProvider.System;
+        Schema = RuleStoreSchema.ForTable(_options.TableName);
     }
+
+    /// <summary>The schema module of this store's table (<see cref="RuleStoreSchema.ForTable"/>).</summary>
+    public SchemaModule Schema { get; }
 
     private const string Columns = "rule_set, version, kind, code, tier_path, stream_hash, effective_from, published_by, published_at, note, payload";
 
     // ── Schema ──────────────────────────────────────────────────────────────
 
-    /// <summary>DDL of the table + stream index for <paramref name="database"/> (for migrations tools / DBAs).</summary>
-    public static IReadOnlyList<string> CreateTableScript(RuleStoreDatabase database, string table = "yfex_rule_data")
-    {
-        (string text, string shortText, string num16, string num64, string blob) = database switch
-        {
-            RuleStoreDatabase.Sqlite => ("TEXT", "TEXT", "INTEGER", "INTEGER", "BLOB"),
-            RuleStoreDatabase.Postgres => ("VARCHAR(2000)", "VARCHAR(200)", "SMALLINT", "BIGINT", "BYTEA"),
-            RuleStoreDatabase.SqlServer => ("NVARCHAR(2000)", "NVARCHAR(200)", "SMALLINT", "BIGINT", "VARBINARY(MAX)"),
-            RuleStoreDatabase.Oracle => ("VARCHAR2(2000 CHAR)", "VARCHAR2(200 CHAR)", "NUMBER(5)", "NUMBER(19)", "BLOB"),
-            _ => throw new ArgumentOutOfRangeException(nameof(database)),
-        };
-        return
-        [
-            $"""
-            CREATE TABLE {table} (
-                rule_set {shortText} NOT NULL,
-                version {num64} NOT NULL,
-                kind {num16} NOT NULL,
-                code {shortText} NOT NULL,
-                tier_path {text} NOT NULL,
-                stream_hash {num64} NOT NULL,
-                effective_from {shortText} NOT NULL,
-                published_by {shortText} NULL,
-                published_at {shortText} NOT NULL,
-                note {text} NULL,
-                payload {blob} NOT NULL,
-                CONSTRAINT pk_{table} PRIMARY KEY (rule_set, version)
-            )
-            """,
-            $"CREATE INDEX ix_{table}_stream ON {table} (rule_set, stream_hash, version)",
-        ];
-    }
-
-    /// <summary>Creates the table when it doesn't exist (engine-specific existence check).</summary>
+    /// <summary>
+    /// Applies <see cref="Schema"/> (creates the table on first use; a no-op once applied). Runs YFex.Data's migrator, which records the
+    /// version in <c>yfex_schema_history</c> and takes the module's migration lock.
+    /// </summary>
     public async Task EnsureSchemaAsync(CancellationToken ct = default)
     {
         await using var c = _connections.Create();
-        await c.OpenAsync(ct).ConfigureAwait(false);
-        string table = Table(c);
-        string exists = _options.Database switch
-        {
-            RuleStoreDatabase.Sqlite => "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = " + P(c, "t"),
-            RuleStoreDatabase.Postgres => "SELECT COUNT(*) FROM information_schema.tables WHERE table_name = " + P(c, "t"),
-            RuleStoreDatabase.SqlServer => "SELECT COUNT(*) FROM sys.tables WHERE name = " + P(c, "t"),
-            _ => "SELECT COUNT(*) FROM user_tables WHERE table_name = " + P(c, "t"),
-        };
-        await using (var check = Command(c, null, exists))
-        {
-            Add(c, check, "t", table);
-            if (Convert.ToInt64(await check.ExecuteScalarAsync(ct).ConfigureAwait(false), CultureInfo.InvariantCulture) > 0) return;
-        }
-        foreach (var statement in CreateTableScript(_options.Database, table))
-        {
-            await using var create = Command(c, null, statement);
-            await create.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
-        }
+        await c.ApplySchemaAsync(Schema, cancellationToken: ct).ConfigureAwait(false);
     }
 
     // ── IRuleStore ──────────────────────────────────────────────────────────

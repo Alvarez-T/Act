@@ -9,6 +9,7 @@ using YFex.Cqrs;
 using YFex.Cqrs.Runtime;
 using YFex.Messaging.Rpc.Serialization;
 using YFex.Tenancy;
+using YFex.Tenancy.Resolution;
 using YFex.Validation;
 
 namespace YFex.Messaging.Rpc;
@@ -23,6 +24,9 @@ internal sealed class CallContextResolver
 {
     private readonly ICallIdentitySource[] _sources;
     private readonly bool _tenant;
+    private readonly bool _impersonation;
+    private readonly ITenantImpersonationGate? _gate;
+    private readonly ImpersonationRestrictions? _restrictions;
     private readonly IAuthorizationContextFactory? _factory;
     private readonly AuthorizationContextCache? _cache;
     private readonly IPermissionVersions _versions;
@@ -33,6 +37,9 @@ internal sealed class CallContextResolver
         _sources = new ICallIdentitySource[options.Sources.Count];
         for (int i = 0; i < _sources.Length; i++) _sources[i] = options.Sources[i](services);
         _tenant = options.Tenant;
+        _impersonation = options.Impersonation;
+        _gate = services.GetService<ITenantImpersonationGate>();
+        _restrictions = services.GetService<ImpersonationRestrictions>();
         _factory = services.GetService<IAuthorizationContextFactory>();
         _cache = services.GetService<AuthorizationContextCache>();
         _versions = services.GetRequiredService<IPermissionVersions>();
@@ -53,33 +60,55 @@ internal sealed class CallContextResolver
             fallback ??= identity;                                            // anonymous but may carry the tenant
         }
 
-        var caller = chosen ?? fallback;
-        var auth = chosen is null ? CallContext.Anonymous : await AuthForAsync(chosen, ct).ConfigureAwait(false);
-        return new CallContext(auth, caller?.Scope ?? default, _tenant, caller?.Culture);
+        if (chosen is null)                                                   // anonymous never impersonates
+            return new CallContext(CallContext.Anonymous, fallback?.HomeScope ?? default, _tenant, fallback?.Culture);
+        var resolved = await AuthForAsync(chosen, ct).ConfigureAwait(false);
+        return new CallContext(resolved.Caller, resolved.Scope, _tenant, chosen.Culture);
     }
 
-    private ValueTask<IAuthorizationContext> AuthForAsync(CallIdentity identity, CancellationToken ct)
+    private ValueTask<CallIdentity.ResolvedAuth> AuthForAsync(CallIdentity identity, CancellationToken ct)
     {
         long version = identity.Subject is { } subject ? _versions.Get(subject) : 0;
-        if (identity.Resolved is { } resolved && resolved.Version == version) return new(resolved.Caller);
+        if (identity.Resolved is { } resolved && resolved.Version == version) return new(resolved);
         return ResolveAuthAsync(identity, version, ct);
     }
 
-    private async ValueTask<IAuthorizationContext> ResolveAuthAsync(CallIdentity identity, long version, CancellationToken ct)
+    private async ValueTask<CallIdentity.ResolvedAuth> ResolveAuthAsync(CallIdentity identity, long version, CancellationToken ct)
     {
-        IAuthorizationContext auth;
+        // Impersonation (06 §3): honoured only when allowed AND the gate admits the real actor in its home tenant; else home scope.
+        var scope = identity.Scope;
+        bool impersonating = false;
+        if (identity.Impersonation is { } impersonation)
+        {
+            scope = identity.HomeScope;
+            if (_impersonation && _gate is not null)
+                using (ScopeOverride.Enter(scope))
+                    impersonating = _gate.CanImpersonate(identity.Principal);
+            if (impersonating) scope = identity.Scope;
+        }
+
+        var auth = await ResolveInAsync(identity, scope, version, ct).ConfigureAwait(false);
+        if (impersonating && auth.IsAuthenticated && auth.Relation == ActorRelation.None)
+        {
+            auth = AuthorizationContext.ForTenantImpersonation(auth, identity.Impersonation!.HomeScope, _restrictions);
+            AuthorizationEvents.EmitImpersonationStarted(auth, "rpc");
+        }
+        var resolved = new CallIdentity.ResolvedAuth(auth, version, scope);
+        identity.Resolved = resolved;
+        return resolved;
+    }
+
+    private async ValueTask<IAuthorizationContext> ResolveInAsync(CallIdentity identity, ScopeIdentity scope, long version, CancellationToken ct)
+    {
         // Tenant-scoped grants (ScopedClaimSource, store-backed sources) are resolved inside the caller's tenant.
-        using (_tenant ? ScopeOverride.Enter(identity.Scope) : default)
+        using (_tenant ? ScopeOverride.Enter(scope) : default)
         {
             if (_cache is not null)
-                auth = await _cache.GetAsync(identity.Principal, identity.Token, version, ct).ConfigureAwait(false);
-            else if (_factory is not null)
-                auth = await _factory.CreateAsync(identity.Principal, identity.Token, version, ct).ConfigureAwait(false);
-            else
-                auth = new AuthorizationContext(identity.Principal, PermissionSet.Empty, identity.Token, version: version);
+                return await _cache.GetAsync(identity.Principal, identity.Token, version, ct).ConfigureAwait(false);
+            if (_factory is not null)
+                return await _factory.CreateAsync(identity.Principal, identity.Token, version, ct).ConfigureAwait(false);
+            return new AuthorizationContext(identity.Principal, PermissionSet.Empty, identity.Token, version: version);
         }
-        identity.Resolved = new CallIdentity.ResolvedAuth(auth, version);
-        return auth;
     }
 }
 

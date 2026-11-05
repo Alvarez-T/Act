@@ -43,7 +43,7 @@ src/
     YFex.Capabilities.Cqrs/            (ICapabilitySource bridge over CompiledMessagingRegistry)
     YFex.Capabilities.Messaging/       (ICapabilitySource bridge over [Live]/[Subscribe]/RPC)
     YFex.Capabilities.Web/             (ICapabilitySource bridge over inbound HTTP endpoints)
-    YFex.Capabilities.Jobs/            (ICapabilitySource bridge over YFex.Jobs)
+    (Jobs source lives in the YFex.Jobs repo as YFex.Jobs.Capabilities — built 2026-11-04, YFex.Jobs Plan D §7A)
   State/
     YFex.State.Generator.Abstractions/ (netstandard2.0 — NEW, shared discovery; recommended)
     YFex.State.Generator/              (existing — refactored to consume Abstractions)
@@ -117,7 +117,7 @@ public sealed record CapabilityDescriptor(
 | **CQRS** — `YFex.Capabilities.Cqrs` | message record / `None` | `IQuery`→ReadOnly; `ICommand`→Mutating (config may raise to Irreversible); `IQueueable`→+Deferred; `ICacheable`→+Cacheable | record properties | `IAggregateConfiguration<T>` (new `.Describe/.SideEffect/.Keywords`) + XML docs |
 | **Messaging** — `YFex.Capabilities.Messaging` | event / handler type / `None` | events ReadOnly (notifications); RPC per contract | event / RPC payload props | `[Live]`/`[Subscribe<T>]` + config + XML docs |
 | **HTTP API** — `YFex.Capabilities.Web` | endpoint request type / `None` | HTTP verb: GET→ReadOnly, POST/PUT/PATCH→Mutating, DELETE→Irreversible | request DTO / route+query params | endpoint metadata + XML docs |
-| **Jobs** — `YFex.Capabilities.Jobs` | job type / `None` | Mutating +Background (+Deferred) | job argument props | job attribute/config + XML docs |
+| **Jobs** — `YFex.Jobs.Capabilities` (YFex.Jobs repo) | job type / `None` | Mutating +Background (+Deferred) | job argument props | job attribute/config + XML docs |
 | **Navigation** — folded into the ViewModel/route source | route type / `None` | ReadOnly (navigation) | route params | `RouteAttribute.DisplayName` + config |
 
 Each source is a **thin bridge**: it reuses that subsystem's *already-compiled* metadata (e.g. CQRS's `CompiledMessagingRegistry.ByMessageType`, the routing table, the jobs registry) plus a one-line XML-doc harvest, and projects it into `CapabilityDescriptor`s. **No subsystem gains a dependency on `YFex.Capabilities`**; the bridge project depends on both and is registered in DI. This is the open/closed extension point — a new subsystem becomes AI-describable and searchable by adding one `ICapabilitySource`.

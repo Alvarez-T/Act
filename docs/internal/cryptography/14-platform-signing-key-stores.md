@@ -1,6 +1,11 @@
 # 14 — Persisted signing-key stores on Linux and macOS (`FileSigningKeyStore`, Apple, Linux TPM)
 
-> **Status:** DESIGNED 2026-10-07, **nothing coded** (user: "for all this plan, I just want it designed, do not change anything in code
+> **Status 2026-10-18:** §2 `FileSigningKeyStore` and §3 F-P1 **BUILT** (user go 2026-10-18; log in 12 §5). Linux run still pending
+> (no Linux environment). **Later the same day (user: "create it and keep the testing pending on those platforms"):** §6 Linux TPM route A
+> and a Secret Service root key **WRITTEN** in `YFex.Cryptography.Linux`, §5 Apple Secure Enclave/Keychain store and Keychain root key
+> **WRITTEN** in `YFex.Cryptography.Apple` — compiled and AOT-analysed on Windows, **NOT RUN on Linux/macOS**, opt-in only. The
+> verification checklist and scripts are §8.
+> **Original status:** DESIGNED 2026-10-07, nothing coded (user: "for all this plan, I just want it designed, do not change anything in code
 > yet"). The user approved the `FileSigningKeyStore` design as proposed (§2, including the `FileKeyRingStore` permission fix §3), the
 > Apple store as a **later spike in `YFex.Cryptography.Apple`** (§5), and tests on Windows now with the Linux run later (§4).
 > The Linux TPM 2.0 store is only noted (§6): a native dependency that needs the user's approval.
@@ -169,10 +174,10 @@ development machines and tests.
 | tamper: flipped byte in header / ciphertext / key id → `SigningKeyStoreException`; file copied to another name → refused; file from another store (other store key) → refused; `store.key` from another root provider → refused | Tests |
 | concurrency: 8 parallel `GetOrCreateAsync` of one name on **two** store instances (simulated processes) → one `KeyId` | Tests |
 | Unix: directory 0700, `store.key` and `.signingkey` 0600 (also for `FileKeyRingStore`, §3) | Tests, run only on Linux/macOS (**Linux run pending**: no Docker/WSL on the development PC) |
-| `CopyWithPrivateKeyAsync`: wrong certificate → `ArgumentException`; mutual TLS 1.3 over loopback `SslStream` with two file-store keys and certificates from `CertificateAuthority` | Tests (Windows: round trip; Linux: direct) |
+| `CopyWithPrivateKeyAsync`: wrong certificate → `ArgumentException`; mutual TLS 1.3 over loopback `SslStream` with two file-store keys and certificates from `CertificateAuthority` | Tests (Windows: round trip; Linux: direct) — **Windows: Tls13 ✅ 2026-10-18** |
 | AOT smoke: create, sign, reopen, verify | AotSmoke, **0 IL warnings** |
 | architecture test unchanged and green (`ECDsa.Create` stays inside the library) | Tests |
-| benchmark: open an existing key ≤ 200 µs (software sign as `SigningKeyRing`) | Benchmarks |
+| benchmark: open an existing key ≤ 200 µs (software sign as `SigningKeyRing`) | Benchmarks — **145 µs ✅** with the per-store cache of the decrypted key (file still read and compared on every call). The first open per store instance costs ≈ 1.7 ms on Windows: CNG imports an ephemeral P-256 key in 400–550 µs (probe 2026-10-18) |
 
 ## 3. `FileKeyRingStore` permission fix (finding F-P1, 2026-10-07)
 
@@ -273,7 +278,7 @@ public sealed class AppleSigningKeyStore : ISigningKeyStore     // (sketch)
 4. Secure Enclave identity in `SslStream` (both paths) → decides whether 09 R2 can relax.
 5. AOT publish of the test host: 0 warnings, runs.
 
-## 6. Linux TPM 2.0 — note only (native dependency, needs the user's approval)
+## 6. Linux TPM 2.0 — route A approved 2026-10-18 (native dependency, optional at run time; spike not started)
 
 | Route | What we would write | Native dependency | TLS with the key | Verdict |
 |---|---|---|---|---|
@@ -294,3 +299,228 @@ Spike when approved: swtpm in a container (or a Linux PC with a TPM), route A, s
 | R1 (TLS 1.3 on macOS) | answered by desk research (§5.3): client yes with an opt-in switch; listener TLS 1.2 in .NET 11 |
 | R2 (Keychain key in `SslStream`) | unverified (§5.3); spike step 4 |
 | R3 (Linux TPM key in TLS) | probably yes through route A (§6); to verify |
+
+## 8. Pending platform verification (written 2026-10-18 without Linux or macOS)
+
+Everything below compiles on Windows with the AOT/trim analyzers (0 warnings) and its OS-independent parts are tested there; **none of it
+has run on its target OS**. Until a run passes, the stores stay **opt-in** (explicit builder calls; nothing picks them automatically) and
+their XML docs say "not yet run". Run the script, send the log (`scripts/verify-*.log`) to the cryptography session, which fixes what fails
+and then updates this section, 12 §5 and the memory file. Make the scripts executable first if needed (`chmod +x scripts/*.sh`) or run
+them with `bash scripts/verify-linux.sh`.
+
+### 8.1 Linux — `bash scripts/verify-linux.sh [--require-tpm] [--require-secret-service]`
+
+Prerequisites: .NET 11 SDK; OpenSSL 3 (`libcrypto.so.3`); for the TPM the distro packages **`tpm2-openssl`** and the `tpm2-tss` device
+TCTI, `/dev/tpmrm0` readable and writable (user in the `tss` group: `sudo usermod -aG tss $USER`, then log in again); for the Secret
+Service a desktop session (D-Bus session bus, unlocked GNOME Keyring or KWallet) and `libsecret-1`. Without `--require-…` a missing
+feature is reported as `[SKIP]`, which is **not** a verification.
+
+| # | What | Code | Pass when |
+|---|---|---|---|
+| L1 | Unix modes of the file stores (0700 directories, 0600 files, older 0644 files narrowed) and direct `CopyWithPrivateKey` (14 §4) | `FileStoreTests` (Unix test), `CertificateKeyStoreTests` | `YFex.Cryptography.Tests` green |
+| L2 | TPM key creation: `EVP_PKEY_CTX_new_from_name(EC, provider=tpm2)` → `EVP_PKEY_generate` → `OSSL_ENCODER` PEM (`TSS2 PRIVATE KEY`) | `LinuxTpmSigningKeyStore.CreateKeyBlob` | `TPM_keys_sign_survive_a_restart_and_are_deleted` green; the log prints the creation time |
+| L3 | Opening the blob with `SafeEvpPKeyHandle.OpenKeyFromProvider("tpm2", "object:<path>")` → `ECDsaOpenSsl`; sign, verify, reopen, delete; four concurrent creates agree on one key | same | the TPM tests green. **If opening fails**, the `object:` URI is the first suspect (tpm2-openssl store loader) |
+| L4 | Mutual TLS 1.3 with TPM keys on both sides | `TPM_keys_attached_to_their_certificates_complete_mutual_TLS` | green. A handshake failure points at dotnet/runtime#111251 (only `tpm2` loaded without `default`, §6) |
+| L5 | Secret Service root key: store, look up from a second instance, wrap a `FileKeyRingStore`, delete | `SecretServiceRootKeyProvider`, `Interop.Libsecret` (SecretSchema layout LP64) | `The_Secret_Service_root_key_persists…` green |
+| L6 | Native AOT `linux-x64`/`linux-arm64`: publish with 0 IL warnings; the smoke runs, including its platform checks | `AotSmoke` | `VERIFY LINUX: PASSED`, no `[FAIL]` |
+| L7 | ML-KEM on Linux (OpenSSL ≥ 3.5): the hybrid tests run instead of returning early | `HybridRecipientSealingTests` | with OpenSSL 3.5+, `CryptographyCapabilities.Describe()` says `ML-KEM: yes` in the smoke output |
+
+### 8.2 Linux without a hardware TPM: swtpm
+
+```bash
+mkdir -p /tmp/swtpm && swtpm socket --tpm2 --tpmstate dir=/tmp/swtpm --server type=tcp,port=2321 --ctrl type=tcp,port=2322 --flags not-need-init,startup-clear --daemon
+export TPM2OPENSSL_TCTI="swtpm:port=2321"
+bash scripts/verify-linux.sh --require-tpm
+```
+
+`LinuxTpmSigningKeyStore.IsAvailable()` honours `TPM2OPENSSL_TCTI` (a TPM other than `/dev/tpmrm0`), so the TPM tests run against swtpm.
+It proves the code path, not the protection of a real chip.
+
+### 8.3 macOS — `bash scripts/verify-macos.sh [--require-keychain] [--require-secure-enclave]`
+
+| # | What | Pass when |
+|---|---|---|
+| M1 | Unix modes of the file stores; direct `CopyWithPrivateKey` | `YFex.Cryptography.Tests` green |
+| M2 | Keychain root key (login keychain): store, second instance reads it, delete. macOS may ask once to allow access: "Always Allow" | `The_Keychain_root_key_persists_and_wraps` green |
+| M3 | Keychain software signing key (login keychain, `preferSecureEnclave: false`): create, sign, verify, reopen, delete | `Keychain_signing_keys_sign_reopen_and_are_deleted` green |
+| M4 | Secure Enclave key (§5.4 steps 1–2): needs a **signed** test host with a `keychain-access-groups` entitlement (Developer ID + provisioning profile); an unsigned run reports `[SKIP]` (-34018). Record the signing time | `Secure_Enclave_keys_sign_reopen_and_are_deleted` green with `--require-secure-enclave` on the signed host |
+| M5 | Native AOT `osx-arm64`/`osx-x64`: 0 IL warnings; the smoke runs | `VERIFY MACOS: PASSED` |
+| M6 | TLS on macOS (§5.4 steps 3–4) | still a spike: not part of the script |
+
+### 8.4 After a pass
+
+The session that receives the log updates 12 §5, this section and the memory file, and removes "not yet run" from the XML docs. Whether
+the automatic per-host choice should then include these stores (e.g. `UsePlatformKeyStore()` picking the TPM on Linux) is a decision for
+the user (12 §4 question 1 style: automatic with manual overrides).
+
+## 9. Android Keystore — `YFex.Cryptography.Android` (⚑K19, decided 2026-10-20; BUILT 2026-10-27, emulator-verified, real device pending)
+
+**Requested by:** installations 11 (Android handhelds that work offline, ⚑I26, ⚑I32). The user chose a **variant package of this
+library** ("a variant of the Crypto"), like `.Windows`, `.Apple` and `.Linux`.
+
+### 9.1 Package
+
+- `YFex.Cryptography.Android`, target `net11.0-android`. It is a .NET-for-Android project (Java interop with
+  `java.security.KeyStore` "AndroidKeyStore"), which is why it cannot live in the BCL-only main package (12 Phase 5 note).
+- No NuGet package beyond the Android workload. It is trim-clean (0 warnings under the Android build's trimming/AOT settings). NativeAOT for
+  Android is evaluated in the spike, not assumed.
+- Lives in this repo, so the architecture test needs no allow-list entry (as `.Apple`, §5.1).
+
+### 9.2 Design sketch
+
+```csharp
+[SupportedOSPlatform("android")]
+public sealed class AndroidKeystoreSigningKeyStore : ISigningKeyStore      // (sketch)
+{
+    public AndroidKeystoreSigningKeyStore(string aliasPrefix = "yfex.signing.", bool preferStrongBox = true);
+    // P-256 (secp256r1), PURPOSE_SIGN, SHA-256, non-exportable. Order: StrongBox (setIsStrongBoxBacked) → TEE → software Keystore.
+    // KeyProtection reported: Hardware for StrongBox and TEE (KeyInfo.getSecurityLevel), OperatingSystem for the software Keystore.
+    // DER signatures from the platform are converted to P1363 (r ‖ s) like every other store.
+}
+
+[SupportedOSPlatform("android")]
+public sealed class AndroidKeystoreRootKeyProvider : IRootKeyProvider      // (sketch)
+{
+    // AES-256-GCM key in the Keystore wraps the YFex root key file in the app's private files directory
+    // (storage encryption, sealed installation state, refresh tokens).
+}
+
+[SupportedOSPlatform("android")]
+public static class AndroidKeyAttestation                                 // (sketch) record only, never a decision here
+{
+    public static ImmutableArray<byte[]> ReadChain(string alias);        // certificate chain of the key, empty when unsupported
+}
+```
+
+### 9.3 Rules
+
+- **Hardware is preferred, never required** by this package (user, 2026-10-20). Requiring it is a policy at central (installations
+  ⚑I32, `IEnrollmentPolicy`).
+- Attestation chains are returned as bytes. Parsing and checking them against Google's roots is the policy's job (later; it needs a
+  maintained root list).
+- **Spike (installations 09 §4 R7), on a real device:** sign + verify, StrongBox and TEE signature time, Keystore key as `SslStream`
+  client credential (fallback: software transport key under this root key), AOT/trim warnings, behaviour after a factory reset and after
+  adding a screen lock (keys must not require user authentication, or background signing breaks).
+  *Emulator results (2026-10-21, `C:\Dev\YFex\_ignore\androidKit-runs\`, Android 15 and 16, software KeyMint):* a Keystore P-256 key
+  **works as the TLS 1.3 client credential** with `SslStream` (`new X509Certificate2(PrivateKeyEntry handle)`, dotnet/runtime#103337;
+  mutual TLS, server saw the Keystore certificate), provided the key also allows `DIGEST_NONE` (Conscrypt signs the handshake hash with
+  `NONEwithECDSA`). Keystore sign 3–9 ms median, key generation 37–53 ms, with attestation 130–160 ms; no StrongBox. Hardware numbers
+  still need a real device (`androidKit probe --serial …`).
+
+### 9.4 Decisions for the build (2026-10-27, user: "you can start it")
+
+**Shape as built (replaces the 9.2 sketch where they differ):**
+
+- `AndroidKeystoreSigningKeyStore : ICertificateKeyStore`. Alias `{prefix}{name}`. P-256, `PURPOSE_SIGN`, digests `NONE` + `SHA-256`,
+  no user authentication, no unlocked-device requirement. `SignHash` signs the 32-byte hash with `NONEwithECDSA` (the library hashes,
+  ⚑K8), so every key also works for TLS. Order StrongBox → TEE/software Keystore. `KeyProtection.Hardware` for StrongBox and TEE,
+  `OperatingSystem` for software KeyMint.
+- **TLS without touching the stored chain:** `CopyWithPrivateKeyAsync` builds an **in-memory** `KeyStore.PrivateKeyEntry` (the
+  Keystore key + the issued certificate) and wraps it in an `X509Certificate2`. The certificate chain stored with the key stays the
+  attestation chain.
+- **Attestation:** the store's `GetOrCreateAsync(name, attestationChallenge)` overload sets the challenge at creation, and
+  `ReadAttestationChain(name)` returns the DER chain (empty when none). This replaces the static `AndroidKeyAttestation` of 9.2,
+  so callers never handle aliases. Record only (9.3).
+- **Root key:** `AndroidKeystoreRootKeyProvider : IRootKeyProvider`. A non-exportable AES-256-GCM Keystore key (alias
+  `yfex.root-key.{name}`) wraps each blob itself, the way the CNG root key does. The YFex root key is never in a file. Provider id
+  `RootKeyFormat.AndroidKeystore = 0x08` (05 §7). Protection comes from the key's security level.
+
+**Gap 1: Auto Backup and device-to-device transfer.** Keystore keys are never backed up, but app files are. Restoring sealed state onto
+another device gives files whose wrapping key does not exist there. The rule: **key material and sealed installation state live in
+`Context.NoBackupFilesDir`**, which Auto Backup and device transfer always skip. The package gives `AndroidKeyPaths.Directory("keys")`
+(a folder under `NoBackupFilesDir/yfex/`) for `StoreKeyRingsInFiles` / `StoreSecretsInFiles`. Apps that also back up other files must
+not list these folders in their `dataExtractionRules`/`fullBackupContent`.
+
+**Gap 2: lost or invalidated keys.** Keys are not bound to user authentication or biometrics, so `KeyPermanentlyInvalidatedException`
+does not apply. They disappear on uninstall, "clear data", factory reset, or a restore onto another device. The root provider then
+throws `AndroidKeystoreKeyLostException` (a `CryptographicException`), whose message says "the Keystore key is gone; re-enroll", when
+blobs exist but its key does not, or when the key cannot open them. A missing signing key is simply absent (`TryGetAsync` → null).
+Recovery is the app's and Installations' job: wipe local state and enroll again with a new QR (installations 11 §4.3).
+
+**Gap 3: runtime.** The package makes no runtime assumption. It is trim-clean (`IsTrimmable`, analyzers on, 0 warnings) and uses only
+the generated `Mono.Android` bindings, no reflection. v1 tests run on the default .NET for Android runtime. NativeAOT for Android is
+evaluated with the handheld app (installations I6), not in this package.
+
+### 9.5 Verification (2026-10-27)
+
+`tests/YFex.Cryptography.Android.DeviceTests` is an Android app whose instrumentation runs 11 tests and reports JSON. Run it with
+`androidKit test tests/YFex.Cryptography.Android.DeviceTests/YFex.Cryptography.Android.DeviceTests.csproj [--atd | --serial <id>]`.
+Every alias and file carries a per-run suffix and is deleted at the end.
+
+| Test | Proves |
+|---|---|
+| create / reopen / sign / verify / delete | Keystore `NONEwithECDSA` over the hash → P1363 verifies with `SignatureVerifier`; same id on reopen; tamper → `Invalid`; delete is idempotent |
+| concurrent creation | 4 parallel `GetOrCreateAsync` → one key |
+| attestation | with a challenge: chain ≥ 2, leaf = the key; without: empty; missing key: empty |
+| mutual TLS | a Keystore CA key signs a root and a leaf (`CertificateAuthority`); `CopyWithPrivateKeyAsync` → `SslStream` TLS 1.3 client credential; server sees the issued certificate; **the stored attestation chain is unchanged** |
+| mismatch | a certificate for another key → `ArgumentException`; missing key → `InvalidOperationException` |
+| root key | blob `0x08 ‖ 12 ‖ ct ‖ 16`; fresh nonce per wrap; second instance unwraps; tampered / other id / truncated → `CryptographicException` (not "lost") |
+| lost root key | key deleted, provider recreated, old blob → `AndroidKeystoreKeyLostException` |
+| restart | `FileKeyRingStore` under the Keystore root in `AndroidKeyPaths`: same ring key and the sealed value opens after a new root provider + store + ring provider |
+| builder | `UseAndroidKeystoreRootKey` + `StoreSigningKeysInAndroidKeystore` + `StoreSecretsInFiles` resolve; secret round trip |
+| key folders | `AndroidKeyPaths.Directory` is under `NoBackupFilesDir/yfex/`; a path is refused |
+
+| Run | Result | Facts |
+|---|---|---|
+| Android 16 ATD emulator (API 36), run `20261027-153003-emulator-5586` | **11/11 pass** | protection `OperatingSystem` (software KeyMint), sign median 4.0 ms, attestation root "Droid Unregistered Device CA" (test root), TLS 1.3 |
+| Android 15 emulator (API 35), run `20261027-153157-emulator-5584` | **11/11 pass** | sign median 5.8 ms; first handshake 7.3 s (emulator warm-up, includes JIT) |
+| Release build of `cryptography.android.slnx` (trimming on) | 0 warnings | |
+| Real handheld | **pending** | StrongBox/TEE protection and timing, Google attestation root, `NONE` digest with StrongBox: run with `--serial` when a device is connected |
+
+Real-device question to settle: some StrongBox implementations accept only `SHA-256` for EC keys. If StrongBox refuses `DIGEST_NONE`,
+the store already falls back to the TEE (`StrongBoxUnavailableException`). A refusal surfacing as another exception type would need
+a fix, so the first handheld run decides it.
+
+
+## 10. Named recipient (key-agreement) keys — `IRecipientKeyStore` (BUILT 2026-10-27)
+
+**Requested by:** installations I5 (08 §2 dependency table) and crypto 13 §6: each installation needs a third key, an ECDH P-256
+**key-agreement key** next to its signing keys, so central can seal a secret (an A1 certificate) to that installation alone. Ring
+recipient keys (`RecipientKeyRing`) are server-side and rotate; an installation's key is a single named key, like its signing keys.
+
+```csharp
+public interface IRecipientKeyStore                         // main library
+{
+    ValueTask<IRecipientKey> GetOrCreateAsync(string keyName, CancellationToken cancellationToken = default);
+    ValueTask<IRecipientKey?> TryGetAsync(string keyName, CancellationToken cancellationToken = default);
+    ValueTask DeleteAsync(string keyName, CancellationToken cancellationToken = default);
+}
+// IRecipientKey gained KeyProtection Protection => KeyProtection.Memory (default member; stores override it).
+
+services.AddYFexCryptography(cryptography => cryptography
+    .UseCngRootKey()
+    .StoreSigningKeysInCng()
+    .StoreRecipientKeysInCng());                            // Windows: TPM first, else the software KSP
+//  .StoreRecipientKeysInFiles(AppPaths.Data("recipient-keys"))   // every OS: sealed secrets under the root key
+//  .StoreRecipientKeysIn(sp => …)                                 // custom store
+
+IRecipientKey agreement = await recipientKeys.GetOrCreateAsync("installation/key-agreement");
+// enrollment publishes agreement.PublicKey; central: RecipientSealing.Seal(publicKey, pfx, context)
+OpenResult opened = RecipientSealing.Open(agreement, sealedA1, context, plaintext);
+```
+
+| Store | Where | Protection | Algorithm |
+|---|---|---|---|
+| `SealedRecipientKeyStore(ISecretStore, KeyProtection, PostQuantumKeys)` (main library) | any `ISecretStore`; `StoreRecipientKeysInFiles` builds it over a `FileSecretStore` | as given (`File` from the builder) | **hybrid `0x11`** when the host runs ML-KEM (`PostQuantumKeys.Automatic`), else classic |
+| `CngRecipientKeyStore` (`.Windows`) | CNG key `YFex.KeyAgreement.{name}`, `ExportPolicy None`, user or machine scope | `Hardware` (TPM) / `OperatingSystem` (software KSP) | classic `0x01` (a TPM has no ML-KEM) |
+
+- **Key id:** `PublicKeyRecord.KeyIdOf(SPKI of the P-256 public key)` in every store, as for signing keys.
+- **Stored record** (`SealedRecipientKeyStore`, secret `recipient-key/{name}`, 05 §7): `0x01 ‖ P-256 scalar (32) [‖ ML-KEM-768 seed (64)]`.
+- **TPM finding (probe 2026-10-27, `C:\Dev\YFex\_ignore\cng-ecdh-probe`):** the Platform Crypto Provider creates ECDH P-256 keys only
+  without `NCRYPT_ALLOW_KEY_AGREEMENT_FLAG` (the default usage works), and `ECDiffieHellmanCng.DeriveRawSecretAgreement` cannot
+  use the key: it imports the peer key with flags the PCP refuses ("Invalid flags" / "handle invalid"). `NCryptImportKey(flags 0)` →
+  `NCryptSecretAgreement` → `NCryptDeriveKey("TRUNCATE")` works on the TPM and the software KSP. The secret comes back little-endian
+  and is reversed. So `.Windows` calls NCrypt through `LibraryImport` (AOT-safe, `AllowUnsafeBlocks`). One TPM agreement takes about 47 ms;
+  the first use of a reopened key takes about 1 s (key load).
+- **Same rules as ring keys:** an off-curve or malformed ephemeral point → `false` (the library's `RecipientSealing.IsOnCurve`, shared
+  with `.Windows` through `InternalsVisibleTo`), never an exception. Creation proves an agreement against a software peer before the
+  key is trusted; a TPM that fails falls back to the software KSP.
+- **Across processes:** CNG creation is by name (first creator wins). `SealedRecipientKeyStore` serializes creation within a process;
+  across processes the last writer wins, so the installation's own setup creates the key.
+- **Not yet:** Android (Keystore `PURPOSE_AGREE_KEY`, API 31+), Linux TPM and Apple stores. Until then those OSes use
+  `StoreRecipientKeysInFiles`.
+
+**Tests (2026-10-27):** cryptography 241 (+6 `RecipientKeyStoreTests`: classic and hybrid round trip after reopen, id from the
+public key, concurrent creation, record version check, builder + restart with files); Windows 20 (+5 `CngRecipientKeyStoreTests`: software
+KSP **and TPM** seal → reopen → open, tamper refused, id + no export, shared secret = software ECDH, off-curve/compressed point
+refused, no ML-KEM half, builder); AOT smoke (win-x64) 0 IL warnings with both stores.

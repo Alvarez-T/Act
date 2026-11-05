@@ -49,6 +49,72 @@ public class WireFormatTests
     }
 
     [Fact]
+    public void Unavailable_error_round_trips_reason_and_message()   // v6, offline ⚑O13
+    {
+        QueueableResult<int> offline = Error.Unavailable(UnavailableReason.CentralRequired);
+        var back = RoundTrip(offline);
+
+        back.TryGetError(out var error).Should().BeTrue();
+        error.Kind.Should().Be(ErrorKind.Unavailable);
+        error.TryGetValue(out Unavailable unavailable).Should().BeTrue();
+        unavailable.Reason.Should().Be(UnavailableReason.CentralRequired);
+        unavailable.Message.Should().Be("Requires the central server.");
+        RoundTrip(Error.Unavailable(UnavailableReason.AllowanceExhausted, "Convênio sem saldo offline")).Message
+            .Should().Be("Convênio sem saldo offline");
+    }
+
+    [Fact]
+    public void ReauthenticationRequired_round_trips_max_age_and_minimum()   // v7, authentication P5 (R2)
+    {
+        var requirement = new YFex.Authorization.Public.RecentAuthenticationRequirement(TimeSpan.FromMinutes(5),
+            YFex.Authorization.Public.AssuranceLevel.MultiFactor);
+        // A step-up denial from the gate becomes its own error kind, not a plain Forbidden.
+        Error error = Error.From(YFex.Authorization.Public.AuthorizationVerdict.Forbidden(
+            YFex.Authorization.Public.Denial.ReauthenticationRequiredOf(requirement)));
+        error.Kind.Should().Be(ErrorKind.ReauthenticationRequired);
+        error.TryGetValue(out Forbidden _).Should().BeFalse();
+
+        var back = RoundTrip<QueueableResult<int>>(error);
+        back.TryGetError(out var received).Should().BeTrue();
+        received.Kind.Should().Be(ErrorKind.ReauthenticationRequired);
+        received.TryGetValue(out ReauthenticationRequired step).Should().BeTrue();
+        step.Requirement.Should().Be(requirement);
+        received.Message.Should().Be(error.Message);
+        received.Value.Should().Be(new ReauthenticationRequired(requirement));
+    }
+
+    [Fact]
+    public void SitePresenceRequired_round_trips_max_age()   // v8, ⚑Z20 (authentication R8)
+    {
+        var requirement = new YFex.Authorization.Public.SitePresenceRequirement(TimeSpan.FromMinutes(10));
+        Error error = Error.From(YFex.Authorization.Public.AuthorizationVerdict.Forbidden(
+            YFex.Authorization.Public.Denial.SitePresenceRequiredOf(requirement)));
+        error.Kind.Should().Be(ErrorKind.SitePresenceRequired);
+        error.TryGetValue(out Forbidden _).Should().BeFalse();
+
+        var back = RoundTrip<QueueableResult<int>>(error);
+        back.TryGetError(out var received).Should().BeTrue();
+        received.Kind.Should().Be(ErrorKind.SitePresenceRequired);
+        received.TryGetValue(out SitePresenceRequired presence).Should().BeTrue();
+        presence.Requirement.Should().Be(requirement);
+        received.Message.Should().Be(error.Message);
+        received.Value.Should().Be(new SitePresenceRequired(requirement));
+    }
+
+    [Fact]
+    public void RestrictedWhileImpersonating_round_trips_as_Forbidden_with_the_permission()   // Phase 6
+    {
+        var permission = YFex.Authorization.Public.Permission.Parse("shop.customers.export");
+        Error error = Error.From(YFex.Authorization.Public.AuthorizationVerdict.Forbidden(
+            YFex.Authorization.Public.Denial.RestrictedWhileImpersonatingOf(permission.Key)));
+        var back = RoundTrip<QueueableResult<int>>(error);
+        back.TryGetError(out var received).Should().BeTrue();
+        received.TryGetValue(out Forbidden forbidden).Should().BeTrue();
+        forbidden.Denial.Kind.Should().Be(YFex.Authorization.Public.DenialKind.RestrictedWhileImpersonating);
+        forbidden.Denial.Missing.Value.Should().Be("shop.customers.export");
+    }
+
+    [Fact]
     public void Approval_required_error_round_trips_approvals_fingerprint_and_digest()
     {
         var reason = new Violation(FieldPath.Of("Discount"), "rules.limit.max", Severity.Warning,

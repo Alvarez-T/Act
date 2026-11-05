@@ -338,6 +338,8 @@ NetworkFingerprint? here = NetworkFingerprint.Compute(evidence, bytes => install
 Offline uses it to guess "we are in branch 12" before any server answers (pick the right site profile, try the right broker
 address). It is spoofable (anyone can copy a gateway MAC and SSID), so it only **orders candidates**. HMAC with a consumer key keeps
 the fingerprint from identifying a home network across tenants.
+The same holds for "is this handheld inside the store?": that is a witness-signed Installations statement (installations 11 §5),
+not a fingerprint, SSID or IP match.
 
 ### 10.3 Multi-homing (prefer Ethernet over the 4G dongle)
 
@@ -431,7 +433,7 @@ public readonly union FeatureSupport(FeatureAvailable, FeatureNeedsPermission, F
 | Windows 10/11 | everything; `.Windows` adds NLM (connectivity, cost, category, network id), Wi-Fi (WLAN API), ARP/NDP table, route-table primary adapter, firewall read — verified on this PC 2026-10-07 (NativeAOT included) |
 | Linux | `/proc/net/arp`, `/proc/net/route`; ICMP works unprivileged when `ping_group_range` allows, else the BCL falls back to `ping`; no cost source (NetworkManager is D-Bus: app-supplied source) |
 | macOS (⚑N29, spike) | main package works (BCL adapters, ICMP is unprivileged, sockets); **macOS 15+ asks the user for "Local Network" access** the first time an app talks to the LAN (multicast, unicast to private addresses) — the app bundle needs `NSLocalNetworkUsageDescription` (and `NSBonjourServices` for mDNS); a planned `YFex.Networking.MacOS` would add the ARP table (`sysctl` route dump), Wi-Fi (CoreWLAN; SSID needs Location permission), cost (`Network.framework` `isExpensive`/`isConstrained`). Not built or tested yet (no Mac here) |
-| Android / iOS | multicast needs a platform lock (Android `WifiManager.MulticastLock`) → `IMulticastLock` hook supplied by the app; cost from the app's `INetworkConditionsSource` |
+| Android / iOS | multicast needs a platform lock (Android `WifiManager.MulticastLock`) → `IMulticastLock` hook supplied by the app; cost from the app's `INetworkConditionsSource`; Android handhelds (installations 11, 2026-10-20): the app also supplies `NetworkFingerprintEvidence` (SSID needs the location permission) — a hint for "which store, which broker", **never** presence |
 | Browser (WASM) | no sockets/ICMP/multicast: `AddYFexNetworking` registers a conditions monitor driven by an app-supplied source (`navigator.onLine`); everything else reports `FeatureUnsupported` |
 | QUIC | reported only (`QuicConnection.IsSupported`) for YFex.Installations |
 

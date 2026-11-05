@@ -143,6 +143,7 @@ public sealed class FusionMessageBus : IDispatcher
     private readonly IServiceProvider _sp;
     private readonly CallPrincipalSource _principal;
     private readonly CallContextClientHeaders _headers;
+    private readonly IOfflineAdmission? _admission;
 
     internal FusionMessageBus(
         FrozenDictionary<Type, QueryDispatchEntry> queries,
@@ -166,6 +167,7 @@ public sealed class FusionMessageBus : IDispatcher
         _sp = sp;
         _principal = new CallPrincipalSource(sp, registry);
         _headers = new CallContextClientHeaders(sp);
+        _admission = sp.GetService<IOfflineAdmission>();
     }
 
     // ── Call context (D29): per-call headers ─────────────────────────────────
@@ -345,6 +347,8 @@ public sealed class FusionMessageBus : IDispatcher
             return QueueableResult<TResult>.Invalid(shape);
 
         _registry.Commands.TryGetValue(typeof(TCommand), out var policy);
+        Error refused = await AdmitOfflineAsync(cmd!, typeof(TCommand), ct).ConfigureAwait(false);
+        if (refused.HasValue) return refused;
         await RunOfflineHandlerAsync(cmd!, policy, ct).ConfigureAwait(false);
 
         if (cmd is IQueueable)
@@ -355,7 +359,7 @@ public sealed class FusionMessageBus : IDispatcher
             return QueueableResult<TResult>.Queue(queued.IdempotencyKey);
         }
 
-        return QueueableResult<TResult>.Fail("No network connectivity.");
+        return Error.Unavailable(UnavailableReason.CentralRequired);   // offline 06 §2: central-only (⚑O13)
     }
 
     private async ValueTask<QueueableResult> OfflineCommandVoidAsync<TCommand>(
@@ -366,6 +370,8 @@ public sealed class FusionMessageBus : IDispatcher
             return QueueableResult.Invalid(shape);
 
         _registry.Commands.TryGetValue(typeof(TCommand), out var policy);
+        Error refused = await AdmitOfflineAsync(cmd!, typeof(TCommand), ct).ConfigureAwait(false);
+        if (refused.HasValue) return refused;
         await RunOfflineHandlerAsync(cmd!, policy, ct).ConfigureAwait(false);
 
         if (cmd is IQueueable)
@@ -376,23 +382,35 @@ public sealed class FusionMessageBus : IDispatcher
             return QueueableResult.Queue(queued.IdempotencyKey);
         }
 
-        return QueueableResult.Fail("No network connectivity.");
+        return Error.Unavailable(UnavailableReason.CentralRequired);   // offline 06 §2: central-only (⚑O13)
     }
+
+    // Offline 06 §4 (YFex.Offline): allowance reservations and unique claims before the handler; nothing to do without an admission.
+    private ValueTask<Error> AdmitOfflineAsync(object cmd, Type commandType, CancellationToken ct)
+        => _admission is null ? default : _admission.AdmitAsync(cmd, commandType, ct);
 
     private async ValueTask RunOfflineHandlerAsync(
         object cmd, YFex.Cqrs.Runtime.CommandPolicy? policy, CancellationToken ct)
     {
-        if (policy?.OnOfflineHandler is not null)
+        try
         {
-            await policy.OnOfflineHandler(cmd, ct).ConfigureAwait(false);
-            return;
-        }
+            if (policy?.OnOfflineHandler is not null)
+            {
+                await policy.OnOfflineHandler(cmd, ct).ConfigureAwait(false);
+                return;
+            }
 
-        // Strongly-typed resolve + invoke captured at registration where the handler/command[/result] are
-        // generic parameters — no reflection (was GetMethod/Invoke, an IL2075 site). The delegate resolves
-        // the handler from DI (interface first, concrete fallback) and calls the typed HandleAsync.
-        if (policy?.OnOfflineHandlerInvoke is not null)
-            await policy.OnOfflineHandlerInvoke(_sp, cmd, ct).ConfigureAwait(false);
+            // Strongly-typed resolve + invoke captured at registration where the handler/command[/result] are
+            // generic parameters — no reflection (was GetMethod/Invoke, an IL2075 site). The delegate resolves
+            // the handler from DI (interface first, concrete fallback) and calls the typed HandleAsync.
+            if (policy?.OnOfflineHandlerInvoke is not null)
+                await policy.OnOfflineHandlerInvoke(_sp, cmd, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            _admission?.Abandon(cmd);
+            throw;
+        }
     }
 
     private async ValueTask InvalidateCachesAsync(object cmd, Type commandType, CancellationToken ct)

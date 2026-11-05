@@ -56,9 +56,11 @@ DHCP changing the broker's IP needs no reconfiguration: the next beacon carries 
 
 ## 3. Routing: where a call goes in each mode (Fusion, no fork)
 
-> **⚑O31 (open, README):** the recommendation is now to reach the broker services over Installations **peer channels**
-> (`offline.session`, `offline.coordination`, `offline.custody`, `offline.feed`) instead of a second Fusion peer. The routing logic below
-> is the same either way; only the `broker` transport changes.
+> **⚑O31 (✅ decided 2026-10-19, README):** terminals reach the broker services over Installations **peer channels**
+> (`offline.session`, `offline.coordination`, `offline.custody`, `offline.feed`), not a second Fusion peer. Read "broker peer" below as
+> those channels: requests and replies plus pushes in both directions on the one mTLS connection per friend pair. Central stays a Fusion
+> peer. A call in doubt on a channel is repeated with the same envelope id (the broker's ledger deduplicates by it), and live broker
+> values reach view models as local events/services (catch-up on connect, versioned pushes).
 
 There are two Fusion client peers: `central` and `broker`. The broker peer exposes only the generic broker services. **No app message
 is ever executed on the broker.** In `Site` and `Standalone` modes the terminal runs the app's own `OnOffline<T>` handler locally.

@@ -57,6 +57,12 @@ b.Command<VoidSale, Receipt>()
           at replay, always flagged for review (D34 semantics kept)
 ```
 
+**As built with Offline (Phase 3, 2026-10-17/19):** during a replay `OfflineApprovalOrigin` supplies the envelope's installation and decision
+time, so device tokens are judged **as of the sale** (F7; a Friday approval replayed on Monday stays valid, acceptance 09 S2 standalone);
+`IPermissionHistory.HeldAtAsync` re-checks the approver as of that time when the app provides a history; `OfflineUnverifiedApproverHandler`
+implements `Defer` (a fact is applied with a finding, a request is parked in the review queue). Site-signed tokens (`ApprovalTokenKind.Site`)
+come with the broker (Offline Phase 4).
+
 ## 2. Temporary grants (⚑Z13)
 
 ```csharp

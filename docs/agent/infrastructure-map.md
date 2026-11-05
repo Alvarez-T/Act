@@ -15,9 +15,11 @@ Use this file only when a task crosses package or repository boundaries. This is
 | CQRS contracts and dispatch | `YFex/src/Cqrs` | [`docs/public/cqrs.md`](../public/cqrs.md) |
 | Event bus, offline outbox, RPC | `YFex/src/Messaging` | [`docs/public/messaging.md`](../public/messaging.md) |
 | Reactive state, navigation, framework-neutral UI contracts | `YFex/src/State`, `src/Navigation`, `src/UI` | [`docs/index.md`](../index.md) |
+| Accounts, sign-in (password, PIN, codes by e-mail/SMS/WhatsApp; Google/Microsoft/OIDC), sessions and tokens; the app-side client (`.Client`) and offline bridge (`.Offline`) | `YFex.Authentication` (P1–P4 built) | [`YFex.Authentication/README.md`](../../../YFex.Authentication/README.md), [`authentication/README.md`](../internal/authentication/README.md) |
 | Permission evaluation and actor identity | `YFex.Authorization` | [`YFex.Authorization/README.md`](../../../YFex.Authorization/README.md) |
 | Discoverable actions for search and AI | `YFex.Capabilities` | [`YFex.Capabilities/README.md`](../../../YFex.Capabilities/README.md) |
 | Provider-neutral search orchestration | `YFex.Search` | [`YFex.Search/AGENTS.md`](../../../YFex.Search/AGENTS.md) |
+| Remote file stores (FTP/FTPS, SFTP, S3, Azure Blob, shared folders) and partner file exchange | `YFex.Files` (planned, design proposed) | [`files/README.md`](../internal/files/README.md) |
 | Outbound HTTP API clients, per-scope endpoints and credentials | `YFex.Web` | [`YFex.Web/docs/README.md`](../../../YFex.Web/docs/README.md) |
 | Keys, cryptographic bytes, signatures, certificates | `YFex.Cryptography` | [`YFex.Cryptography/README.md`](../../../YFex.Cryptography/README.md) |
 | Data classification and masking | `YFex.Privacy` | [`YFex.Privacy/README.md`](../../../YFex.Privacy/README.md) |
@@ -26,11 +28,15 @@ Use this file only when a task crosses package or repository boundaries. This is
 | Trusted time and rollback detection | `YFex.Time` | [`YFex.Time/README.md`](../../../YFex.Time/README.md) |
 | Network conditions, probes, discovery, Telnet, SNMP | `YFex.Networking` | [`YFex.Networking/README.md`](../../../YFex.Networking/README.md) |
 | Installed-copy identity, enrollment, trusted peers | `YFex.Installations` | [`installations/README.md`](../internal/installations/README.md) |
-| Offline modes, signed offline envelopes, site manifest and limits, allowances, signed rule data, site broker services | `YFex.Offline` (`.Central`, `.Rules`) | [`YFex.Offline/README.md`](../../../YFex.Offline/README.md), [`offline/README.md`](../internal/offline/README.md) |
+| Android handhelds: QR enrollment, presence in the store, off-site rules | `YFex.Installations` (+ Cryptography.Android, Authentication, Authorization, Offline) | [`installations/11-mobile-handhelds.md`](../internal/installations/11-mobile-handhelds.md) |
+| Offline modes, signed offline envelopes, offline sign-in, site manifest and limits, allowances, signed rule data, central reconciliation and durable stores, site broker services (Phase 4) | `YFex.Offline` (`.Central`, `.Rules`, `.Persistence`, `.Rpc`, `.Central.Rpc`, `.Data`) | [`YFex.Offline/README.md`](../../../YFex.Offline/README.md), [`offline/README.md`](../internal/offline/README.md) |
 | Retry, timeout, breaker policy vocabulary | `YFex.Resilience` | [`YFex.Resilience/README.md`](../../../YFex.Resilience/README.md) |
 | Sagas, process managers, durable waits | `YFex.Orchestration` | [`YFex.Orchestration/README.md`](../../../YFex.Orchestration/README.md) |
 | Event-sourced aggregate write model | `YFex.EventSourcing` | [`YFex.EventSourcing/README.md`](../../../YFex.EventSourcing/README.md) |
 | Embedded scheduled jobs | `YFex.Jobs` | [`YFex.Jobs/README.md`](../../../YFex.Jobs/README.md) |
+| Running background services: one service host per machine role (`yfex-host`), module profiles from central, tray/CLI control | composition roots; `YFex.Hosting` (planned, plan proposed 2026-11-03) | [`hosting/README.md`](../internal/hosting/README.md) |
+| Sending messages to people (e-mail, SMS, WhatsApp, chat, webhooks, in-app), templates, outbox | `YFex.Notifications` (planned, plan proposed 2026-11-04); OTP rules stay in `YFex.Authentication.Delivery` | [`notifications/README.md`](../internal/notifications/README.md) |
+| Installing products, firewall rules, enrollment UI, self-update | `YFex.Installer` (future, orientation only) | [`installer/README.md`](../internal/installer/README.md) |
 | Consent-gated machine telemetry | `YFex.System` | [`YFex.System/README.md`](../../../YFex.System/README.md) |
 | Consent-aware profile signals | `YFex.Profiling` | [`YFex.Profiling/AGENTS.md`](../../../YFex.Profiling/AGENTS.md) |
 | Security intelligence and inspection | `YFex.Security` | [`YFex.Security/AGENTS.md`](../../../YFex.Security/AGENTS.md) |
@@ -46,6 +52,7 @@ Other `YFex.*` folders may be infrastructure, product-specific libraries, experi
 - **Core is types first.** A shared `Hash256` or `ITimeSource` can live there; key storage, clocks, networking, authorization, and audit engines do not.
 - **Validation and Rules stay domain neutral.** `Money`, `Tenant`, and `Store` may be application values, never built into the general rule engine's core contract. Use a type extension point when the app decides the value domain.
 - **Persistence and Data serve different purposes.** Persistence is app-state storage and offline durability; Data is database access, SQL, mapping, and migration. Put bridging adapters at their boundary.
+- **Authentication proves who; Authorization decides what.** Authentication tokens carry identity facts (subject, session, methods, assurance), never permissions.
 - **Authorization makes decisions; Capabilities describes actions.** A capability manifest can read permission metadata but does not grant access.
 - **Logging and Audit differ.** Libraries probe logging through `YFex.Diagnostics` in core; composition roots install `YFex.Logging`. Audit records durable, tamper-evident facts through `YFex.Audit.Public` contracts and its engine.
 - **Networking discovers candidates; Installations decides trust.** Presence on a LAN never proves tenant membership. Trusted time belongs to `YFex.Time`; platform clock reads alone are insufficient for security decisions.
@@ -54,9 +61,12 @@ Other `YFex.*` folders may be infrastructure, product-specific libraries, experi
 
 ## Current documentation routes
 
+- Ecosystem status, dependency map and known inconsistencies: [`docs/atlas`](../atlas/README.md) (`atlas.json` curated, `atlas.generated.json` scanned by `C:\Dev\Scripts\yfexAtlas.cs`). Update a component's status there when a phase lands.
 - Public caller guides: [`docs/index.md`](../index.md), then only the relevant `docs/public/<topic>.md`.
 - Contributor design and acceptance: `docs/internal/<topic>/README.md`, then its phase/acceptance file. Some docs describe proposals or older progress; inspect the target repo's `README.md` and current symbols before calling a feature complete.
 - Generator architecture: [`docs/internal/source-generators.md`](../internal/source-generators.md). Check current generator APIs semantically before copying old examples.
+- Running code on Android (headless emulator, USB handhelds, `androidKit probe`): [`android-testing.md`](android-testing.md).
+- Running code on Linux (WSL2 `yfex-linux` + Docker distro matrix, swtpm, Secret Service, `linuxKit verify-crypto`): [`linux-testing.md`](linux-testing.md).
 - Former full agent files: [`AGENTS archive`](AGENTS-archive-2026-10-09.md) and [`CLAUDE archive`](CLAUDE-archive-2026-10-09.md). They preserve detailed examples, but their build matrix, status notes, and API examples may be stale.
 
 ## Efficient task input

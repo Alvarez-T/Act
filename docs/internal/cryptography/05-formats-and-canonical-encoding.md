@@ -58,8 +58,32 @@ key ‖ nonce = HKDF-SHA256(IKM = ECDH shared secret, salt = bytes[18..83) ‖ b
 AAD = bytes[0..83) ‖ SealContext.Bytes
 ```
 
-Overhead 99 bytes (a CPF of 11 bytes becomes 110). The reserved hybrid algorithm `0x11` appends the ML-KEM-768 ciphertext (1 088 bytes)
-after the ephemeral key and feeds both shared secrets into HKDF (08 §3).
+Overhead 99 bytes (a CPF of 11 bytes becomes 110).
+
+**Hybrid `0x11` (Phase 5, built 2026-10-18; 08 §3):**
+
+```
+offset  size  field
+0       1     format version   0x81
+1       1     algorithm        0x11 ML-KEM-768 + ECDH P-256 + HKDF-SHA256 + AES-256-GCM
+2       16    recipient key id
+18      65    ephemeral P-256 public key (SEC1 uncompressed)
+83      1088  ML-KEM-768 ciphertext (FIPS 203), encapsulated to the recipient's encapsulation key
+1171    n     ciphertext
+1171+n  16    tag
+key ‖ nonce = HKDF-SHA256(IKM = ECDH shared secret (32) ‖ ML-KEM shared secret (32),
+                          salt = bytes[18..1171) ‖ bytes[2..18),
+                          info = "yfex.recipient-seal.v1" ‖ 0x00 ‖ SealContext.Bytes) → 44 bytes
+AAD = bytes[0..1171) ‖ SealContext.Bytes
+```
+
+Overhead 1 187 bytes (a CPF becomes 1 198). The salt rule is the classic one generalised ("the header after the key id ‖ key id"), so
+both ciphertexts and the key id are bound; the algorithm byte is in the AAD. A hybrid recipient key publishes `P-256 point (65) ‖ ML-KEM-768
+encapsulation key (1 184)` = 1 249 bytes with algorithm `0x11`; its ring material is 96 bytes = P-256 scalar ‖ ML-KEM seed `d ‖ z`, both
+random and independent (a recovered scalar reveals nothing about the ML-KEM key). The same key also opens classic `0x01` values sealed to
+its P-256 half (a sealer without ML-KEM falls back to `0x01`). **Golden:** ML-KEM encapsulation randomness cannot be fixed through the
+BCL, so (1) a value sealed 2026-10-18 to the key `scalar 0x01…0x20 ‖ seed 0x41…0x80` is frozen in `HybridRecipientSealingTests` and must
+open forever, and (2) a test re-derives the layout above with BCL primitives only (ECDH, `MLKem.Decapsulate`, `HKDF`, `AesGcm`).
 
 **As built 2026-10-05:** exactly this layout. Golden: `RecipientSealingTests.Golden_value_is_rebuilt_byte_for_byte…` (recipient scalar
 0x01…0x20, ephemeral scalar 0x21…0x40); points, ECDH secret, key and nonce were computed independently with a pure-Python P-256 + HKDF
@@ -128,18 +152,35 @@ tag: HMAC-SHA256(subkey(store key, "yfex.key-ring-file.v1"), all bytes above)
 store directory: `0x01 · root provider id · wrapped bytes`. A ring file is `0x01 · ring name · purpose · revision · entry count ·
 entries [key id · status · validity · sealed key material, empty once destroyed] · tag`.)*
 
-`FileSigningKeyStore` file (one per key name, 14 §2.3; **designed 2026-10-07, not built**), same `store.key`, canonical encoding:
+`FileSigningKeyStore` file (`*.signingkey`, one per key name, 14 §2.3; **built 2026-10-18**), same `store.key`, canonical encoding:
 
 ```
 version 0x01 · key name · algorithm (SignatureAlgorithm) · key id (16 bytes) · sealed private key
-sealed private key = sealed value v3 under the store key, context "yfex.signing-key-wrap.v1" [key name, key id, algorithm];
+sealed private key = sealed value v3 under the store key, context "yfex.signing-key-wrap.v1"
+                     [key name, key id (KeyId.ToString()), algorithm byte as invariant decimal ("1")];
 plaintext = PKCS#8 PrivateKeyInfo. No file tag: every header field is in the seal context.
 ```
+
+`FileSecretStore` file (`*.sealedsecret`, one per secret name, **built 2026-10-18**, 12 §4 question 3), same `store.key`:
+
+```
+version 0x01 · secret name · sealed value
+sealed value = sealed value v3 under the store key, context "yfex.secret-store.v1" [secret name]; plaintext = the secret's bytes.
+```
+
+File names for all three file kinds: readable part (non `[A-Za-z0-9.-]` → `_`) + `-` + first 8 hex of SHA-256(UTF-8 name) + extension.
+On Unix the store directory is 0700 and every file 0600 (14 §3, F-P1).
 
 The file tag stops someone from flipping a `Retired` key back to `Active` or deleting the newest entry to force an old key. Root provider
 ids (`RootKeyFormat`, as implemented in Phase 0): `0x01` CNG Platform (TPM) RSA-OAEP-SHA256, `0x02` CNG software KSP RSA-OAEP-SHA256
 (both byte-identical to offline Phase 0's `CngKeyWrapper` blobs), `0x03` ASP.NET Core DataProtection (offline Phase 0 only; not read),
-`0x04` provided/environment key (AES-GCM wrap), `0x05` file key (AES-GCM wrap, file permissions only).
+`0x04` provided/environment key (AES-GCM wrap), `0x05` file key (AES-GCM wrap, file permissions only), `0x06` Linux Secret Service key
+(libsecret, AES-GCM wrap; `.Linux`, 2026-10-18), `0x07` Apple Keychain key (generic password, AES-GCM wrap; `.Apple`, 2026-10-18),
+`0x08` Android Keystore AES-256-GCM key (`.Android`, 2026-10-27): the key never leaves the Keystore and wraps each blob itself, as
+`0x08 ‖ nonce (12, chosen by the Keystore) ‖ ciphertext ‖ tag (16)`, AAD = UTF-8 `yfex.root-wrap.android.v1` ‖ `0x08` (14 §9.4).
+
+Named recipient keys in an `ISecretStore` (`SealedRecipientKeyStore`, 14 §10): secret `recipient-key/{name}` holds
+`0x01 ‖ P-256 scalar (32) [‖ ML-KEM-768 seed (64)]`; the secret store seals it (`FileSecretStore`: under the root key).
 
 ## 8. Algorithm id registry
 
@@ -148,7 +189,7 @@ ids (`RootKeyFormat`, as implemented in Phase 0): `0x01` CNG Platform (TPM) RSA-
 | `SealingAlgorithm` | 0x01 | AES-256-GCM, 96-bit random nonce, 128-bit tag | default |
 | | 0x02 | ChaCha20-Poly1305 | implemented; used only without AES-GCM |
 | `RecipientSealingAlgorithm` | 0x01 | ECDH P-256 + HKDF-SHA256 + AES-256-GCM | default |
-| | 0x11 | hybrid ML-KEM-768 + ECDH P-256 → HKDF-SHA256 → AES-256-GCM | reserved (⚑K10) |
+| | 0x11 | hybrid ML-KEM-768 + ECDH P-256 → HKDF-SHA256 → AES-256-GCM | **implemented 2026-10-18** (Phase 5): automatic when the recipient publishes it and the sealer runs ML-KEM (§3) |
 | `SignatureAlgorithm` (core) | 0x01 | ECDsa P-256 SHA-256 IEEE P1363 | default |
 | | 0x10 | ML-DSA-65 (FIPS 204) | reserved |
 | | 0x11 | composite ML-DSA-65 + ECDsa P-256 | reserved |
@@ -164,10 +205,10 @@ and has a uniqueness test. This table is the cross-library view:
 |---|---|---|
 | `yfex.store.v1` | Persistence.Encryption | sealing context of `IKeyValueStore` values (parts: store, key) |
 | `yfex.web.secret.v1` | Web.Data | credential columns (parts: tenant, table, column, row id) |
-| `yfex.secret-store.v1` | Automation | secret files (parts: key name) |
+| `yfex.secret-store.v1` | YFex.Cryptography | §7 `FileSecretStore` (parts: secret name; built 2026-10-18 as the generic store Automation adopts, 12 §4 question 3) |
 | `yfex.credential-verifier.v1` | Offline | offline login verifiers at rest |
 | `yfex.key-wrap.v1`, `yfex.key-ring-file.v1` | YFex.Cryptography | §7 |
-| `yfex.signing-key-wrap.v1` | YFex.Cryptography | §7 `FileSigningKeyStore` (designed 2026-10-07, 14 §2.3) |
+| `yfex.signing-key-wrap.v1` | YFex.Cryptography | §7 `FileSigningKeyStore` (built 2026-10-18, 14 §2.3) |
 | `yfex.recipient-seal.v1` | YFex.Cryptography | §3 |
 | `yfex.payment-request.v1` | Payment | MAC of the idempotency fingerprint (C9, written 2026-10-05; Payment will be rewritten) |
 | `yfex.event-audience.v1` | Messaging.Rpc | §6 tokens |

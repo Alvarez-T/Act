@@ -144,6 +144,19 @@ public sealed class CommandConfigurationBuilder<TCommand>
     /// <summary>The caller must be in at least one of <paramref name="roles"/> (case-insensitive).</summary>
     public CommandConfigurationBuilder<TCommand> RequireRoles(params Role[] roles) => AddRequirement(Requirement.RequireRoles(roles));
 
+    /// <summary>
+    /// The caller proved who they are within <paramref name="maxAge"/>, at <paramref name="minimum"/> or stronger (step-up,
+    /// authentication 09 §4.1); unmet → <see cref="ErrorKind.ReauthenticationRequired"/>: the client steps up and resends.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> RequireRecentAuthentication(TimeSpan maxAge, AssuranceLevel minimum = AssuranceLevel.SingleFactor)
+        => AddRequirement(Requirement.RequireRecentAuthentication(maxAge, minimum));
+
+    /// <summary>
+    /// The caller was verified present at the site within <paramref name="maxAge"/> (⚑Z20, <c>presence_at</c>); unmet, missing or
+    /// unparseable → <see cref="ErrorKind.SitePresenceRequired"/>. Optional per command; does not hide it.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand> RequireSitePresence(TimeSpan maxAge) => AddRequirement(Requirement.RequireSitePresence(maxAge));
+
     /// <summary>The caller must hold <paramref name="permission"/> (a catalog property, e.g. <c>SalesPermissions.SaleVoid</c>).</summary>
     public CommandConfigurationBuilder<TCommand> RequirePermission(Permission permission) => AddRequirement(Requirement.Require(permission));
 
@@ -565,6 +578,19 @@ public sealed class CommandConfigurationBuilder<TCommand, TResult>
 
     /// <summary>The caller must be in at least one of <paramref name="roles"/> (case-insensitive).</summary>
     public CommandConfigurationBuilder<TCommand, TResult> RequireRoles(params Role[] roles) => AddRequirement(Requirement.RequireRoles(roles));
+
+    /// <summary>
+    /// The caller proved who they are within <paramref name="maxAge"/>, at <paramref name="minimum"/> or stronger (step-up,
+    /// authentication 09 §4.1); unmet → <see cref="ErrorKind.ReauthenticationRequired"/>: the client steps up and resends.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand, TResult> RequireRecentAuthentication(TimeSpan maxAge, AssuranceLevel minimum = AssuranceLevel.SingleFactor)
+        => AddRequirement(Requirement.RequireRecentAuthentication(maxAge, minimum));
+
+    /// <summary>
+    /// The caller was verified present at the site within <paramref name="maxAge"/> (⚑Z20, <c>presence_at</c>); unmet, missing or
+    /// unparseable → <see cref="ErrorKind.SitePresenceRequired"/>. Optional per command; does not hide it.
+    /// </summary>
+    public CommandConfigurationBuilder<TCommand, TResult> RequireSitePresence(TimeSpan maxAge) => AddRequirement(Requirement.RequireSitePresence(maxAge));
 
     /// <summary>The caller must hold <paramref name="permission"/> (a catalog property, e.g. <c>SalesPermissions.SaleVoid</c>).</summary>
     public CommandConfigurationBuilder<TCommand, TResult> RequirePermission(Permission permission) => AddRequirement(Requirement.Require(permission));

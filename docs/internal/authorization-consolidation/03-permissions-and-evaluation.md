@@ -158,6 +158,14 @@ for an absent user, so a claims-only deployment rejects offline approvals exactl
 | `Policy(PolicyName)` | no → hidden; decided by `AuthorizeAsync` through `INamedPolicyHandler` | `.RequirePolicy(name)` |
 | `Approval(Permission)` | yes (token present + valid) → else `ApprovalRequired` | `.RequireApproval(p)` (06 §1) |
 | `Justification(JustificationKind)` | yes (reason attached) → else `JustificationRequired` | reveal of sensitive data (07 §1) |
+| `SitePresence(maxAge)` — the caller's `presence_at` (witness-signed installation presence, installations 11 §5) within `maxAge` — **designed 2026-10-20 (⚑Z20), built 2026-10-29** (claim producer: AN-P7 / I6) | yes (the evaluator's `TimeProvider`) → else `SitePresenceRequired`; never hides; unknown presence fails closed | `.RequireSitePresence(TimeSpan)` on the same builders as the row below |
+| `RecentAuthentication(maxAge, minimum)` — the caller's `auth_time` within `maxAge`, `acr` ≥ `minimum` | yes (the evaluator's `TimeProvider`) → else `ReauthenticationRequired`; never hides (visible, using it asks for a step-up) | `.RequireRecentAuthentication(TimeSpan, AssuranceLevel)` on Cqrs command/query builders and `RequirementBuilder<T>` (endpoints, routes, commands) — authentication requests R1/R3, **as built 2026-10-19** |
+
+> **As built (authentication AN-P5, 2026-10-19):** `AssuranceLevel` (`None`, `SingleFactor`, `MultiFactor`, `PhishingResistant`) lives in
+> `.Public` (Authentication imports it; one type, no conversion), with `AuthenticationFacts` — the one parser of the `auth_time` and
+> `acr` (`yfex:aal0`…`yfex:aal3`) claims — and `RecentAuthenticationRequirement(MaxAge, Minimum)`. `IAuthorizationContext` gained
+> `AuthenticatedAt` / `Assurance` (default members reading the principal; `AuthorizationContext` reads them once). Unknown or missing
+> facts fail closed (age unknown, `None`).
 
 `Policy` (a list of requirements) is compiled once at registry build into a `CompiledPolicy`:
 
@@ -189,7 +197,8 @@ delegate call.
     public bool IsAllowed { get; }
 }
 public readonly record struct Denial(DenialKind Kind, Permission Missing, PolicyName Policy, string? Code);
-public enum DenialKind : byte { MissingPermission = 1, MissingRole = 2, MissingClaim = 3, PolicyDenied = 4, ResourceDenied = 5, RestrictedWhileImpersonating = 6, JustificationRequired = 7 }
+public enum DenialKind : byte { MissingPermission = 1, MissingRole = 2, MissingClaim = 3, PolicyDenied = 4, ResourceDenied = 5, RestrictedWhileImpersonating = 6, JustificationRequired = 7,
+                              ReauthenticationRequired = 8 }   // as built 2026-10-19 (R2); Denial gained RecentAuthenticationRequirement RecentAuthentication
 ```
 
 ### 5.1 The Cqrs `Error` becomes a `[Union]` (⚑Z11, Phase 2b)
@@ -244,6 +253,7 @@ switch (result.Error?.Kind)
 | `Forbidden(denial)` | 403 + `missing` | `Forbidden(Denial)` | "Requer: Cancelar venda" (display name from the manifest) |
 | `ApprovalRequired(list)` | 403 + approvals | `ApprovalRequired` (same case the rules stage uses) | same supervisor-approval dialog as rule overrides |
 | `JustificationRequired` | 403 + kind | `Forbidden(Denial { Kind = JustificationRequired })` | ask for a reason, retry |
+| `Forbidden(Denial { Kind = ReauthenticationRequired })` (R2, 2026-10-19) | 401 + RFC 9470 `WWW-Authenticate: Bearer error="insufficient_user_authentication", max_age=…, acr_values="yfex:aal2"` + `maxAge`/`minimum` | `ErrorKind.ReauthenticationRequired = 9`, case `ReauthenticationRequired(RecentAuthenticationRequirement)` — `new Forbidden(denial)` of that kind becomes this case; RPC wire v7 (max age ticks + minimum byte) | step up (`POST step-up`, authentication 09 §4.1), resend |
 
 Migration cost: `ErrorType` is referenced 114 times in 24 files (Cqrs, Messaging, Messaging.Rpc + formatters, Rules.Admin, tests)
 — mostly mechanical. `ErrorType.Unauthorized` → `ErrorKind.Unauthenticated`, `ErrorType.Fail` → `Failed`. The MemoryPack wire

@@ -1,0 +1,660 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>YFex Atlas</title>
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface2: #f0f2f5; --border: #dde1e7; --text: #18202b; --muted: #5b6676; --faint: #8b95a3;
+  --accent: #2563eb; --accent-soft: #dbe7ff; --edge: #7b8594; --in: #ea580c; --out: #2563eb; --danger: #dc2626;
+  --shadow: 0 1px 2px rgba(16,24,40,.06), 0 1px 3px rgba(16,24,40,.08);
+  --s-done: #16a34a; --s-integrating: #0891b2; --s-building: #d97706; --s-approved: #7c3aed; --s-proposed: #6366f1;
+  --s-idea: #94a3b8; --s-prototype: #db2777; --s-residue: #ef4444; --s-domain: #78716c; --s-unknown: #64748b;
+  --sev-high: #dc2626; --sev-medium: #d97706; --sev-low: #2563eb; --sev-info: #64748b;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1318; --surface: #171c23; --surface2: #1e252e; --border: #2b3440; --text: #e6eaf0; --muted: #9aa5b4; --faint: #6b7686;
+    --accent: #60a5fa; --accent-soft: #1d2b45; --edge: #8591a3; --in: #fb923c; --out: #60a5fa;
+    --shadow: 0 1px 2px rgba(0,0,0,.4); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1318; --surface: #171c23; --surface2: #1e252e; --border: #2b3440; --text: #e6eaf0; --muted: #9aa5b4; --faint: #6b7686;
+  --accent: #60a5fa; --accent-soft: #1d2b45; --edge: #8591a3; --in: #fb923c; --out: #60a5fa;
+  --shadow: 0 1px 2px rgba(0,0,0,.4); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 13px/1.45 "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; display: flex; flex-direction: column; overflow: hidden; }
+a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
+button, input, select { font: inherit; color: inherit; }
+button { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+input[type=search], select { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 4px 8px; }
+header.top { display: flex; align-items: center; gap: 16px; padding: 8px 16px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.brand { font-weight: 700; font-size: 15px; display: flex; align-items: baseline; gap: 8px; }
+.brand small { font-weight: 400; color: var(--muted); font-size: 12px; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); display: inline-block; transition: background .3s; }
+.live-dot.on { background: var(--s-done); } .live-dot.flash { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+nav.tabs { display: flex; gap: 2px; flex-wrap: wrap; }
+nav.tabs button { border: none; background: none; padding: 6px 10px; border-radius: 6px; color: var(--muted); }
+nav.tabs button.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.tools { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.stats { display: flex; gap: 10px; padding: 8px 16px; overflow-x: auto; border-bottom: 1px solid var(--border); background: var(--surface2); flex-shrink: 0; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 12px; min-width: 110px; box-shadow: var(--shadow); flex: 0 0 auto; max-width: 460px; }
+.stat b { font-size: 18px; display: block; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+.stat .pills { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 2px; }
+.pill { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 1px 8px; font-size: 11px; border: 1px solid var(--border); background: var(--surface); white-space: nowrap; }
+.pill i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+main { flex: 1; display: flex; min-height: 0; }
+#view { flex: 1; min-width: 0; overflow: auto; position: relative; }
+#view.canvas { overflow: hidden; }
+aside.panel { width: 420px; max-width: 45vw; border-left: 1px solid var(--border); background: var(--surface); overflow-y: auto; padding: 16px; flex-shrink: 0; }
+aside.panel.hidden { display: none; }
+.panel h2 { margin: 0 0 4px; font-size: 18px; display: flex; align-items: center; gap: 8px; }
+.panel h3 { margin: 16px 0 6px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.panel .close { float: right; border: none; background: none; font-size: 18px; color: var(--muted); }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; color: #fff; white-space: nowrap; }
+.link-chip { display: inline-flex; gap: 4px; align-items: center; padding: 2px 8px; margin: 2px; border-radius: 6px; background: var(--surface2); border: 1px solid var(--border); cursor: pointer; font-size: 12px; }
+.link-chip:hover { border-color: var(--accent); }
+.link-chip em { color: var(--faint); font-style: normal; font-size: 11px; }
+.kv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.kv div { background: var(--surface2); border-radius: 6px; padding: 4px 8px; }
+.kv b { display: block; font-size: 15px; font-variant-numeric: tabular-nums; }
+.kv span { font-size: 11px; color: var(--muted); }
+.bar { height: 6px; border-radius: 3px; background: var(--surface2); overflow: hidden; border: 1px solid var(--border); }
+.bar > div { height: 100%; }
+.muted { color: var(--muted); } .faint { color: var(--faint); }
+.small { font-size: 12px; }
+.box { background: var(--surface2); border-radius: 8px; padding: 8px 10px; margin: 6px 0; }
+.toolbar { position: absolute; top: 10px; left: 10px; right: 10px; display: flex; gap: 6px; flex-wrap: wrap; z-index: 2; pointer-events: none; }
+.toolbar > * { pointer-events: auto; }
+.legend { position: absolute; bottom: 10px; left: 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; display: flex; gap: 10px; flex-wrap: wrap; font-size: 11px; box-shadow: var(--shadow); max-width: calc(100% - 20px); z-index: 2; }
+.legend span { display: inline-flex; align-items: center; gap: 4px; }
+.legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+svg.graph { width: 100%; height: 100%; display: block; cursor: grab; user-select: none; }
+svg.graph.dragging { cursor: grabbing; }
+.node { cursor: pointer; }
+.node rect.card { fill: var(--surface); stroke-width: 2; filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.12)); }
+.node text { fill: var(--text); pointer-events: none; }
+.node text.sub { fill: var(--muted); font-size: 10.5px; }
+.node.sel rect.card { stroke-width: 4; }
+.edge { fill: none; stroke: var(--edge); stroke-opacity: .42; }
+.edge.planned { stroke: var(--s-proposed); stroke-dasharray: 6 5; stroke-opacity: .7; }
+.edge.analyzer { stroke-dasharray: 2 4; }
+.edge.cycle { stroke: var(--danger); stroke-opacity: .75; }
+.focusing .node:not(.hl) { opacity: .16; }
+.focusing .edge:not(.hl) { opacity: .05; }
+.focusing .edge.hl-out { stroke: var(--out); stroke-opacity: .95; stroke-width: 2.2; }
+.focusing .edge.hl-in { stroke: var(--in); stroke-opacity: .95; stroke-width: 2.2; }
+.searching .node:not(.match) { opacity: .2; }
+.mm-link { fill: none; stroke: var(--border); stroke-width: 1.5; }
+.mm-group { font-weight: 700; }
+/* board */
+.board { display: flex; gap: 12px; padding: 16px; align-items: flex-start; min-width: max-content; }
+.col { width: 270px; background: var(--surface2); border-radius: 10px; padding: 8px; border: 1px solid var(--border); }
+.col h4 { margin: 2px 4px 8px; display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.col h4 .n { margin-left: auto; color: var(--muted); font-weight: 400; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; cursor: pointer; box-shadow: var(--shadow); border-left-width: 4px; }
+.card:hover { border-color: var(--accent); }
+.card .t { font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.card .t .g { margin-left: auto; font-weight: 400; font-size: 11px; color: var(--faint); }
+.card p { margin: 4px 0; color: var(--muted); font-size: 12px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.card .meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-top: 6px; font-size: 11px; color: var(--faint); }
+.badge { display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px; border-radius: 9px; padding: 0 5px; font-size: 11px; font-weight: 700; color: #fff; }
+/* lists and tables */
+.page { padding: 16px; max-width: 1400px; }
+.filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; align-items: center; }
+.finding { background: var(--surface); border: 1px solid var(--border); border-left: 4px solid; border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; box-shadow: var(--shadow); }
+.finding .h { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.finding .h b { font-size: 14px; }
+.finding pre { white-space: pre-wrap; font: 12px/1.5 ui-monospace, Consolas, monospace; background: var(--surface2); border-radius: 6px; padding: 8px; margin: 8px 0; max-height: 260px; overflow: auto; }
+.finding .rec { border-left: 3px solid var(--s-done); padding: 4px 10px; background: var(--surface2); border-radius: 0 6px 6px 0; margin-top: 6px; }
+table { border-collapse: collapse; width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+th, td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { background: var(--surface2); position: sticky; top: 0; cursor: pointer; font-size: 12px; white-space: nowrap; z-index: 1; }
+tr:hover td { background: var(--surface2); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+.tag { display: inline-block; padding: 0 6px; border-radius: 4px; font-size: 11px; background: var(--surface2); border: 1px solid var(--border); margin: 1px; }
+.tag.warn { color: var(--sev-medium); border-color: var(--sev-medium); }
+.tag.bad { color: var(--sev-high); border-color: var(--sev-high); }
+.empty { padding: 40px; text-align: center; color: var(--muted); }
+details summary { cursor: pointer; color: var(--muted); }
+@media (max-width: 760px) {
+  aside.panel { position: fixed; inset: auto 0 0 0; width: 100%; max-width: none; max-height: 65vh; border-left: none; border-top: 1px solid var(--border); z-index: 10; }
+  .tools { margin-left: 0; width: 100%; }
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">YFex Atlas <small id="gen"></small> <span class="live-dot" id="liveDot" title="Live reload"></span></div>
+  <nav class="tabs" id="tabs">
+    <button data-tab="map">Map</button>
+    <button data-tab="mind">Mind map</button>
+    <button data-tab="board">Board</button>
+    <button data-tab="findings">Findings</button>
+    <button data-tab="projects">Projects</button>
+    <button data-tab="docs">Docs</button>
+    <button data-tab="activity">Activity</button>
+  </nav>
+  <div class="tools">
+    <input type="search" id="q" placeholder="Search components…" aria-label="Search components">
+    <label class="small"><input type="checkbox" id="live"> Live</label>
+    <button id="theme" title="Toggle theme">◐</button>
+  </div>
+</header>
+<section class="stats" id="stats"></section>
+<main>
+  <div id="view"></div>
+  <aside class="panel hidden" id="panel"></aside>
+</main>
+<script src="atlas.data.js"></script>
+<script>
+"use strict";
+// ─────────────────────────────────────────────────────────────── state
+const STATUS = {
+  idea: 'Idea', proposed: 'Proposed', approved: 'Approved', building: 'Building', integrating: 'Integrating',
+  done: 'Done', prototype: 'Prototype', residue: 'Residue', unknown: 'Unknown', domain: 'Domain'
+};
+const ORDER = ['idea', 'proposed', 'approved', 'building', 'integrating', 'done', 'prototype', 'residue', 'unknown', 'domain'];
+const SEV = ['high', 'medium', 'low', 'info'];
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+const sColor = s => css('--s-' + (STATUS[s] ? s : 'unknown'));
+const sevColor = s => css('--sev-' + s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const $ = s => document.querySelector(s);
+
+let D = null, C = new Map(), FIND = [], OUT = new Map(), IN = new Map();
+const st = Object.assign({
+  tab: 'map', showPlanned: true, showDomain: false, showAnalyzer: false, colorBy: 'status', focus: 'all',
+  selected: null, live: true, theme: null, fSev: [], fCat: '', fSrc: '', fStatus: 'open', fComp: '', fText: '',
+  pSort: 'component', pDir: 1, pKind: '', pText: '', search: ''
+}, load());
+function load() { try { return JSON.parse(localStorage.getItem('yfexAtlas') || '{}'); } catch { return {}; } }
+function save() { try { const { selected, search, ...rest } = st; localStorage.setItem('yfexAtlas', JSON.stringify(rest)); } catch { } }
+let view = { map: null, mind: null };   // viewBox per canvas tab
+
+// ─────────────────────────────────────────────────────────────── data
+function prep() {
+  D = window.ATLAS_DATA;
+  C = new Map(D.components.map(c => [c.id, c]));
+  FIND = D.findings;
+  OUT = new Map(); IN = new Map();
+  for (const e of D.edges) {
+    if (!C.has(e.from) || !C.has(e.to)) continue;
+    (OUT.get(e.from) || OUT.set(e.from, []).get(e.from)).push(e);
+    (IN.get(e.to) || IN.set(e.to, []).get(e.to)).push(e);
+  }
+  for (const c of D.components) {
+    c.findings = FIND.filter(f => (f.components || []).includes(c.id) && (f.status || 'open') === 'open');
+    c.worst = SEV.find(s => c.findings.some(f => f.severity === s));
+    c.dirty = (c.git || []).reduce((a, g) => a + (g.dirty || 0), 0);
+  }
+  $('#gen').textContent = 'generated ' + fmtDate(D.generatedAt, true) + ' · ' + D.machine;
+}
+const groupsOrdered = () => (D.groups || []).map(g => g.id).concat(['uncatalogued']);
+const groupName = id => (D.groups || []).find(g => g.id === id)?.name || id;
+const visibleComp = c => (st.showDomain || c.status !== 'domain') && (st.showPlanned || c.metrics.projects > 0 || c.status === 'residue');
+function fmtDate(s, time) {
+  if (!s) return '—';
+  const d = new Date(s); if (isNaN(d)) return s;
+  return d.toISOString().slice(0, 10) + (time ? ' ' + d.toTimeString().slice(0, 5) : '');
+}
+function ago(s) {
+  if (!s) return '—';
+  const days = Math.floor((Date.now() - new Date(s)) / 864e5);
+  return days <= 0 ? 'today' : days === 1 ? '1 day ago' : days < 60 ? days + ' days ago' : Math.round(days / 30) + ' months ago';
+}
+const fileUrl = p => 'file:///' + (D.root.replace(/\\/g, '/') + '/' + p).replace(/ /g, '%20');
+const nodeColor = c => st.colorBy === 'group' ? groupColor(c.group) : sColor(c.status);
+function groupColor(g) {
+  const pal = ['#2563eb', '#7c3aed', '#0891b2', '#d97706', '#16a34a', '#db2777', '#78716c', '#64748b'];
+  const i = groupsOrdered().indexOf(g); return pal[(i < 0 ? 7 : i) % pal.length];
+}
+
+// ─────────────────────────────────────────────────────────────── chrome
+function renderStats() {
+  const infra = D.components.filter(c => c.status !== 'domain');
+  const counts = ORDER.filter(s => s !== 'domain').map(s => [s, infra.filter(c => c.status === s).length]).filter(x => x[1]);
+  const open = FIND.filter(f => (f.status || 'open') === 'open');
+  const proj = D.projects.filter(p => C.get(p.component)?.status !== 'domain');
+  const lines = proj.reduce((a, p) => a + p.lines, 0);
+  const tests = proj.filter(p => p.kind === 'test').length;
+  const dirty = D.repos.reduce((a, r) => a + (r.git.dirty || 0), 0);
+  $('#stats').innerHTML = `
+    <div class="stat"><b>${infra.length}</b><span>components</span><div class="pills">${counts.map(([s, n]) => `<span class="pill"><i style="background:${sColor(s)}"></i>${n} ${STATUS[s]}</span>`).join('')}</div></div>
+    <div class="stat"><b>${proj.length}</b><span>projects · ${tests} test</span></div>
+    <div class="stat"><b>${(lines / 1000).toFixed(0)}k</b><span>lines of C#</span></div>
+    <div class="stat"><b>${D.edges.filter(e => !e.planned && !e.analyzerOnly).length}</b><span>component links · ${D.edges.filter(e => e.planned).length} planned</span></div>
+    <div class="stat" style="cursor:pointer" onclick="go('findings')"><b>${open.length}</b><span>open findings</span><div class="pills">${SEV.map(s => [s, open.filter(f => f.severity === s).length]).filter(x => x[1]).map(([s, n]) => `<span class="pill"><i style="background:${sevColor(s)}"></i>${n} ${s}</span>`).join('')}</div></div>
+    <div class="stat" style="cursor:pointer" onclick="go('activity')"><b>${dirty}</b><span>uncommitted files · ${D.repos.length} repos</span></div>`;
+}
+function go(tab) { st.tab = tab; save(); render(); }
+document.querySelectorAll('#tabs button').forEach(b => b.onclick = () => go(b.dataset.tab));
+$('#q').oninput = e => { st.search = e.target.value.trim().toLowerCase(); render(); };
+$('#q').onkeydown = e => { if (e.key === 'Enter') { const m = D.components.find(c => matches(c)); if (m) select(m.id); } };
+$('#live').onchange = e => { st.live = e.target.checked; save(); liveDot(); };
+$('#theme').onclick = () => {
+  const dark = matchMedia('(prefers-color-scheme: dark)').matches;
+  const cur = st.theme || (dark ? 'dark' : 'light');
+  st.theme = cur === 'dark' ? 'light' : 'dark'; applyTheme(); save(); render();
+};
+function applyTheme() { if (st.theme) document.documentElement.dataset.theme = st.theme; }
+function liveDot() { $('#liveDot').classList.toggle('on', !!st.live); $('#live').checked = !!st.live; }
+const matches = c => !st.search || (c.id + ' ' + c.name + ' ' + (c.summary || '') + ' ' + c.projects.join(' ')).toLowerCase().includes(st.search);
+
+function render() {
+  document.querySelectorAll('#tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === st.tab));
+  renderStats();
+  const v = $('#view');
+  v.className = (st.tab === 'map' || st.tab === 'mind') ? 'canvas' : '';
+  ({ map: renderMap, mind: renderMind, board: renderBoard, findings: renderFindings, projects: renderProjects, docs: renderDocs, activity: renderActivity })[st.tab](v);
+  renderPanel();
+}
+function select(id) { st.selected = id; if (st.tab === 'map' && st.focus !== 'all') { render(); return; } render(); }
+
+// ─────────────────────────────────────────────────────────────── map (layered)
+function mapGraph() {
+  let nodes = D.components.filter(visibleComp);
+  let ids = new Set(nodes.map(n => n.id));
+  let edges = D.edges.filter(e => ids.has(e.from) && ids.has(e.to) && (st.showPlanned || !e.planned) && (st.showAnalyzer || !e.analyzerOnly));
+  if (st.selected && st.focus !== 'all' && ids.has(st.selected)) {
+    const keep = new Set([st.selected]);
+    const walk = (dirMap, key) => { const stack = [st.selected]; while (stack.length) { const n = stack.pop(); for (const e of (dirMap.get(n) || [])) { const m = e[key]; if (!keep.has(m) && ids.has(m) && edges.includes(e)) { keep.add(m); stack.push(m); } } } };
+    if (st.focus === 'deps' || st.focus === 'both') walk(OUT, 'to');
+    if (st.focus === 'dependents' || st.focus === 'both') walk(IN, 'from');
+    nodes = nodes.filter(n => keep.has(n.id)); ids = keep;
+    edges = edges.filter(e => keep.has(e.from) && keep.has(e.to));
+  }
+  return { nodes, edges };
+}
+function layoutLayered(nodes, edges) {
+  const W = 156, H = 48, GX = 24, LAYERGAP = 70, STAG = 16, MAXROW = 8;
+  const out = new Map(nodes.map(n => [n.id, []])), nb = new Map(nodes.map(n => [n.id, []]));
+  for (const e of edges) { out.get(e.from).push(e.to); nb.get(e.from).push(e.to); nb.get(e.to).push(e.from); }
+  // strongly connected components (Tarjan) → condensed DAG → longest-path layering (deps below)
+  let idx = 0; const index = new Map(), low = new Map(), onS = new Set(), S = [], comp = new Map(); let cc = 0;
+  const strong = v => {
+    index.set(v, idx); low.set(v, idx); idx++; S.push(v); onS.add(v);
+    for (const w of out.get(v)) {
+      if (!index.has(w)) { strong(w); low.set(v, Math.min(low.get(v), low.get(w))); }
+      else if (onS.has(w)) low.set(v, Math.min(low.get(v), index.get(w)));
+    }
+    if (low.get(v) === index.get(v)) { let w; do { w = S.pop(); onS.delete(w); comp.set(w, cc); } while (w !== v); cc++; }
+  };
+  for (const n of nodes) if (!index.has(n.id)) strong(n.id);
+  const cOut = new Map();
+  for (const n of nodes) for (const w of out.get(n.id)) { const a = comp.get(n.id), b = comp.get(w); if (a !== b) (cOut.get(a) || cOut.set(a, new Set()).get(a)).add(b); }
+  const cLayer = new Map();
+  const layerOf = c => { if (cLayer.has(c)) return cLayer.get(c); cLayer.set(c, 0); let l = 0; for (const d of (cOut.get(c) || [])) l = Math.max(l, layerOf(d) + 1); cLayer.set(c, l); return l; };
+  const layers = [];
+  const go = groupsOrdered();
+  for (const n of [...nodes].sort((a, b) => go.indexOf(a.group) - go.indexOf(b.group) || a.name.localeCompare(b.name))) {
+    const l = layerOf(comp.get(n.id)); (layers[l] ||= []).push(n.id);
+  }
+  for (let i = 0; i < layers.length; i++) layers[i] ||= [];
+  // barycenter ordering
+  const layerIdx = new Map(); layers.forEach((L, i) => L.forEach(id => layerIdx.set(id, i)));
+  const pos = new Map();
+  const setPos = L => L.forEach((id, i) => pos.set(id, L.length > 1 ? i / (L.length - 1) : .5));
+  layers.forEach(setPos);
+  for (let it = 0; it < 12; it++) {
+    const seq = it % 2 ? [...layers.keys()] : [...layers.keys()].reverse();
+    for (const li of seq) {
+      const L = layers[li];
+      const key = new Map(L.map(id => { const ps = nb.get(id).filter(m => layerIdx.get(m) !== li).map(m => pos.get(m)); return [id, ps.length ? ps.reduce((a, b) => a + b, 0) / ps.length : pos.get(id)]; }));
+      L.sort((a, b) => key.get(a) - key.get(b)); setPos(L);
+    }
+  }
+  // coordinates: top = highest layer; wide layers are staggered into rows
+  const P = new Map(); let y = 0;
+  const widths = layers.map(L => { const k = Math.max(1, Math.ceil(L.length / MAXROW)); return (L.length - 1) * (W + GX) / k + W; });
+  const maxW = Math.max(...widths, W);
+  for (let li = layers.length - 1; li >= 0; li--) {
+    const L = layers[li]; if (!L.length) continue;
+    const k = Math.max(1, Math.ceil(L.length / MAXROW)), step = (W + GX) / k, x0 = (maxW - widths[li]) / 2;
+    L.forEach((id, i) => P.set(id, { x: x0 + i * step, y: y + (i % k) * (H + STAG), w: W, h: H, layer: li }));
+    y += k * (H + STAG) - STAG + LAYERGAP;
+  }
+  return { P, W, H, width: maxW, height: y - LAYERGAP };
+}
+function renderMap(v) {
+  const { nodes, edges } = mapGraph();
+  if (!nodes.length) { v.innerHTML = '<div class="empty">Nothing to show with the current filters.</div>'; return; }
+  const L = layoutLayered(nodes, edges);
+  const NS = 'http://www.w3.org/2000/svg';
+  const edgePath = e => {
+    const a = L.P.get(e.from), b = L.P.get(e.to);
+    if (!a || !b) return '';
+    const ax = a.x + a.w / 2, bx = b.x + b.w / 2;
+    if (a.y + a.h <= b.y) { const y1 = a.y + a.h, y2 = b.y - 3, dy = Math.max(30, (y2 - y1) / 2); return `M${ax},${y1} C${ax},${y1 + dy} ${bx},${y2 - dy} ${bx},${y2}`; }
+    if (b.y + b.h <= a.y) { const y1 = a.y, y2 = b.y + b.h + 3, dy = Math.max(30, (y1 - y2) / 2); return `M${ax},${y1} C${ax},${y1 - dy} ${bx},${y2 + dy} ${bx},${y2}`; }
+    const yy = Math.min(a.y, b.y), lift = 40 + Math.abs(ax - bx) * .15;
+    return `M${ax},${a.y} C${ax},${yy - lift} ${bx},${yy - lift} ${bx},${b.y - 3}`;
+  };
+  const markers = [['m-edge', css('--edge')], ['m-planned', css('--s-proposed')], ['m-cycle', css('--danger')], ['m-out', css('--out')], ['m-in', css('--in')]]
+    .map(([id, c]) => `<marker id="${id}" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${c}"/></marker>`).join('');
+  const eh = edges.map((e, i) => {
+    const cls = ['edge', e.planned ? 'planned' : '', e.analyzerOnly ? 'analyzer' : '', e.cycle ? 'cycle' : ''].join(' ');
+    const m = e.planned ? 'm-planned' : e.cycle ? 'm-cycle' : 'm-edge';
+    const w = e.planned ? 1.4 : Math.min(4, 1 + Math.log2(e.weight || 1) * .7);
+    const title = e.planned ? `${e.from} ⇢ ${e.to} (planned): ${e.note || ''}` : `${e.from} → ${e.to} (${e.weight})\n${(e.refs || []).join('\n')}`;
+    return `<path class="${cls}" data-i="${i}" data-from="${esc(e.from)}" data-to="${esc(e.to)}" d="${edgePath(e)}" stroke-width="${w}" marker-end="url(#${m})"><title>${esc(title)}</title></path>`;
+  }).join('');
+  const nh = nodes.map(c => {
+    const p = L.P.get(c.id), col = nodeColor(c);
+    const dash = ['proposed', 'idea', 'residue', 'approved'].includes(c.status) ? 'stroke-dasharray="6 4"' : '';
+    const prog = c.progress == null ? '' : `<rect x="8" y="${p.h - 7}" width="${p.w - 16}" height="3" rx="1.5" fill="${css('--surface2')}"/><rect x="8" y="${p.h - 7}" width="${(p.w - 16) * c.progress / 100}" height="3" rx="1.5" fill="${sColor(c.status)}"/>`;
+    const sub = `${STATUS[c.status] || c.status}${c.progress != null ? ' · ' + c.progress + '%' : ''}${c.metrics.projects ? ' · ' + c.metrics.projects + 'p' : ''}`;
+    const badge = c.findings.length ? `<circle cx="${p.w - 2}" cy="2" r="9" fill="${sevColor(c.worst)}"/><text x="${p.w - 2}" y="6" text-anchor="middle" font-size="10" font-weight="700" fill="#fff">${c.findings.length}</text>` : '';
+    const cls = ['node', st.selected === c.id ? 'sel' : '', matches(c) ? 'match' : ''].join(' ');
+    return `<g class="${cls}" data-id="${esc(c.id)}" transform="translate(${p.x},${p.y})">
+      <rect class="card" width="${p.w}" height="${p.h}" rx="9" stroke="${col}" ${dash}/>
+      <rect width="5" height="${p.h - 10}" x="0" y="5" rx="2" fill="${col}"/>
+      <text x="13" y="19" font-size="13" font-weight="650">${esc(c.name.length > 19 ? c.name.slice(0, 18) + '…' : c.name)}</text>
+      <text class="sub" x="13" y="34">${esc(sub)}</text>${prog}${badge}
+      <title>${esc(c.id + '\n' + (c.summary || ''))}</title></g>`;
+  }).join('');
+  const pad = 60, full = { x: -pad, y: -pad - 50, w: L.width + 2 * pad, h: L.height + 2 * pad + 50 };
+  const sig = nodes.map(n => n.id).join('|') + st.focus;
+  if (!view.map || view.mapSig !== sig) { view.map = { ...full }; view.mapSig = sig; }
+  v.innerHTML = `
+    <div class="toolbar">
+      <button class="${st.showPlanned ? 'on' : ''}" onclick="toggle('showPlanned')">Planned</button>
+      <button class="${st.showDomain ? 'on' : ''}" onclick="toggle('showDomain')">Domain repos</button>
+      <button class="${st.showAnalyzer ? 'on' : ''}" onclick="toggle('showAnalyzer')">Generator refs</button>
+      <select onchange="st.colorBy=this.value;save();render()"><option value="status" ${st.colorBy === 'status' ? 'selected' : ''}>Colour by status</option><option value="group" ${st.colorBy === 'group' ? 'selected' : ''}>Colour by group</option></select>
+      ${st.selected ? `<select onchange="st.focus=this.value;save();render()">${[['all', 'Show everything'], ['deps', 'Only what ' + C.get(st.selected)?.name + ' needs'], ['dependents', 'Only who needs ' + C.get(st.selected)?.name], ['both', 'Both directions']].map(([k, t]) => `<option value="${k}" ${st.focus === k ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select>` : ''}
+      <button onclick="view.map=null;render()">Fit</button>
+    </div>
+    <svg class="graph ${st.search ? 'searching' : ''}" id="svg" xmlns="${NS}"><defs>${markers}</defs><g id="edges">${eh}</g><g id="nodes">${nh}</g></svg>
+    <div class="legend">${legendHtml()}<span class="faint">↓ arrow = depends on · dashed = planned · red = cycle · hover to trace · drag/scroll to move</span></div>`;
+  const svg = $('#svg');
+  bindCanvas(svg, 'map', full);
+  const edgeEls = [...svg.querySelectorAll('.edge')];
+  const highlight = id => {
+    svg.classList.toggle('focusing', !!id);
+    svg.querySelectorAll('.node').forEach(n => n.classList.remove('hl'));
+    edgeEls.forEach(e => { e.classList.remove('hl', 'hl-in', 'hl-out'); e.setAttribute('marker-end', e.getAttribute('marker-end').replace(/m-(out|in)/, e.classList.contains('planned') ? 'm-planned' : e.classList.contains('cycle') ? 'm-cycle' : 'm-edge')); });
+    if (!id) return;
+    const lit = new Set([id]);
+    for (const e of edgeEls) {
+      if (e.dataset.from === id) { e.classList.add('hl', 'hl-out'); e.setAttribute('marker-end', 'url(#m-out)'); lit.add(e.dataset.to); }
+      if (e.dataset.to === id) { e.classList.add('hl', 'hl-in'); e.setAttribute('marker-end', 'url(#m-in)'); lit.add(e.dataset.from); }
+    }
+    svg.querySelectorAll('.node').forEach(n => { if (lit.has(n.dataset.id)) n.classList.add('hl'); });
+  };
+  svg.querySelectorAll('.node').forEach(n => {
+    n.addEventListener('mouseenter', () => highlight(n.dataset.id));
+    n.addEventListener('mouseleave', () => highlight(st.selected));
+    n.addEventListener('click', ev => { ev.stopPropagation(); select(n.dataset.id); });
+  });
+  if (st.selected) highlight(st.selected);
+}
+function legendHtml() {
+  if (st.colorBy === 'group') return groupsOrdered().filter(g => D.components.some(c => c.group === g && visibleComp(c))).map(g => `<span><i style="background:${groupColor(g)}"></i>${esc(groupName(g))}</span>`).join('');
+  return ORDER.filter(s => D.components.some(c => c.status === s && visibleComp(c))).map(s => `<span><i style="background:${sColor(s)}"></i>${STATUS[s]}</span>`).join('');
+}
+function toggle(k) { st[k] = !st[k]; save(); render(); }
+
+// pan & zoom shared by both canvases
+function bindCanvas(svg, key, full) {
+  const vb = view[key];
+  const apply = () => svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+  apply();
+  svg.addEventListener('wheel', ev => {
+    ev.preventDefault();
+    const r = svg.getBoundingClientRect(), k = Math.exp(ev.deltaY * .0015);
+    const sx = vb.w / r.width, sy = vb.h / r.height, s = Math.max(sx, sy);
+    const ox = (r.width * s - vb.w) / 2, oy = (r.height * s - vb.h) / 2;   // preserveAspectRatio offset
+    const px = vb.x - ox + (ev.clientX - r.left) * s, py = vb.y - oy + (ev.clientY - r.top) * s;
+    const nw = Math.min(full.w * 4, Math.max(200, vb.w * k)), f = nw / vb.w;
+    vb.x = px - (px - vb.x) * f; vb.y = py - (py - vb.y) * f; vb.w = nw; vb.h *= f; apply();
+  }, { passive: false });
+  let drag = null;
+  svg.addEventListener('pointerdown', ev => { if (ev.target.closest('.node')) return; drag = { x: ev.clientX, y: ev.clientY, vx: vb.x, vy: vb.y, moved: false }; svg.classList.add('dragging'); svg.setPointerCapture(ev.pointerId); });
+  svg.addEventListener('pointermove', ev => {
+    if (!drag) return;
+    const r = svg.getBoundingClientRect(), s = Math.max(vb.w / r.width, vb.h / r.height);
+    if (Math.abs(ev.clientX - drag.x) + Math.abs(ev.clientY - drag.y) > 3) drag.moved = true;
+    vb.x = drag.vx - (ev.clientX - drag.x) * s; vb.y = drag.vy - (ev.clientY - drag.y) * s; apply();
+  });
+  svg.addEventListener('pointerup', () => { if (drag && !drag.moved) { st.selected = null; st.focus = 'all'; render(); } drag = null; svg.classList.remove('dragging'); });
+}
+
+// ─────────────────────────────────────────────────────────────── mind map (radial)
+function renderMind(v) {
+  const comps = D.components.filter(visibleComp);
+  const groups = groupsOrdered().filter(g => comps.some(c => c.group === g));
+  const total = comps.length, R1 = 210, R2 = 470;
+  let ang = -Math.PI / 2;
+  const nodes = [], links = [], glabels = [];
+  for (const g of groups) {
+    const members = comps.filter(c => c.group === g).sort((a, b) => ORDER.indexOf(a.status) - ORDER.indexOf(b.status) || a.name.localeCompare(b.name));
+    const sector = 2 * Math.PI * members.length / total, mid = ang + sector / 2;
+    const gx = Math.cos(mid) * R1, gy = Math.sin(mid) * R1;
+    glabels.push({ g, x: gx, y: gy, color: groupColor(g), n: members.length });
+    links.push(`<path class="mm-link" d="M0,0 Q${Math.cos(mid) * R1 * .5},${Math.sin(mid) * R1 * .5} ${gx},${gy}" stroke="${groupColor(g)}" stroke-width="4" stroke-opacity=".5"/>`);
+    members.forEach((c, i) => {
+      const a = ang + sector * (i + .5) / members.length, r = R2 + (members.length > 6 ? (i % 2) * 70 : 0);
+      const x = Math.cos(a) * r, y = Math.sin(a) * r;
+      nodes.push({ c, x, y, a });
+      links.push(`<path class="mm-link" d="M${gx},${gy} Q${Math.cos(a) * (R1 + 90)},${Math.sin(a) * (R1 + 90)} ${x},${y}" stroke="${groupColor(g)}" stroke-opacity=".45"/>`);
+    });
+    ang += sector;
+  }
+  const nh = nodes.map(({ c, x, y, a }) => {
+    const r = 6 + Math.min(14, Math.sqrt(c.metrics.lines || 0) / 14), right = Math.cos(a) >= 0;
+    const tx = x + (right ? r + 6 : -r - 6);
+    const dash = ['proposed', 'idea', 'residue', 'approved'].includes(c.status) ? 'stroke-dasharray="3 3"' : '';
+    return `<g class="node ${st.selected === c.id ? 'sel' : ''} ${matches(c) ? 'match' : ''}" data-id="${esc(c.id)}">
+      <circle cx="${x}" cy="${y}" r="${r}" fill="${sColor(c.status)}" fill-opacity="${c.metrics.projects ? .9 : .25}" stroke="${sColor(c.status)}" stroke-width="2" ${dash}/>
+      ${c.findings.length ? `<circle cx="${x + r * .75}" cy="${y - r * .75}" r="4.5" fill="${sevColor(c.worst)}"/>` : ''}
+      <text x="${tx}" y="${y + 4}" font-size="12.5" font-weight="${st.selected === c.id ? 700 : 500}" text-anchor="${right ? 'start' : 'end'}">${esc(c.name)}</text>
+      <text class="sub" x="${tx}" y="${y + 17}" text-anchor="${right ? 'start' : 'end'}">${esc(STATUS[c.status] + (c.progress != null ? ' ' + c.progress + '%' : ''))}</text>
+      <title>${esc(c.id + '\n' + (c.summary || ''))}</title></g>`;
+  }).join('');
+  const gh = glabels.map(l => `<g><circle cx="${l.x}" cy="${l.y}" r="34" fill="${css('--surface')}" stroke="${l.color}" stroke-width="3"/>
+    <text class="mm-group" x="${l.x}" y="${l.y - 2}" text-anchor="middle" font-size="11" fill="${css('--text')}">${esc(groupName(l.g).split(' ')[0])}</text>
+    <text x="${l.x}" y="${l.y + 12}" text-anchor="middle" font-size="10" fill="${css('--muted')}">${esc(groupName(l.g).split(' ').slice(1).join(' ') || '')} ${l.n}</text></g>`).join('');
+  const full = { x: -R2 - 300, y: -R2 - 140, w: 2 * R2 + 600, h: 2 * R2 + 280 };
+  if (!view.mind) view.mind = { ...full };
+  v.innerHTML = `
+    <div class="toolbar">
+      <button class="${st.showPlanned ? 'on' : ''}" onclick="toggle('showPlanned')">Planned</button>
+      <button class="${st.showDomain ? 'on' : ''}" onclick="toggle('showDomain')">Domain repos</button>
+      <button onclick="view.mind=null;render()">Fit</button>
+    </div>
+    <svg class="graph ${st.search ? 'searching' : ''}" id="svg">${links.join('')}
+      <circle r="62" fill="${css('--accent')}"/><text text-anchor="middle" y="-2" font-size="17" font-weight="700" fill="#fff">YFex</text>
+      <text text-anchor="middle" y="16" font-size="11" fill="#fff">${comps.length} components</text>${gh}${nh}</svg>
+    <div class="legend">${ORDER.filter(s => comps.some(c => c.status === s)).map(s => `<span><i style="background:${sColor(s)}"></i>${STATUS[s]}</span>`).join('')}<span class="faint">circle size = lines of code · faded = no code yet · dot = open finding</span></div>`;
+  const svg = $('#svg');
+  bindCanvas(svg, 'mind', full);
+  svg.querySelectorAll('.node').forEach(n => n.addEventListener('click', ev => { ev.stopPropagation(); select(n.dataset.id); }));
+}
+
+// ─────────────────────────────────────────────────────────────── board
+function renderBoard(v) {
+  const comps = D.components.filter(c => visibleComp(c) && matches(c));
+  const cols = ORDER.filter(s => comps.some(c => c.status === s));
+  v.innerHTML = `<div class="board">${cols.map(s => {
+    const cs = comps.filter(c => c.status === s).sort((a, b) => (b.progress ?? 0) - (a.progress ?? 0) || a.name.localeCompare(b.name));
+    return `<div class="col"><h4><i class="pill" style="background:${sColor(s)};width:10px;height:10px;padding:0"></i>${STATUS[s]}<span class="n">${cs.length}</span></h4>${cs.map(card).join('')}</div>`;
+  }).join('')}</div>`;
+  v.querySelectorAll('.card').forEach(el => el.onclick = () => select(el.dataset.id));
+}
+function card(c) {
+  const sev = SEV.map(s => [s, c.findings.filter(f => f.severity === s).length]).filter(x => x[1]);
+  return `<div class="card" data-id="${esc(c.id)}" style="border-left-color:${sColor(c.status)}">
+    <div class="t">${esc(c.name)}<span class="g">${esc(groupName(c.group))}</span></div>
+    ${c.progress != null ? `<div class="bar" style="margin:5px 0"><div style="width:${c.progress}%;background:${sColor(c.status)}"></div></div>` : ''}
+    <p>${esc(c.summary || '')}</p>
+    ${c.next ? `<p style="color:var(--text)"><b>Next:</b> ${esc(c.next)}</p>` : ''}
+    <div class="meta">${sev.map(([s, n]) => `<span class="badge" style="background:${sevColor(s)}" title="${n} ${s} findings">${n}</span>`).join('')}
+      ${c.metrics.projects ? `<span>${c.metrics.projects} proj · ${(c.metrics.lines / 1000).toFixed(1)}k loc</span>` : '<span>no code</span>'}
+      ${c.dirty ? `<span class="tag warn">${c.dirty} uncommitted</span>` : ''}
+      ${c.metrics.lastChange ? `<span>changed ${ago(c.metrics.lastChange)}</span>` : ''}</div></div>`;
+}
+
+// ─────────────────────────────────────────────────────────────── findings
+function renderFindings(v) {
+  const cats = [...new Set(FIND.map(f => f.category))].sort();
+  const list = FIND.filter(f =>
+    (!st.fSev.length || st.fSev.includes(f.severity)) && (!st.fCat || f.category === st.fCat) && (!st.fSrc || (f.source || 'curated') === st.fSrc) &&
+    (!st.fStatus || (f.status || 'open') === st.fStatus) && (!st.fComp || (f.components || []).includes(st.fComp)) &&
+    (!st.fText || (f.id + f.title + f.detail + (f.recommendation || '')).toLowerCase().includes(st.fText.toLowerCase())))
+    .sort((a, b) => SEV.indexOf(a.severity) - SEV.indexOf(b.severity) || (a.source === b.source ? 0 : a.source === 'auto' ? 1 : -1) || a.id.localeCompare(b.id, undefined, { numeric: true }));
+  v.innerHTML = `<div class="page">
+    <div class="filters">
+      ${SEV.map(s => `<button class="${st.fSev.includes(s) ? 'on' : ''}" onclick="fSev('${s}')"><i class="pill" style="background:${sevColor(s)};width:9px;height:9px;padding:0"></i> ${s} (${FIND.filter(f => f.severity === s && (f.status || 'open') === 'open').length})</button>`).join('')}
+      <select onchange="st.fCat=this.value;save();render()"><option value="">All categories</option>${cats.map(c => `<option ${st.fCat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
+      <select onchange="st.fSrc=this.value;save();render()"><option value="">Curated + auto</option><option value="curated" ${st.fSrc === 'curated' ? 'selected' : ''}>Curated (analysis)</option><option value="auto" ${st.fSrc === 'auto' ? 'selected' : ''}>Auto (scanner)</option></select>
+      <select onchange="st.fStatus=this.value;save();render()">${['open', 'accepted', 'fixed', 'wontfix', ''].map(s => `<option value="${s}" ${st.fStatus === s ? 'selected' : ''}>${s || 'any status'}</option>`).join('')}</select>
+      <select onchange="st.fComp=this.value;save();render()"><option value="">All components</option>${D.components.filter(c => c.status !== 'domain').map(c => `<option value="${esc(c.id)}" ${st.fComp === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+      <input type="search" placeholder="Filter text…" value="${esc(st.fText)}" oninput="st.fText=this.value;clearTimeout(window._ft);window._ft=setTimeout(render,250)">
+      <span class="muted">${list.length} shown</span>
+    </div>
+    ${list.map(f => `<div class="finding" style="border-left-color:${sevColor(f.severity)}">
+      <div class="h"><span class="chip" style="background:${sevColor(f.severity)}">${f.severity}</span><b>${esc(f.id)} · ${esc(f.title)}</b>
+        <span class="tag">${esc(f.category)}</span><span class="tag">${f.source === 'auto' ? 'auto' : 'curated'}</span>${(f.status || 'open') !== 'open' ? `<span class="tag">${esc(f.status)}</span>` : ''}</div>
+      <div style="margin-top:4px">${(f.components || []).map(id => C.has(id) ? `<span class="link-chip" onclick="select('${esc(id)}')"><i class="pill" style="background:${sColor(C.get(id).status)};width:8px;height:8px;padding:0"></i>${esc(C.get(id).name)}</span>` : '').join('')}</div>
+      <pre>${esc(f.detail)}</pre>
+      ${(f.evidence || []).length ? `<details><summary>${f.evidence.length} evidence path(s)</summary>${f.evidence.map(p => `<div class="small"><a href="${fileUrl(p.replace(/:\d+$/, ''))}">${esc(p)}</a></div>`).join('')}</details>` : ''}
+      ${f.recommendation ? `<div class="rec"><b>Recommendation.</b> ${esc(f.recommendation)}</div>` : ''}
+    </div>`).join('') || '<div class="empty">No findings match.</div>'}</div>`;
+}
+function fSev(s) { st.fSev = st.fSev.includes(s) ? st.fSev.filter(x => x !== s) : [...st.fSev, s]; save(); render(); }
+
+// ─────────────────────────────────────────────────────────────── projects
+function renderProjects(v) {
+  const kinds = [...new Set(D.projects.map(p => p.kind))].sort();
+  const cols = [['name', 'Project'], ['component', 'Component'], ['repo', 'Repo'], ['kind', 'Kind'], ['tfms', 'Target'], ['aot', 'AOT'], ['refs', 'Refs out'], ['refsIn', 'Refs in'], ['csFiles', '.cs'], ['lines', 'Lines'], ['lastChange', 'Changed'], ['inSolution', 'In sln']];
+  const val = (p, k) => k === 'refs' ? p.refs.length : k === 'tfms' ? p.tfms.join(';') : p[k];
+  const list = D.projects.filter(p => (st.showDomain || C.get(p.component)?.status !== 'domain') && (!st.pKind || p.kind === st.pKind) &&
+    (!st.pText || (p.name + ' ' + p.component + ' ' + p.path).toLowerCase().includes(st.pText.toLowerCase())))
+    .sort((a, b) => { const x = val(a, st.pSort), y = val(b, st.pSort); return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y))) * st.pDir; });
+  v.innerHTML = `<div class="page"><div class="filters">
+      <input type="search" placeholder="Filter projects…" value="${esc(st.pText)}" oninput="st.pText=this.value;clearTimeout(window._pt);window._pt=setTimeout(render,250)">
+      <select onchange="st.pKind=this.value;save();render()"><option value="">All kinds</option>${kinds.map(k => `<option ${st.pKind === k ? 'selected' : ''}>${k}</option>`).join('')}</select>
+      <button class="${st.showDomain ? 'on' : ''}" onclick="toggle('showDomain')">Domain repos</button>
+      <span class="muted">${list.length} projects · click a header to sort · click a row for its component</span></div>
+    <table><thead><tr>${cols.map(([k, t]) => `<th onclick="pSort('${k}')">${t}${st.pSort === k ? (st.pDir > 0 ? ' ▲' : ' ▼') : ''}</th>`).join('')}</tr></thead><tbody>
+    ${list.map(p => `<tr data-c="${esc(p.component)}" style="cursor:pointer">
+      <td><a href="${fileUrl(p.path)}" onclick="event.stopPropagation()" title="${esc(p.path)}">${esc(p.name)}</a></td>
+      <td>${esc(C.get(p.component)?.name || p.component)}</td><td class="small muted">${esc(p.repo)}</td><td><span class="tag">${p.kind}</span></td>
+      <td class="small">${esc(p.tfms.join('; '))}</td><td>${p.aot ? '✓' : ''}</td>
+      <td class="num" title="${esc(p.refs.join('\n'))}">${p.refs.length}</td><td class="num">${p.refsIn}</td><td class="num">${p.csFiles}</td><td class="num">${p.lines.toLocaleString()}</td>
+      <td class="small">${fmtDate(p.lastChange)}</td><td>${p.inSolution ? '✓' : '<span class="tag warn">no</span>'}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  v.querySelectorAll('tbody tr').forEach(tr => tr.onclick = () => select(tr.dataset.c));
+}
+function pSort(k) { st.pDir = st.pSort === k ? -st.pDir : 1; st.pSort = k; save(); render(); }
+
+// ─────────────────────────────────────────────────────────────── docs
+function renderDocs(v) {
+  const docs = [...D.docs].sort((a, b) => (b.lastDate || '').localeCompare(a.lastDate || ''));
+  v.innerHTML = `<div class="page"><p class="muted">Design documents found under <code>YFex/docs/internal</code> plus the documents each component lists in <code>atlas.json</code>. “Last date” is the newest date mentioned in the document head; ⚑ counts decision flags in the README.</p>
+    <table><thead><tr><th>Document</th><th>Components</th><th>Status line</th><th>Last date</th><th>Files</th><th>⚑</th></tr></thead><tbody>
+    ${docs.map(d => `<tr><td><a href="${fileUrl(d.file)}">${esc(d.title)}</a><div class="small faint">${esc(d.path)}</div></td>
+      <td>${(d.components || []).map(id => `<span class="link-chip" onclick="select('${esc(id)}')">${esc(C.get(id)?.name || id)}</span>`).join('') || '<span class="tag warn">unmapped</span>'}</td>
+      <td class="small" style="max-width:560px">${esc((d.status || '—').slice(0, 320))}${(d.status || '').length > 320 ? '…' : ''}</td>
+      <td class="small">${esc(d.lastDate || '—')}</td><td class="num">${d.files}</td><td class="num">${d.flags || ''}</td></tr>`).join('')}
+    </tbody></table></div>`;
+}
+
+// ─────────────────────────────────────────────────────────────── activity
+function renderActivity(v) {
+  const repos = D.repos.filter(r => st.showDomain || !D.components.some(c => c.status === 'domain' && c.repos.includes(r.name) && c.id === r.name))
+    .map(r => ({ ...r, act: [r.git.lastCommit, r.lastChange].filter(Boolean).sort().pop() }))
+    .sort((a, b) => (b.act || '').localeCompare(a.act || ''));
+  const maxDirty = Math.max(1, ...repos.map(r => r.git.dirty || 0));
+  const recent = D.projects.filter(p => p.kind !== 'test' && (st.showDomain || C.get(p.component)?.status !== 'domain')).sort((a, b) => b.lastChange.localeCompare(a.lastChange)).slice(0, 30);
+  v.innerHTML = `<div class="page">
+    <h3 style="margin-top:0">Repositories by latest activity</h3>
+    <table><thead><tr><th>Repo</th><th>Git</th><th>Last commit</th><th>Commits 14d</th><th>Uncommitted</th><th>Newest file change</th><th>Projects</th></tr></thead><tbody>
+    ${repos.map(r => `<tr><td><b>${esc(r.name)}</b></td>
+      <td>${r.git.isRepo ? esc(r.git.branch || '') : '<span class="tag bad">no git</span>'}</td>
+      <td class="small">${r.git.lastCommit ? fmtDate(r.git.lastCommit) + ' · ' + esc((r.git.lastSubject || '').slice(0, 70)) : '—'}</td>
+      <td class="num">${r.git.commits14d || 0}</td>
+      <td><div style="display:flex;gap:6px;align-items:center"><div class="bar" style="width:120px"><div style="width:${100 * (r.git.dirty || 0) / maxDirty}%;background:var(--sev-medium)"></div></div><span class="small">${r.git.dirty || 0}</span></div></td>
+      <td class="small">${fmtDate(r.lastChange)} <span class="faint">(${ago(r.lastChange)})</span></td><td class="num">${r.projects}</td></tr>`).join('')}
+    </tbody></table>
+    <h3>Most recently changed projects</h3>
+    <table><thead><tr><th>Project</th><th>Component</th><th>Changed</th><th>Lines</th></tr></thead><tbody>
+    ${recent.map(p => `<tr data-c="${esc(p.component)}" style="cursor:pointer"><td>${esc(p.name)}</td><td>${esc(C.get(p.component)?.name || p.component)}</td><td class="small">${fmtDate(p.lastChange, true)} <span class="faint">(${ago(p.lastChange)})</span></td><td class="num">${p.lines.toLocaleString()}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  v.querySelectorAll('tbody tr[data-c]').forEach(tr => tr.onclick = () => select(tr.dataset.c));
+}
+
+// ─────────────────────────────────────────────────────────────── detail panel
+function renderPanel() {
+  const p = $('#panel'), c = st.selected && C.get(st.selected);
+  if (!c) { p.classList.add('hidden'); return; }
+  p.classList.remove('hidden');
+  const shown = (e, id) => (!e.analyzerOnly || st.showAnalyzer) && (st.showDomain || C.get(id)?.status !== 'domain');
+  const outs = (OUT.get(c.id) || []).filter(e => shown(e, e.to)), ins = (IN.get(c.id) || []).filter(e => shown(e, e.from));
+  const chip = (id, e) => `<span class="link-chip" onclick="select('${esc(id)}')" title="${esc(e.planned ? 'planned: ' + (e.note || '') : (e.refs || []).join('\n'))}"><i class="pill" style="background:${sColor(C.get(id)?.status)};width:8px;height:8px;padding:0"></i>${esc(C.get(id)?.name || id)}${e.planned ? ' <em>planned</em>' : e.weight > 1 ? ` <em>×${e.weight}</em>` : ''}${e.cycle ? ' <em style="color:var(--danger)">cycle</em>' : ''}</span>`;
+  const m = c.metrics, projs = D.projects.filter(x => x.component === c.id);
+  p.innerHTML = `<button class="close" onclick="st.selected=null;st.focus='all';render()" aria-label="Close">×</button>
+    <h2>${esc(c.name)}</h2>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center"><span class="chip" style="background:${sColor(c.status)}">${STATUS[c.status] || c.status}</span><span class="tag">${esc(groupName(c.group))}</span><span class="small faint">${esc(c.id)}</span></div>
+    ${c.progress != null ? `<div class="bar" style="margin-top:8px"><div style="width:${c.progress}%;background:${sColor(c.status)}"></div></div><div class="small muted">${c.progress}% by the curated estimate</div>` : ''}
+    ${c.summary ? `<h3>What it does</h3><div>${esc(c.summary)}</div>` : '<div class="box small">Not described yet — add it to <code>atlas.json</code>.</div>'}
+    ${c.next ? `<h3>Next</h3><div class="box">${esc(c.next)}</div>` : ''}
+    ${(c.pending || []).length ? `<h3>Open decisions / gates</h3>${c.pending.map(x => `<span class="tag warn">${esc(x)}</span>`).join(' ')}` : ''}
+    <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap">
+      <button onclick="focusOn('deps')">Show what it needs</button><button onclick="focusOn('dependents')">Show who needs it</button><button onclick="focusOn('all')">Show all</button></div>
+    <h3>Depends on (${outs.length})</h3>${outs.map(e => chip(e.to, e)).join('') || '<span class="faint">nothing outside itself</span>'}
+    <h3>Used by (${ins.length})</h3>${ins.map(e => chip(e.from, e)).join('') || '<span class="faint">no one yet</span>'}
+    ${c.findings.length ? `<h3>Open findings (${c.findings.length})</h3>${c.findings.sort((a, b) => SEV.indexOf(a.severity) - SEV.indexOf(b.severity)).map(f => `<div class="box small" style="cursor:pointer;border-left:3px solid ${sevColor(f.severity)}" onclick="st.fComp='${esc(c.id)}';st.fStatus='open';go('findings')"><b>${esc(f.id)}</b> ${esc(f.title)}</div>`).join('')}` : ''}
+    ${m.projects ? `<h3>Code</h3><div class="kv">
+      <div><b>${m.projects}</b><span>projects</span></div><div><b>${m.libraries}</b><span>libraries</span></div><div><b>${m.tests}</b><span>test projects</span></div>
+      <div><b>${m.generators}</b><span>generators</span></div><div><b>${m.csFiles}</b><span>.cs files</span></div><div><b>${(m.lines / 1000).toFixed(1)}k</b><span>lines</span></div>
+      <div><b>${m.aot}</b><span>AOT-marked</span></div><div><b>${(c.platforms || []).join(', ') || '—'}</b><span>platform pkgs</span></div><div><b>${ago(m.lastChange)}</b><span>last change</span></div></div>` : ''}
+    ${(c.git || []).length ? `<h3>Git</h3>${c.git.map(g => `<div class="box small"><b>${esc(g.repo)}</b> ${g.isRepo ? `· ${esc(g.branch || '')} · last commit ${fmtDate(g.lastCommit)} (${ago(g.lastCommit)}) · ${g.commits14d} in 14 days<br><span class="muted">${esc(g.lastSubject || '')}</span>${g.dirty ? `<br><span class="tag warn">${g.dirty} uncommitted changes</span>` : ''}` : '<span class="tag bad">not a git repository</span>'}</div>`).join('')}` : ''}
+    ${(c.docs || []).length ? `<h3>Design & docs</h3>${c.docs.map(d => d.missing ? `<div class="box small"><span class="tag bad">missing</span> ${esc(d.path)}</div>` : `<div class="box small"><a href="${fileUrl(d.file)}"><b>${esc(d.title)}</b></a> <span class="faint">${d.files} file(s)${d.lastDate ? ' · ' + d.lastDate : ''}${d.flags ? ' · ⚑' + d.flags : ''}</span>${d.status ? `<div class="muted" style="margin-top:4px">${esc(d.status.slice(0, 420))}${d.status.length > 420 ? '…' : ''}</div>` : ''}</div>`).join('')}` : ''}
+    ${projs.length ? `<h3>Projects</h3><details ${projs.length <= 8 ? 'open' : ''}><summary>${projs.length} project(s)</summary>${projs.map(x => `<div class="small" style="padding:3px 0;border-bottom:1px solid var(--border)"><span class="tag">${x.kind}</span> <a href="${fileUrl(x.path)}">${esc(x.name)}</a> <span class="faint">${x.lines.toLocaleString()} lines · ${esc(x.tfms.join(';'))}</span>${x.refs.length ? `<div class="faint">→ ${esc(x.refs.join(', '))}</div>` : ''}</div>`).join('')}</details>` : ''}`;
+}
+function focusOn(f) { st.focus = f; save(); if (st.tab !== 'map') st.tab = 'map'; render(); }
+
+// ─────────────────────────────────────────────────────────────── live reload (file:// friendly)
+function poll() {
+  if (!st.live || window.ATLAS_STANDALONE) return;
+  const s = document.createElement('script');
+  s.src = 'atlas.data.js?t=' + Date.now();
+  s.onload = () => {
+    s.remove();
+    if (window.ATLAS_DATA && window.ATLAS_DATA.generatedAt !== D.generatedAt) {
+      const v = $('#view'), top = v.scrollTop, left = v.scrollLeft, pTop = $('#panel').scrollTop;
+      prep(); render();
+      v.scrollTop = top; v.scrollLeft = left; $('#panel').scrollTop = pTop;
+      const dot = $('#liveDot'); dot.classList.add('flash'); setTimeout(() => dot.classList.remove('flash'), 1200);
+    }
+  };
+  s.onerror = () => s.remove();
+  document.head.appendChild(s);
+}
+
+// ─────────────────────────────────────────────────────────────── boot
+if (!window.ATLAS_DATA) {
+  document.body.innerHTML = '<div class="empty"><h2>No data yet</h2><p>Run <code>yfexAtlas</code> (C:\\Dev\\Scripts\\Exe\\yfexAtlas.bat) to scan C:\\Dev\\YFex and create atlas.data.js next to this page.</p></div>';
+} else {
+  applyTheme(); prep(); liveDot(); render();
+  if (window.ATLAS_STANDALONE) {
+    // one-file snapshot: nothing to reload, and file:///C:/ links only exist on the scanning PC
+    $('#live').parentElement.remove(); $('#liveDot').remove();
+    $('#gen').textContent = 'snapshot ' + fmtDate(D.generatedAt, true) + ' · ' + D.machine;
+  } else setInterval(poll, 4000);
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => render());
+  addEventListener('keydown', e => { if (e.key === 'Escape') { st.selected = null; st.focus = 'all'; render(); } if (e.key === '/' && document.activeElement.tagName !== 'INPUT') { e.preventDefault(); $('#q').focus(); } });
+}
+</script>
+</body>
+</html>

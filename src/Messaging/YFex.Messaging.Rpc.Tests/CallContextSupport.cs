@@ -4,6 +4,7 @@ using System.Security.Claims;
 using YFex.Authorization;
 using YFex.Authorization.Public;
 using YFex.Tenancy;
+using YFex.Tenancy.Resolution;
 
 namespace YFex.Messaging.Rpc.Tests;
 
@@ -84,8 +85,11 @@ public sealed class TestTokenValidator : ICallTokenValidator
 {
     private static readonly Dictionary<string, string[]> TenantsOf = new(StringComparer.Ordinal)
     {
-        ["alice"] = ["acme"], ["bob"] = ["globex"], ["dave"] = ["acme"], ["mallory"] = ["acme"],
+        ["alice"] = ["acme"], ["bob"] = ["globex"], ["dave"] = ["acme"], ["mallory"] = ["acme"], ["sam"] = ["acme"], ["sid"] = ["acme"],
     };
+
+    /// <summary>Support staff whose token may ask for another tenant: the identity then carries a <see cref="TenantImpersonation"/>.</summary>
+    private static readonly HashSet<string> Support = new(StringComparer.Ordinal) { "sam", "sid" };
 
     public int Validations;
 
@@ -95,7 +99,13 @@ public sealed class TestTokenValidator : ICallTokenValidator
         if (!token.Value.StartsWith("t:", StringComparison.Ordinal)) return new((CallIdentity?)null);
         var subject = token.Value[2..];
         if (!TenantsOf.TryGetValue(subject, out var tenants)) return new((CallIdentity?)null);
-        if (!requestedScope.IsEmpty && Array.IndexOf(tenants, Users.TenantOf(requestedScope)) < 0) return new((CallIdentity?)null);
+        if (!requestedScope.IsEmpty && Array.IndexOf(tenants, Users.TenantOf(requestedScope)) < 0)
+        {
+            if (!Support.Contains(subject)) return new((CallIdentity?)null);
+            var home = ScopeIdentity.Of(new ScopeValue(Users.TenantRank, tenants[0]));
+            var impersonation = new TenantImpersonation(subject, Users.TenantOf(requestedScope), tenants[0], home.ToString());
+            return new(new CallIdentity(Users.Principal(subject), token, requestedScope, impersonation: impersonation));
+        }
         return new(new CallIdentity(Users.Principal(subject), token, requestedScope));
     }
 }

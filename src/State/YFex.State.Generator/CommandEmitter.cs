@@ -14,6 +14,10 @@ namespace YFex.State.Generator;
 ///     transition when the ValueTask completes synchronously.
 ///   - For Task&lt;T&gt; / ValueTask&lt;T&gt; with TargetProperty: automatic result flattening
 ///     into the named [Observable] property after successful execution.
+///   - The hook <c>partial void __OnCanExecute_&lt;Name&gt;(ref bool canExecute)</c> (Name = method name without "Async"):
+///     CanExecute and Execute ask it, so another generator can gate the command (YFex.Authorization implements it for
+///     <c>[RequirePermission]</c>, authorization-consolidation ⚑Z19). Unimplemented, the calls compile away. Plus
+///     <c>__RaiseCanExecuteChanged_&lt;Name&gt;()</c>, which that generator calls when its answer may have changed.
 /// </summary>
 internal static class CommandEmitter
 {
@@ -88,6 +92,32 @@ internal static class CommandEmitter
             EmitAsyncCommand(sb, m);
         else
             EmitSyncCommand(sb, m);
+
+        EmitCanExecuteHook(sb, m);
+    }
+
+    // The command name used by hooks and by YFex.Authorization's ForCommand rows: the method name without "Async".
+    private static string HookName(CommandMethodRawModel m)
+        => m.CommandPropertyName.Substring(0, m.CommandPropertyName.Length - "Command".Length);
+
+    private static void EmitCanExecuteHook(StringBuilder sb, CommandMethodRawModel m)
+    {
+        string name = HookName(m);
+        string cmdClass = (m.IsAsync ? "__AsyncCmd_" : "__SyncCmd_") + m.CommandPropertyName;
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>Gate hook: implemented by another generator (e.g. YFex.Authorization for [RequirePermission]).</summary>");
+        sb.Append("    partial void __OnCanExecute_").Append(name).AppendLine("(ref bool canExecute);");
+        sb.AppendLine();
+        sb.AppendLine("    /// <summary>Raises CanExecuteChanged when the gate's answer may have changed (no-op before the command is created).</summary>");
+        sb.Append("    private void __RaiseCanExecuteChanged_").Append(name).Append("() => (__cmd_").Append(m.CommandPropertyName)
+          .Append(" as ").Append(cmdClass).AppendLine(")?.NotifyCanExecuteChanged();");
+    }
+
+    // `bool __canExecute = true; _owner.__OnCanExecute_X(ref __canExecute);` — the call disappears when the hook is not implemented.
+    private static void EmitAskHook(StringBuilder sb, CommandMethodRawModel m, string indent)
+    {
+        sb.Append(indent).AppendLine("bool __canExecute = true;");
+        sb.Append(indent).Append("_owner.__OnCanExecute_").Append(HookName(m)).AppendLine("(ref __canExecute);");
     }
 
     // ── Async command ──────────────────────────────────────────────────────────
@@ -174,7 +204,12 @@ internal static class CommandEmitter
         // IsExecuting — derived from Status; no second atomic read needed
         sb.Append("        public bool IsExecuting => _status == ")
           .Append(Ns).AppendLine("CommandStatus.Executing;");
-        sb.AppendLine("        public bool CanExecute() => !IsExecuting;");
+        sb.AppendLine("        public bool CanExecute()");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (IsExecuting) return false;");
+        EmitAskHook(sb, m, "            ");
+        sb.AppendLine("            return __canExecute;");
+        sb.AppendLine("        }");
         sb.AppendLine("        public void Execute() { _ = ExecuteAsync(); }");
         sb.AppendLine();
 
@@ -182,6 +217,13 @@ internal static class CommandEmitter
         sb.Append("        public async ").Append(SysThrTasks).AppendLine("Task ExecuteAsync(");
         sb.Append("            ").Append(SysThr).AppendLine("CancellationToken ct = default)");
         sb.AppendLine("        {");
+
+        // Gate hook — a command the gate refuses does not run (and does not touch Status)
+        sb.AppendLine("            {");
+        EmitAskHook(sb, m, "                ");
+        sb.AppendLine("                if (!__canExecute) return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
 
         // CAS gate — lock-free single-execution guarantee
         sb.Append("            if (").Append(Sys)
@@ -377,8 +419,18 @@ internal static class CommandEmitter
         sb.Append("        internal ").Append(cmdClass).Append('(').Append(m.ClassName)
           .AppendLine(" owner) => _owner = owner;");
         sb.AppendLine("        public event global::System.Action? CanExecuteChanged;");
-        sb.AppendLine("        public bool CanExecute() => true;");
-        sb.Append("        public void Execute() => _owner.").Append(m.MethodName).AppendLine("();");
+        sb.AppendLine("        internal void NotifyCanExecuteChanged() => CanExecuteChanged?.Invoke();");
+        sb.AppendLine("        public bool CanExecute()");
+        sb.AppendLine("        {");
+        EmitAskHook(sb, m, "            ");
+        sb.AppendLine("            return __canExecute;");
+        sb.AppendLine("        }");
+        sb.AppendLine("        public void Execute()");
+        sb.AppendLine("        {");
+        EmitAskHook(sb, m, "            ");
+        sb.AppendLine("            if (!__canExecute) return;");
+        sb.Append("            _owner.").Append(m.MethodName).AppendLine("();");
+        sb.AppendLine("        }");
         sb.AppendLine("    }");
     }
 }

@@ -212,6 +212,11 @@ public readonly record struct PublicKeyRecord(KeyId Id, SignatureAlgorithm Algor
                                               ValidityPeriod Validity, DateTimeOffset? RevokedAt);
 ```
 
+> **As built (2026-10-18, C1/C5):** the verifier also checks `RsaPkcs1Sha256` (RS256) and `RsaPssSha256` (PS256) — verify-only, for
+> keys published by someone else, accepted only when in `allowedAlgorithms`; `ExternalPublicKeys.TryCreateRsa/TryCreateEcdsaP256/TryCreate`
+> turn JWK components or DER into checked records (RSA 2 048–8 192 bits). `ImportedSigningKey.FromPkcs8/FromPem` is a fixed P-256 signer
+> issued elsewhere (Apple `.p8`), kept sealed with `ISecretStore.ImportSigningKeyAsync`/`GetSigningKeyAsync`. Log: 12 §5.
+
 > **As built (2026-10-04):** `SignedPayload.Sign(key, domain, payload)` returns a `DetachedSignature` (new 64-byte array) and
 > `int Sign(key, domain, payload, Span<byte>)` writes into a caller buffer (a span cannot become the `ReadOnlyMemory` inside
 > `DetachedSignature`). `SignedPayload.ComputeHash` exposes the signed hash. Rotating software keys are a **`SigningKeyRing`**
@@ -442,3 +447,34 @@ public static class CryptographyCapabilities
 Computed once at type initialization. Results are logged at startup through a core probe ("sealing: Aes256Gcm; signing: EcdsaP256Sha256,
 MLDsa65; root key: Hardware"). An unsupported algorithm is an `AlgorithmUnavailable` outcome, never a `PlatformNotSupportedException`
 from deep inside a store (fixes C11's symptom; WASM storage encryption itself is ⚑K18).
+
+## 13. One-time passwords: `OneTimePassword` (authentication request C2, ⚑AN12) — as built 2026-10-19
+
+Authenticator apps (Google/Microsoft Authenticator, 1Password…) speak HOTP (RFC 4226) and TOTP (RFC 6238) with **HMAC-SHA-1** —
+protocol-mandated (P-class) and safe here because HMAC does not rely on collision resistance; SHA-256/512 are RFC 6238 options. The
+shared secret is raw bytes owned by the caller (YFex.Authentication stores it sealed, ring `authentication/factors`); this class only
+computes and checks codes. `HMACSHA1.HashData` joined the architecture test's banned list (only this library may call it).
+
+```csharp
+public enum OneTimePasswordAlgorithm : byte { Sha1 = 0, Sha256 = 1, Sha512 = 2 }
+public readonly record struct OneTimePasswordParameters { int Digits /*6–8, default 6*/; TimeSpan Period /*15 s–10 min, default 30 s*/;
+                                                          OneTimePasswordAlgorithm Algorithm; int Window /*0–2, default 1*/; }   // default = interoperable profile
+public enum OneTimePasswordCheck : byte { Valid, Invalid, Replayed, Malformed }
+
+public static class OneTimePassword
+{
+    public static byte[] CreateSecret(int length = 20);                                    // 16–128 random bytes
+    public static int ComputeHotp(ReadOnlySpan<byte> secret, long counter, int digits = 6, OneTimePasswordAlgorithm algorithm = Sha1);
+    public static long StepOf(DateTimeOffset time, TimeSpan period = default);              // floor(unix / period), T0 = epoch
+    public static int ComputeTotp(ReadOnlySpan<byte> secret, DateTimeOffset time, OneTimePasswordParameters parameters = default);
+    public static bool VerifyHotp(ReadOnlySpan<byte> secret, long counter, ReadOnlySpan<char> code, …);              // fixed time
+    public static OneTimePasswordCheck VerifyTotp(ReadOnlySpan<byte> secret, ReadOnlySpan<char> code, DateTimeOffset now,
+        long lastAcceptedStep, out long acceptedStep, OneTimePasswordParameters parameters = default);
+    public static string EncodeSecret(ReadOnlySpan<byte> secret);                           // RFC 4648 base32, no padding (otpauth://)
+    public static bool TryDecodeSecret(ReadOnlySpan<char> text, Span<byte> destination, out int written);
+}
+```
+
+`VerifyTotp` computes and compares **every** step of the window (no early exit; `FixedTimeEquals` over the digits) and refuses a match at
+or before `lastAcceptedStep` (`Replayed`, RFC 6238 §5.2): each step is accepted once when the caller stores `acceptedStep` with a
+compare-and-set. Codes are exactly `Digits` ASCII digits (callers strip spaces). No allocation on the verify path.

@@ -113,7 +113,7 @@ public sealed class CallIdentity
     internal static readonly CallIdentity Rejected = new(new ClaimsPrincipal(new ClaimsIdentity()));
 
     public CallIdentity(ClaimsPrincipal principal, AccessToken? token = null, ScopeIdentity scope = default,
-        string? culture = null, DateTimeOffset? expiresAt = null)
+        string? culture = null, DateTimeOffset? expiresAt = null, global::YFex.Tenancy.Resolution.TenantImpersonation? impersonation = null)
     {
         ArgumentNullException.ThrowIfNull(principal);
         Principal = principal;
@@ -122,12 +122,20 @@ public sealed class CallIdentity
         Culture = culture;
         ExpiresAt = expiresAt ?? token?.ExpiresAt ?? ExpiryOf(principal);
         Subject = CallContext.SubjectOf(principal);
+        Impersonation = impersonation;
     }
 
     public ClaimsPrincipal Principal { get; }
     public AccessToken? Token { get; }
     public ScopeIdentity Scope { get; }
     public string? Culture { get; }
+
+    /// <summary>
+    /// The tenant impersonation behind <see cref="Scope"/> (the upgrade request went through YFex.Web's act-as-tenant switch, or the
+    /// token validator granted one): <see cref="Scope"/> is then the TARGET. Honoured only with <c>AllowImpersonation()</c>; otherwise
+    /// the call runs in <see cref="TenantImpersonation.HomeScope"/> as the plain user.
+    /// </summary>
+    public global::YFex.Tenancy.Resolution.TenantImpersonation? Impersonation { get; }
 
     /// <summary>After this instant the identity is ignored (the call runs as anonymous). From the token / <c>exp</c> claim.</summary>
     public DateTimeOffset? ExpiresAt { get; }
@@ -141,7 +149,12 @@ public sealed class CallIdentity
     /// <summary>Last resolved auth context and the permissions version it was built for (see CallContextResolver).</summary>
     internal ResolvedAuth? Resolved;
 
-    internal sealed record ResolvedAuth(IAuthorizationContext Caller, long Version);
+    internal sealed record ResolvedAuth(IAuthorizationContext Caller, long Version, ScopeIdentity Scope);
+
+    /// <summary>The scope the caller runs in when its impersonation is not honoured: the home scope (None when unknown).</summary>
+    internal ScopeIdentity HomeScope
+        => Impersonation is not { } impersonation ? Scope
+            : ScopeIdentity.TryParse(impersonation.HomeScope, out var home) ? home : ScopeIdentity.None;
 
     private static DateTimeOffset? ExpiryOf(ClaimsPrincipal principal)
         => principal.FindFirst("exp")?.Value is { } exp && long.TryParse(exp, out var seconds)

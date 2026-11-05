@@ -545,6 +545,9 @@ internal static partial class Emitter
         sb.Line($"{Cqrs}.ErrorKind.Conflict => \"server.conflict\",");
         sb.Line($"{Cqrs}.ErrorKind.ValidationProblem => \"server.invalid\",");
         sb.Line($"{Cqrs}.ErrorKind.ApprovalRequired => \"server.approval\",");
+        sb.Line($"{Cqrs}.ErrorKind.Unavailable => \"server.unavailable\",");
+        sb.Line($"{Cqrs}.ErrorKind.ReauthenticationRequired => \"server.reauthenticate\",");
+        sb.Line($"{Cqrs}.ErrorKind.SitePresenceRequired => \"server.presence\",");
         sb.Line("_ => \"server.fail\",");
         sb.Close();
         sb.Line(";");

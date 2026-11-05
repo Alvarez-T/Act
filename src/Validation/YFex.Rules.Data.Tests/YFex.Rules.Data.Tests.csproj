@@ -21,7 +21,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\YFex.Rules.Data\YFex.Rules.Data.csproj" />
-    <ProjectReference Include="..\..\..\..\YFex.Data\src\YFex.Sqlite\YFex.Sqlite.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Data\src\YFex.Data.Sqlite\YFex.Data.Sqlite.csproj" />
+    <!-- Schema validation on every engine (data-schema DS-P3): the dialects' generators only, no server is contacted. -->
+    <ProjectReference Include="..\..\..\..\YFex.Data\src\YFex.Data.Postgres\YFex.Data.Postgres.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Data\src\YFex.Data.SqlServer\YFex.Data.SqlServer.csproj" />
+    <ProjectReference Include="..\..\..\..\YFex.Data\src\YFex.Data.Oracle\YFex.Data.Oracle.csproj" />
   </ItemGroup>
 
   <ItemGroup>

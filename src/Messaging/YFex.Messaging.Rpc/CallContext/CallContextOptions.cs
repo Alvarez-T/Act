@@ -42,6 +42,7 @@ public sealed class CallContextServerBuilder
     internal bool CaptureConnection { get; private set; }
     internal Func<HttpContext, bool, CallIdentity?>? ConnectionCapture { get; private set; }
     internal bool Tenant { get; private set; }
+    internal bool Impersonation { get; private set; }
 
     /// <summary>
     /// DEFAULT — connection-bound: the identity (<see cref="HttpContext.User"/> + bearer token, and the tenant with
@@ -105,6 +106,20 @@ public sealed class CallContextServerBuilder
     public CallContextServerBuilder WithTenant()
     {
         Tenant = true;
+        return this;
+    }
+
+    /// <summary>
+    /// Honours tenant impersonation (authorization-consolidation 06 §3, ⚑Z14 — parity with HTTP): an identity carrying a
+    /// <see cref="CallIdentity.Impersonation"/> runs in the target tenant as an impersonating caller (real actor kept, relation
+    /// <see cref="ActorRelation.TenantImpersonation"/>, <c>ImpersonationRestrictions</c> withheld, <c>ImpersonationStarted</c> emitted),
+    /// after the registered <c>ITenantImpersonationGate</c> allows the real actor in its home tenant. Without this call, or when the
+    /// gate refuses, the call runs in the home tenant as the plain user. Implies <see cref="WithTenant"/>.
+    /// </summary>
+    public CallContextServerBuilder AllowImpersonation()
+    {
+        Tenant = true;
+        Impersonation = true;
         return this;
     }
 }

@@ -58,7 +58,7 @@ The site broker has **no developer code** (offline ⚑O20). The generic host com
 **YFex.Installer** exists (user, 2026-10-07), takes the code as a start-up argument and calls the same `IInstallationEnrollment`:
 
 ```bash
-YFex.Offline.Broker.exe --enroll 7Q4K-M2XD --display-name PC-GERENTE      # (sketch) Offline's host; machine-scope keys
+yfex-host --enroll 7Q4K-M2XD --display-name PC-GERENTE      # (sketch) the generic service host (hosting ⚑H9); machine-scope keys
 ```
 
 ## 2. Enrolling CAIXA-02

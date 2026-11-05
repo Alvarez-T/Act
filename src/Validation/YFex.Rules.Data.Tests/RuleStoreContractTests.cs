@@ -1,7 +1,10 @@
 using System.Text;
 using Microsoft.Data.Sqlite;
 using YFex.Data;
-using YFex.Sqlite;
+using YFex.Data.Oracle;
+using YFex.Data.Postgres;
+using YFex.Data.Sqlite;
+using YFex.Data.SqlServer;
 
 namespace YFex.Rules.Data.Tests;
 
@@ -135,19 +138,84 @@ public sealed class SqliteRuleStoreTests : RuleStoreContract, IDisposable
         string file = Path.Combine(Path.GetTempPath(), "yfex-rules-" + Guid.NewGuid().ToString("N") + ".db");
         _files.Add(file);
         var connections = new YFexConnectionFactory(() => new SqliteConnection($"Data Source={file};Pooling=False"), SqliteDialect.Instance);
-        var store = new SqlRuleStore(connections, new SqlRuleStoreOptions { Database = RuleStoreDatabase.Sqlite, MaxAppendAttempts = 50 });
-        store.EnsureSchemaAsync().GetAwaiter().GetResult();
-        store.EnsureSchemaAsync().GetAwaiter().GetResult();          // idempotent
+        using (YFexConnection connection = connections.Create())
+            connection.ApplySchemaAsync(RuleStoreSchema.Module).GetAwaiter().GetResult();
+        var store = new SqlRuleStore(connections, new SqlRuleStoreOptions { MaxAppendAttempts = 50 });
+        store.EnsureSchemaAsync().GetAwaiter().GetResult();          // already applied: no-op
         return store;
     }
 
     [Fact]
-    public void Ddl_exists_for_every_engine()
+    public void The_schema_is_valid_on_every_engine()
     {
-        foreach (var db in Enum.GetValues<RuleStoreDatabase>())
-            SqlRuleStore.CreateTableScript(db).Should().HaveCount(2).And.OnlyContain(s => s.Contains("yfex_rule_data"));
-        SqlRuleStore.CreateTableScript(RuleStoreDatabase.SqlServer)[0].Should().Contain("VARBINARY(MAX)");
+        SchemaAssert.Valid(RuleStoreSchema.Module, Engines);
+        SchemaAssert.Valid(RuleStoreSchema.ForTable("tenant_rules"), Engines);
     }
+
+    /// <summary>Version 1 must never change once applied anywhere (the migrator refuses drift): add a version instead.</summary>
+    [Fact]
+    public void Version_1_is_pinned()
+    {
+        RuleStoreSchema.Module.Name.ToString().Should().Be("yfex.rules");
+        RuleStoreSchema.Module.LatestVersion.Should().Be(SchemaVersionNumber.First);
+        RuleStoreSchema.Module[SchemaVersionNumber.First].Checksum.ToString().Should().Be(PinnedV1);
+    }
+
+    /// <summary>
+    /// DS-P4 pilot: the generated schema of <see cref="RuleDataRow"/> equals version 1 written out by hand, so its DDL is unchanged, and the
+    /// module stays in sync with the row class (a new property fails here, printing the version to add).
+    /// </summary>
+    [Fact]
+    public void The_row_class_describes_the_table_the_module_creates()
+    {
+        RuleDataRow.Schema.Equals(RuleStoreSchema.Table()).Should().BeTrue();
+        SchemaAssert.InSync(RuleStoreSchema.Module, RuleDataRow.Schema);
+        RuleDataRow.Columns.StreamHash.Value.Should().Be("stream_hash");
+        RuleDataRow.BulkTable.ColumnCount.Should().Be(11);
+    }
+
+    // Recorded when version 1 was written (DS-P3, 2026-10-23).
+    private const string PinnedV1 = "a3ca2e6acb504360a512b532f1af72cba3f5999c56eba511f7b2b434724dc716";
+
+    /// <summary>Cross-check with the hand-written Oracle and SQL Server DDL this module replaced (DS-P3): the same types and keys.</summary>
+    [Fact]
+    public void The_generated_ddl_matches_the_hand_written_one()
+    {
+        string oracle = string.Join('\n', OracleDialect.Instance.ScriptSchema(RuleStoreSchema.Module));
+        foreach (string column in (string[])["rule_set varchar2(200 char) not null", "version number(19) not null", "kind number(5) not null",
+                     "code varchar2(200 char) not null", "tier_path varchar2(2000 char) not null", "stream_hash number(19) not null",
+                     "effective_from varchar2(200 char) not null", "published_by varchar2(200 char) null", "published_at varchar2(200 char) not null",
+                     "note varchar2(2000 char) null", "payload blob not null", "constraint pk_yfex_rule_data primary key (rule_set, version)"])
+            oracle.Should().Contain(column);
+        oracle.Should().Contain("create index ix_yfex_rule_data_stream on yfex_rule_data (rule_set, stream_hash, version)");
+        string sqlServer = string.Join('\n', SqlServerDialect.Instance.ScriptSchema(RuleStoreSchema.Module));
+        sqlServer.Should().Contain("tier_path nvarchar(2000) not null").And.Contain("payload varbinary(max) not null");
+    }
+
+    [Fact]
+    public async Task A_store_with_its_own_table_has_its_own_module()
+    {
+        RuleStoreSchema.ForTable("tenant_rules").Name.ToString().Should().Be("yfex.rules.tenant-rules");
+        RuleStoreSchema.ForTable("TENANT_RULES").Should().BeSameAs(RuleStoreSchema.ForTable("tenant_rules"));
+        RuleStoreSchema.ForTable(RuleStoreSchema.DefaultTable).Should().BeSameAs(RuleStoreSchema.Module);
+
+        string file = Path.Combine(Path.GetTempPath(), "yfex-rules-" + Guid.NewGuid().ToString("N") + ".db");
+        _files.Add(file);
+        var connections = new YFexConnectionFactory(() => new SqliteConnection($"Data Source={file};Pooling=False"), SqliteDialect.Instance);
+        var store = new SqlRuleStore(connections, new SqlRuleStoreOptions { TableName = "tenant_rules" });
+        store.Schema.Should().BeSameAs(RuleStoreSchema.ForTable("tenant_rules"));
+        await store.EnsureSchemaAsync();
+        var key = new RuleDataKey("loja", RuleDataKind.Parameters, "limites", RuleTierPath.Of(RawValue.From("t1")));
+        RuleDataInfo info = await store.AppendAsync(key, 0, new DateOnly(2026, 1, 1), new byte[] { 1 }, "ana", null, default);
+        (await store.GetAsync(key, info.Version, default)).Should().NotBeNull();
+        await using YFexConnection connection = connections.Create();
+        (await connection.GetSchemaStatusAsync([RuleStoreSchema.Module, store.Schema])).Should().SatisfyRespectively(
+            other => other.PendingCount.Should().Be(1, "the default table was never created here"),
+            own => own.IsUpToDate.Should().BeTrue());
+    }
+
+    private static readonly IQueryDialect[] Engines =
+        [SqliteDialect.Instance, PostgresDialect.Instance, SqlServerDialect.Instance, OracleDialect.Instance];
 
     public void Dispose()
     {

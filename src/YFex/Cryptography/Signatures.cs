@@ -9,6 +9,15 @@ public enum SignatureAlgorithm : byte
     /// <summary>ECDsa over NIST P-256 with SHA-256, IEEE P1363 encoding (64 bytes). The default.</summary>
     EcdsaP256Sha256 = 1,
 
+    /// <summary>
+    /// RSASSA-PKCS1-v1_5 with SHA-256 (JWA <c>RS256</c>), <b>verify only</b>: for public keys published by someone else (OpenID providers,
+    /// passkeys). YFex never signs with RSA; verifiers accept it only when it is in their allowed algorithms.
+    /// </summary>
+    RsaPkcs1Sha256 = 2,
+
+    /// <summary>RSASSA-PSS with SHA-256, MGF1-SHA-256 and a 32-byte salt (JWA <c>PS256</c>), <b>verify only</b> like <see cref="RsaPkcs1Sha256"/>.</summary>
+    RsaPssSha256 = 3,
+
     /// <summary>Reserved (cryptography ⚑K10): ML-DSA-65 (FIPS 204), 3 309-byte signatures. Not implemented yet.</summary>
     MLDsa65 = 16,
 

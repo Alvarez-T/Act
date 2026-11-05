@@ -14,10 +14,16 @@ Probed by reflection and by calling `IsSupported` on .NET 11.0.0-preview.4, Wind
 | Ed25519 / X25519 | — | — | **not in the BCL** | — | — |
 
 Availability is an **operating system** property, not a .NET one. CNG gained ML-KEM/ML-DSA in recent Windows 11 and Server 2025 builds,
-and Linux needs OpenSSL ≥ 3.5. Windows 10 (still common on pharmacy checkouts) cannot be assumed to support them. Phase 5 re-probes the
-real fleet before any switch.
+and Linux needs OpenSSL ≥ 3.5. Windows 10 and older Linux distributions cannot be assumed to support them. The library is generic, so it
+never assumes a deployment: each host reports `CryptographyCapabilities`, and a sender uses a PQ format only for a recipient that
+published support for it (12 §4 question 1, 2026-10-18).
 
 ## 2. Recommendation: agility now, switch later
+
+> **2026-10-18 (Phase 5, after 12 §4 question 1):** hybrid recipient sealing `0x11` is **built** and chosen **per host, automatically**:
+> a `KeyAgreement` ring creates hybrid keys when the host creating them runs ML-KEM (`PostQuantumKeys.Automatic`, the default;
+> `Always`/`Never` override it), and a sealer uses `0x11` when the recipient published a hybrid key and the sealer runs ML-KEM, else `0x01`
+> to the P-256 half (a forced algorithm is an overload). Signatures stay classic (§3 item 3). The paragraph below is the 2026-10-03 text.
 
 **No post-quantum algorithm is made default in this design.** What happens now costs nothing and makes the later switch a configuration
 change:
@@ -42,7 +48,7 @@ change:
 Symmetric cryptography (AES-256, HMAC-SHA256, HKDF-SHA256) is already fine against quantum attacks (Grover halves the security level,
 leaving 128 bits). **Only the asymmetric parts change.**
 
-Hence the order of the switch (Phase 5, after a fleet probe):
+Hence the order of the switch (Phase 5, per recipient capability):
 
 1. **Hybrid recipient sealing** `0x11`: ML-KEM-768 encapsulation **and** ephemeral ECDH P-256. Both shared secrets go into HKDF, so the
    result is safe if **either** algorithm holds. The intake public key becomes a pair (P-256 + ML-KEM-768). Costs: +1 088 bytes per
@@ -50,8 +56,8 @@ Hence the order of the switch (Phase 5, after a fleet probe):
    Installations that do not support ML-KEM keep sealing with `0x01`, and central accepts both.
 2. **TLS**: follows the platform (`SslStream` negotiates hybrid key exchange when both OS stacks support it). There is no YFex code to
    change.
-3. **Signatures** (composite ML-DSA-65 + ECDsa P-256) only when (a) .NET removes `[Experimental]` from `CompositeMLDsa`, (b) the TPMs in
-   the fleet can hold the key or a software key is acceptable for that role, and (c) the size cost is acceptable: +3.3 KB per
+3. **Signatures** (composite ML-DSA-65 + ECDsa P-256) only when (a) .NET removes `[Experimental]` from `CompositeMLDsa`, (b) the TPMs on the hosts
+   that hold the key can hold it or a software key is acceptable for that role, and (c) the size cost is acceptable: +3.3 KB per
    envelope and bundle, ~0.5 ms signing. Long-lived **central** keys (tenant root CA, bundle signing, audit anchors) go first. Device
    keys go last because TPM 2.0 chips do not implement ML-DSA.
 

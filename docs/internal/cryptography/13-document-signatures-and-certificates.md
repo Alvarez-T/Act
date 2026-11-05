@@ -1,7 +1,7 @@
 # 13 — Document signatures (XML) and signing certificates
 
 > **Status:** 2026-10-05. The user decided the tenant root CA is **P-256** (open question 6) and asked for **`YFex.Cryptography.Xml`**
-> (open question 5). The package is built and tested (§2–§4). The certificate-source layer (§6) is a **proposal** awaiting the user.
+> (open question 5). The package is built and tested (§2–§4). The certificate-source layer (§6) was **approved by the user 2026-10-18** (12 §4 question 7): abstraction + PKCS#12 and Windows-store sources first; `YFex.Cryptography.IcpBrasil` when Fiscal needs it; PKCS#11 when a real token/HSM case appears. Not built yet.
 
 ## 1. Why a satellite package, and what is where
 
@@ -91,15 +91,15 @@ Both are possible. What matters is **where the private key operation happens** a
   differ from the signer's ("certificado digital do responsável pela transmissão"). A cloud certificate that only signs hashes cannot
   do a TLS handshake, so transmission then needs a local or central certificate.
 
-## 6. Who owns which certificate code (proposal, awaiting the user)
+## 6. Who owns which certificate code (approved 2026-10-18)
 
 | Concern | Home | Status |
 |---|---|---|
 | Load PKCS#12 / DER / PEM with safe defaults; validate a chain against given roots at a given time | `YFex.Cryptography` (`CertificateFiles`, `CertificateTrust`) | ✅ built (Phase 3) |
 | XML-DSig sign/verify | `YFex.Cryptography.Xml` | ✅ built |
-| **Signing-certificate abstraction** (proposal), e.g. `ISigningCertificate { X509Certificate2 Certificate; RSA PrivateKey; KeyProtection; }` + `ISigningCertificateSource.GetAsync(purpose, ct)`, with sources: PKCS#12 bytes from sealed storage; Windows store by thumbprint (A1 installed or A3 token); remote (`RSA` adapter) | abstraction + PKCS#12 source in `YFex.Cryptography`; Windows store / token source in `.Windows`; each cloud provider in its own small package | **proposal** |
+| **Signing-certificate abstraction**: `ISigningCertificate { X509Certificate2 Certificate; AsymmetricAlgorithm PrivateKey; KeyProtection Protection; }` (disposable) + `ISigningCertificateSource.GetAsync(purpose, ct)` (null = nothing configured), `SigningCertificate` (also for remote signers: certificate + `RSA` adapter), sources: `Pkcs12CertificateSource` (PKCS#12 + password sealed as one `ISecretStore` secret, `ImportAsync`/`RemoveAsync`); `WindowsCertificateStoreSource` by SHA-1/SHA-256 thumbprint (A1 installed or A3 token/smart card through the middleware; protection `Hardware` for TPM/smart card/removable providers); builder `SigningCertificatesFromSecrets()` / `SigningCertificatesFromWindowsStore(…)` / `SigningCertificatesFrom(factory)`, last wins, none by default; `XmlSignature.SignEnveloped(element, ISigningCertificate, …)` | abstraction + PKCS#12 source in `YFex.Cryptography`; Windows store / token source in `.Windows`; each cloud provider in its own small package | ✅ **built 2026-10-18** (12 §5); cloud adapters when needed |
 | Presenting the A1 as a TLS **client** certificate on outbound HTTP (SEFAZ transmission, §5) | **YFex.Web**: `ClientCertificateCredential` + `UseClientCertificates()` (one connection pool per certificate; loads through `CertificateFiles.LoadPkcs12` with `DefaultKeySet` on Windows). Fiscal's `YFex.NFe.Sefaz` uses it | ✅ built 2026-10-14 (time README §10 T3) |
-| ICP-Brasil specifics: read CNPJ/CPF from OtherName (`2.16.76.1.3.3` / `2.16.76.1.3.1`), A1/A3 policy OIDs, the ICP-Brasil root set (AC Raiz v5/v10/v11…) shipped with the app and updated by bundle, revocation via LCR download | a small satellite `YFex.Cryptography.IcpBrasil` (Brazil-specific but not fiscal-specific: also eSocial, contracts, PDF signatures later) | **proposal** |
+| ICP-Brasil specifics: read CNPJ/CPF from OtherName (`2.16.76.1.3.3` / `2.16.76.1.3.1`), A1/A3 policy OIDs, the ICP-Brasil root set (AC Raiz v5/v10/v11…) shipped with the app and updated by bundle, revocation via LCR download | a small satellite `YFex.Cryptography.IcpBrasil` (Brazil-specific but not fiscal-specific: also eSocial, contracts, PDF signatures later); other jurisdictions get their own satellite (e.g. eIDAS), the main library stays country-neutral | **approved 2026-10-18**, built when Fiscal needs it |
 | Which certificate signs for which CNPJ/emitter, upload at central, expiry alerts (30/15/7 days), renewal, distribution to the checkouts of that CNPJ, audit of who used it | **Fiscal** (policy + UI), on Offline's delivery mechanism | Fiscal design |
-| Delivering a secret (the A1) **to one installation** | **Offline** bundle sealed to the installation. Needs a per-installation **key-agreement key** (ECDH P-256 in CNG/TPM next to the signing keys). The library has `RecipientSealing` with server-side rings today, so a CNG-held `IRecipientKey` would be added to `.Windows` | crypto addition when Offline/Fiscal schedule it |
+| Delivering a secret (the A1) **to one installation** | **Offline** bundle sealed to the installation. Needs a per-installation **key-agreement key** (ECDH P-256 in CNG/TPM next to the signing keys). The library has `RecipientSealing` with server-side rings today, so a CNG-held `IRecipientKey` would be added to `.Windows` | ✅ **built 2026-10-27** (14 §10): `IRecipientKeyStore`, `CngRecipientKeyStore` (TPM first) and `SealedRecipientKeyStore` (every OS) |
 | "Installing" a certificate in the Windows store | avoided for A1. Done by the vendor middleware for A3 tokens. Only if a third-party tool needs it: `X509Store` with `UserKeySet` and a non-exportable key, behind the same source abstraction | — |

@@ -221,11 +221,12 @@ services.AddYFexOfflineCentral(central => central
     .UseSqlStore(connectionFactory));             // manifests, delivery receipts, budgets, review queue (YFex.Offline.Data, later)
 ```
 
-The site broker has **no developer code**. It is the generic host `YFex.Offline.Broker`, installed as a Windows service and
-configured only by enrollment. Until the future YFex.Installer exists, the code is a start-up argument:
+The site broker has **no developer code**. It is the module `offline.broker` of the generic service host `yfex-host` ([hosting](../hosting/README.md),
+⚑H9), installed as a Windows service and configured by enrollment and its central profile. Until the future YFex.Installer exists, the code
+is a start-up argument:
 
 ```bash
-YFex.Offline.Broker.exe --enroll 7Q4K-M2XD --display-name PC-GERENTE
+yfex-host --enroll 7Q4K-M2XD --display-name PC-GERENTE
 ```
 
 ```csharp
@@ -237,7 +238,7 @@ builder.Services.AddYFexInstallations(installations => installations
     .UseWindowsKeyStore().EnrollAt(centralUri)
     .Peers());                                                             // peer endpoint always on for SiteBroker (⚑O25)
 builder.Services.AddYFexOfflineBroker();   // sessions, approvals, permission answers, budgets, claims, custody, feed, site time table
-builder.Build().Run();                     // transport: peer channels (⚑O31, recommended), no Kestrel; time, relay, bundles and
+builder.Build().Run();                     // transport: peer channels (⚑O31, decided 2026-10-19), no Kestrel; time, relay, bundles and
                                            // pairing (I5) are Installations channels already
 ```
 

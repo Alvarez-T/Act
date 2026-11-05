@@ -45,7 +45,10 @@ Columns: **C** = central. **B** = site broker while central is unreachable. **T�
  No app assembly is referenced (architecture test). The manager's desktop app on the same PC is an ordinary terminal.
 ```
 
-**Hosting (⚑O20):** a Windows service, so the store keeps working when the manager logs off or closes the app. The service runs under
+**Hosting (⚑O20):** a Windows service, so the store keeps working when the manager logs off or closes the app. **2026-10-19:** the
+broker services are a module (`AddYFexOfflineBroker()`) of the shared generic YFex service host, so the PC runs one service for every
+YFex module it needs, not one executable per library ([hosting](../hosting/README.md); ⚑H1 decided: repo `YFex.Hosting`, built with
+Phase 4). The service runs under
 its own low-privilege account, and its installation keys are machine keys in the TPM. Because the host is generic, it is updated only
 when the YFex.Offline protocol changes, not with every app release. **Since ⚑O2 (2026-10-15)** it is installed on every eligible PC of the
 site, dormant except on the one central marked `Active` in the roster (02 §4.1).

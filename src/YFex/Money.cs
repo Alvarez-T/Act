@@ -9,11 +9,10 @@ using System.Text.Json.Serialization;
 namespace YFex;
 
 /// <summary>
-/// A monetary amount: a <see cref="decimal"/> fixed to 2-decimal scale, with money
+/// A monetary amount with ISO currency identity and currency-specific minor-unit scale, with
 /// semantics — culture-aware formatting (default pt-BR <c>R$</c>), invariant wire
-/// output, allocation/splitting without losing cents, and the full set of modern
-/// numeric/parse/format interfaces. Currency-agnostic in storage (the fiscal domain
-/// is BRL); formatting decides presentation.
+/// output, allocation/splitting without losing minor units, and modern
+/// numeric/parse/format interfaces. The default currency is BRL for fiscal callers.
 ///
 /// <code>
 /// Money m = 1234.5m;            // implicit from decimal
@@ -47,25 +46,43 @@ public readonly record struct Money :
     static void global::YFex.Diagnostics.ILogValue<Money>.Write(in Money value, ref global::YFex.Diagnostics.LogWriter writer, ushort field)
         => writer.WriteRawValue(field, in value);
 
-    /// <summary>Fixed monetary scale (2 decimal places).</summary>
+    /// <summary>Default BRL monetary scale (2 decimal places).</summary>
     public const int Scale = 2;
 
     private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
 
     private readonly decimal _amount;
-    private Money(decimal amount, bool _) => _amount = amount; // raw, no rounding (for bounds)
+    private readonly Currency _currency;
+    private Money(decimal amount, bool _) { _amount = amount; _currency = default; } // raw, no rounding (for bounds)
 
-    public Money(decimal amount) => _amount = Math.Round(amount, Scale, MidpointRounding.AwayFromZero);
+    public Money(decimal amount) : this(amount, Currency.BRL) { }
+
+    public Money(decimal amount, Currency currency)
+    {
+        _currency = currency;
+        _amount = Math.Round(amount, currency.MinorUnitDigits, MidpointRounding.AwayFromZero);
+    }
 
     /// <summary>The rounded decimal amount.</summary>
     public decimal Amount => _amount;
-    /// <summary>The amount expressed in whole cents (centavos).</summary>
-    public long Cents => (long)Math.Round(_amount * 100m, MidpointRounding.AwayFromZero);
+    public Currency Currency => _currency;
+    /// <summary>The amount in hundredths for two-decimal currencies; use <see cref="MinorUnits"/> otherwise.</summary>
+    public long Cents => Currency.MinorUnitDigits == 2
+        ? (long)Math.Round(_amount * 100m, MidpointRounding.AwayFromZero)
+        : throw new InvalidOperationException("Cents is available only for two-decimal currencies; use MinorUnits.");
+
+    /// <summary>The amount expressed in the currency's smallest ordinary unit.</summary>
+    public long MinorUnits => (long)(_amount * Pow10(Currency.MinorUnitDigits));
+
+    private static decimal Pow10(int digits) => digits switch { 0 => 1m, 3 => 1000m, 4 => 10000m, _ => 100m };
 
     public bool IsZero => _amount == 0m;
     public bool IsPositive => _amount > 0m;
     public bool IsNegative => _amount < 0m;
-    public Money Abs() => new(Math.Abs(_amount));
+    public Money Abs() => new(Math.Abs(_amount), Currency);
+
+    /// <summary>Labels the same numeric amount in another currency; no exchange conversion is performed.</summary>
+    public Money WithCurrency(Currency currency) => new(_amount, currency);
 
     // ── Well-known values ────────────────────────────────────────────────────
     public static readonly Money Zero = default;
@@ -78,7 +95,9 @@ public readonly record struct Money :
     /// <summary>Raw type <c>"money"</c> (decimal storage) — rules, tables, bounds, wire.</summary>
     public static RawType RawType { get; } = RawType.Define<Money>("money", ValueKind.Decimal, RawType.SpanFormatter<Money>());
 
-    public RawValue ToRaw() => RawValue.Typed(RawType, _amount);
+    public RawValue ToRaw() => Currency == Currency.BRL
+        ? RawValue.Typed(RawType, _amount)
+        : throw new InvalidOperationException("The legacy money raw type represents BRL only.");
 
     /// <summary>Reads Money, or a plain number as an amount.</summary>
     public static bool TryFromRaw(in RawValue raw, out Money value)
@@ -91,10 +110,13 @@ public readonly record struct Money :
     /// <summary>Creates a money value from a whole number of cents.</summary>
     public static Money FromCents(long cents) => new(cents / 100m);
 
+    public static Money FromMinorUnits(long minorUnits, Currency currency) =>
+        new(minorUnits / Pow10(currency.MinorUnitDigits), currency);
+
     // ── Money operations ─────────────────────────────────────────────────────
 
     /// <summary>Applies a percentage (e.g. a tax rate) and returns the resulting amount.</summary>
-    public Money Percent(Percentual percentual) => new(percentual.ApplyTo(_amount));
+    public Money Percent(Percentual percentual) => new(percentual.ApplyTo(_amount), Currency);
 
     /// <summary>
     /// Splits this amount into <paramref name="parts"/> as evenly as possible,
@@ -103,12 +125,12 @@ public readonly record struct Money :
     public Money[] Allocate(int parts)
     {
         if (parts <= 0) throw new ArgumentOutOfRangeException(nameof(parts));
-        long total = Cents;
+        long total = MinorUnits;
         long each = total / parts;
         long rem = total - each * parts;
         var result = new Money[parts];
         for (int i = 0; i < parts; i++)
-            result[i] = FromCents(each + (i < Math.Abs(rem) ? Math.Sign(rem) : 0));
+            result[i] = FromMinorUnits(each + (i < Math.Abs(rem) ? Math.Sign(rem) : 0), Currency);
         return result;
     }
 
@@ -119,37 +141,41 @@ public readonly record struct Money :
         foreach (var w in weights) totalWeight += w;
         if (totalWeight == 0) throw new ArgumentException("Weights must not sum to zero.", nameof(weights));
 
-        long total = Cents, allocated = 0;
+        long total = MinorUnits, allocated = 0;
         var result = new Money[weights.Length];
         for (int i = 0; i < weights.Length; i++)
         {
             long share = total * weights[i] / totalWeight;
-            result[i] = FromCents(share);
+            result[i] = FromMinorUnits(share, Currency);
             allocated += share;
         }
         // Drop the rounding remainder onto the first part.
-        if (weights.Length > 0) result[0] = FromCents(result[0].Cents + (total - allocated));
+        if (weights.Length > 0) result[0] = FromMinorUnits(result[0].MinorUnits + (total - allocated), Currency);
         return result;
     }
 
     // ── Operators ────────────────────────────────────────────────────────────
-    public static Money operator +(Money a, Money b) => new(a._amount + b._amount);
-    public static Money operator -(Money a, Money b) => new(a._amount - b._amount);
-    public static Money operator -(Money a) => new(-a._amount);
-    public static Money operator *(Money a, decimal factor) => new(a._amount * factor);
-    public static Money operator *(decimal factor, Money a) => new(a._amount * factor);
-    public static Money operator /(Money a, decimal divisor) => new(a._amount / divisor);
+    public static Money operator +(Money a, Money b) => new(a._amount + b._amount, SameCurrency(a, b));
+    public static Money operator -(Money a, Money b) => new(a._amount - b._amount, SameCurrency(a, b));
+    public static Money operator -(Money a) => new(-a._amount, a.Currency);
+    public static Money operator *(Money a, decimal factor) => new(a._amount * factor, a.Currency);
+    public static Money operator *(decimal factor, Money a) => new(a._amount * factor, a.Currency);
+    public static Money operator /(Money a, decimal divisor) => new(a._amount / divisor, a.Currency);
 
-    public static bool operator <(Money a, Money b) => a._amount < b._amount;
-    public static bool operator >(Money a, Money b) => a._amount > b._amount;
-    public static bool operator <=(Money a, Money b) => a._amount <= b._amount;
-    public static bool operator >=(Money a, Money b) => a._amount >= b._amount;
+    private static Currency SameCurrency(Money a, Money b) => a.Currency == b.Currency
+        ? a.Currency : throw new InvalidOperationException("Convert currencies explicitly before arithmetic.");
+
+    public static bool operator <(Money a, Money b) => a.CompareTo(b) < 0;
+    public static bool operator >(Money a, Money b) => a.CompareTo(b) > 0;
+    public static bool operator <=(Money a, Money b) => a.CompareTo(b) <= 0;
+    public static bool operator >=(Money a, Money b) => a.CompareTo(b) >= 0;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static implicit operator Money(decimal amount) => new(amount);
     public static explicit operator decimal(Money m) => m._amount;
 
-    public int CompareTo(Money other) => _amount.CompareTo(other._amount);
+    public int CompareTo(Money other) => Currency == other.Currency
+        ? _amount.CompareTo(other._amount) : throw new InvalidOperationException("Cannot compare different currencies.");
     public int CompareTo(object? obj) => obj is Money m ? CompareTo(m) : 1;
 
     // ── Formatting ───────────────────────────────────────────────────────────
@@ -164,11 +190,15 @@ public readonly record struct Money :
     public string ToString(string? format, IFormatProvider? provider)
     {
         provider ??= PtBr;
+        var numberFormat = (NumberFormatInfo)NumberFormatInfo.GetInstance(provider).Clone();
+        numberFormat.CurrencySymbol = Currency.Symbol;
+        numberFormat.CurrencyDecimalDigits = Currency.MinorUnitDigits;
+        var digits = Currency.MinorUnitDigits.ToString(CultureInfo.InvariantCulture);
         return (format ?? "C") switch
         {
-            "X" or "x" => _amount.ToString("F2", CultureInfo.InvariantCulture),
-            "N" or "n" or "F" or "f" => _amount.ToString("N2", provider),
-            _ => _amount.ToString("C2", provider),
+            "X" or "x" => _amount.ToString("F" + digits, CultureInfo.InvariantCulture),
+            "N" or "n" or "F" or "f" => _amount.ToString("N" + digits, numberFormat),
+            _ => _amount.ToString("C" + digits, numberFormat),
         };
     }
 
@@ -180,7 +210,7 @@ public readonly record struct Money :
     }
 
     /// <summary>Invariant, fixed 2 decimals with a dot — the DF-e XML wire form.</summary>
-    public string ToXmlString() => _amount.ToString("F2", CultureInfo.InvariantCulture);
+    public string ToXmlString() => _amount.ToString("F" + Currency.MinorUnitDigits, CultureInfo.InvariantCulture);
 
     // ── Parsing ──────────────────────────────────────────────────────────────
 
@@ -193,14 +223,18 @@ public readonly record struct Money :
 
     public static bool TryParse([NotNullWhen(true)] string? s, out Money result) => TryParse(s.AsSpan(), null, out result);
     public static bool TryParse([NotNullWhen(true)] string? s, IFormatProvider? provider, out Money result) => TryParse(s.AsSpan(), provider, out result);
-    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Money result)
+    public static bool TryParse(ReadOnlySpan<char> s, IFormatProvider? provider, out Money result) =>
+        TryParse(s, Currency.BRL, provider, out result);
+
+    public static bool TryParse(ReadOnlySpan<char> s, Currency currency, IFormatProvider? provider, out Money result)
     {
         const NumberStyles styles = NumberStyles.Currency | NumberStyles.AllowLeadingSign;
-        // Try the supplied/pt-BR culture first, then invariant (wire form).
-        if (decimal.TryParse(s, styles, provider ?? PtBr, out var d) ||
+        var numberFormat = (NumberFormatInfo)NumberFormatInfo.GetInstance(provider ?? PtBr).Clone();
+        numberFormat.CurrencySymbol = currency.Symbol;
+        if (decimal.TryParse(s, styles, numberFormat, out var d) ||
             decimal.TryParse(s, NumberStyles.Number, CultureInfo.InvariantCulture, out d))
         {
-            result = new Money(d);
+            result = new Money(d, currency);
             return true;
         }
         result = default;
@@ -239,25 +273,49 @@ public sealed class MoneyTypeConverter : TypeConverter
 }
 
 /// <summary>
-/// Serializes <see cref="Money"/> as a JSON number (invariant decimal). Reads a
-/// number or a string (tolerant of culture-formatted input).
+/// BRL keeps the legacy JSON number; other currencies use an amount/currency object.
 /// </summary>
 public sealed class MoneyJsonConverter : JsonConverter<Money>
 {
     public override Money Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => reader.TokenType switch
+    {
+        if (reader.TokenType == JsonTokenType.Number) return new Money(reader.GetDecimal());
+        if (reader.TokenType == JsonTokenType.String && Money.TryParse(reader.GetString(), out var parsed)) return parsed;
+        if (reader.TokenType != JsonTokenType.StartObject) throw new JsonException("Expected a monetary amount.");
+        decimal? amount = null;
+        Currency? currency = null;
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndObject)
         {
-            JsonTokenType.Number => new Money(reader.GetDecimal()),
-            JsonTokenType.String when Money.TryParse(reader.GetString(), out var m) => m,
-            _ => throw new JsonException($"Cannot read Money from {reader.TokenType}."),
-        };
+            if (reader.TokenType != JsonTokenType.PropertyName) throw new JsonException();
+            var property = reader.GetString();
+            if (!reader.Read()) throw new JsonException();
+            if (property == "amount") amount = reader.GetDecimal();
+            else if (property == "currency") currency = Currency.Parse(reader.GetString() ?? string.Empty);
+            else reader.Skip();
+        }
+        return amount is { } value && currency is { } code
+            ? new Money(value, code) : throw new JsonException("Money requires amount and currency.");
+    }
 
     public override void Write(Utf8JsonWriter writer, Money value, JsonSerializerOptions options)
-        => writer.WriteNumberValue(value.Amount);
+    {
+        if (value.Currency == Currency.BRL) { writer.WriteNumberValue(value.Amount); return; }
+        writer.WriteStartObject();
+        writer.WriteNumber("amount", value.Amount);
+        writer.WriteString("currency", value.Currency.Code);
+        writer.WriteEndObject();
+    }
 
     public override void WriteAsPropertyName(Utf8JsonWriter writer, Money value, JsonSerializerOptions options)
-        => writer.WritePropertyName(value.ToXmlString());
+        => writer.WritePropertyName(value.Currency == Currency.BRL
+            ? value.ToXmlString() : value.Currency.Code + " " + value.ToXmlString());
 
     public override Money ReadAsPropertyName(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
-        => Money.Parse(reader.GetString() ?? "0");
+    {
+        var text = reader.GetString() ?? string.Empty;
+        var space = text.IndexOf(' ');
+        if (space > 0 && Currency.TryParse(text.AsSpan(0, space), null, out var currency) &&
+            Money.TryParse(text.AsSpan(space + 1), currency, CultureInfo.InvariantCulture, out var value)) return value;
+        return Money.Parse(text);
+    }
 }

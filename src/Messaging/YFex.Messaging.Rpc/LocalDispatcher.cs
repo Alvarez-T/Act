@@ -27,6 +27,7 @@ public sealed class LocalDispatcher : IDispatcher
     private readonly IOutbox _outbox;
     private readonly IEventBus _eventBus;
     private readonly IServiceProvider _sp;
+    private readonly IOfflineAdmission? _admission;
     private readonly YFex.Resilience.IResiliencePipelineFactory? _pipelineFactory;
     // Stage 2 (D29 + authorization-consolidation 04 §2): the caller (CallContext, else the host's IPrincipalAccessor) and the
     // ONE message gate (IMessageAuthorization) — full check; fails at construction when requirements exist without a gate.
@@ -52,6 +53,7 @@ public sealed class LocalDispatcher : IDispatcher
         _outbox = outbox;
         _eventBus = eventBus;
         _sp = sp;
+        _admission = sp.GetService<IOfflineAdmission>();
         _pipelineFactory = pipelineFactory;
         _principal = new CallPrincipalSource(sp, registry);
     }
@@ -221,11 +223,25 @@ public sealed class LocalDispatcher : IDispatcher
 
         _registry.Commands.TryGetValue(typeof(TCommand), out var policy);
 
-        if (policy?.OnOfflineHandler is not null)
-            await policy.OnOfflineHandler(cmd!, ct).ConfigureAwait(false);
-        else if (policy?.OnOfflineHandlerInvoke is not null)
-            // Typed resolve + invoke captured at registration (interface-first, concrete fallback); no reflection.
-            await policy.OnOfflineHandlerInvoke(_sp, cmd!, ct).ConfigureAwait(false);
+        // Offline 06 §4 (YFex.Offline): allowance reservations and unique claims before the handler.
+        if (_admission is not null)
+        {
+            Error refused = await _admission.AdmitAsync(cmd!, typeof(TCommand), ct).ConfigureAwait(false);
+            if (refused.HasValue) return refused;
+        }
+        try
+        {
+            if (policy?.OnOfflineHandler is not null)
+                await policy.OnOfflineHandler(cmd!, ct).ConfigureAwait(false);
+            else if (policy?.OnOfflineHandlerInvoke is not null)
+                // Typed resolve + invoke captured at registration (interface-first, concrete fallback); no reflection.
+                await policy.OnOfflineHandlerInvoke(_sp, cmd!, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            _admission?.Abandon(cmd!);
+            throw;
+        }
 
         if (cmd is IQueueable)
         {
@@ -237,7 +253,7 @@ public sealed class LocalDispatcher : IDispatcher
 
         return policy?.OnOfflineHandler is not null || policy?.OnOfflineHandlerType is not null
             ? QueueableResult<TResult>.Fail("Offline â€” no result available.")
-            : QueueableResult<TResult>.Fail("No network connectivity.");
+            : Error.Unavailable(UnavailableReason.CentralRequired);
     }
 
     // â”€â”€ Command (void) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -312,11 +328,25 @@ public sealed class LocalDispatcher : IDispatcher
 
         _registry.Commands.TryGetValue(typeof(TCommand), out var policy);
 
-        if (policy?.OnOfflineHandler is not null)
-            await policy.OnOfflineHandler(cmd!, ct).ConfigureAwait(false);
-        else if (policy?.OnOfflineHandlerInvoke is not null)
-            // Typed resolve + invoke captured at registration (interface-first, concrete fallback); no reflection.
-            await policy.OnOfflineHandlerInvoke(_sp, cmd!, ct).ConfigureAwait(false);
+        // Offline 06 §4 (YFex.Offline): allowance reservations and unique claims before the handler.
+        if (_admission is not null)
+        {
+            Error refused = await _admission.AdmitAsync(cmd!, typeof(TCommand), ct).ConfigureAwait(false);
+            if (refused.HasValue) return refused;
+        }
+        try
+        {
+            if (policy?.OnOfflineHandler is not null)
+                await policy.OnOfflineHandler(cmd!, ct).ConfigureAwait(false);
+            else if (policy?.OnOfflineHandlerInvoke is not null)
+                // Typed resolve + invoke captured at registration (interface-first, concrete fallback); no reflection.
+                await policy.OnOfflineHandlerInvoke(_sp, cmd!, ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            _admission?.Abandon(cmd!);
+            throw;
+        }
 
         if (cmd is IQueueable)
         {
@@ -328,7 +358,7 @@ public sealed class LocalDispatcher : IDispatcher
 
         return policy?.OnOfflineHandler is not null || policy?.OnOfflineHandlerType is not null
             ? QueueableResult.Ok()
-            : QueueableResult.Fail("No network connectivity.");
+            : Error.Unavailable(UnavailableReason.CentralRequired);
     }
 
     // â”€â”€ Publish â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

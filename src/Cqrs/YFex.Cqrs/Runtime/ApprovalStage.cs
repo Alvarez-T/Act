@@ -27,6 +27,8 @@ public sealed class ApprovalStage<TMessage> : RulesStage
     /// <summary>The code-declared policy (an <see cref="IApprovalPolicySource"/> may change it at run time).</summary>
     public ApprovalPolicy Declared { get; }
 
+    public override ApprovalPolicy? DeclaredApproval => Declared;
+
     public override Type? SituationType => null;
 
     /// <summary>The digest a token must bind for <paramref name="message"/>.</summary>

@@ -65,7 +65,8 @@ public static class RpcMessagingExtensions
         // → StorageBackedOutbox + StorageBackedSyncFailureLog. Offline design F4: the outbox records who queued each command.
         services.TryAddSingleton<IOutboxCallerCapture, DefaultOutboxCallerCapture>();
         services.AddSingleton(sp => OutboxPair.Create(sp, opts));
-        services.AddSingleton<IOutbox>(sp => sp.GetRequiredService<OutboxPair>().Outbox);
+        // Offline Phase 3: observers (YFex.Offline's envelope custody) see every queued entry.
+        services.AddSingleton<IOutbox>(sp => ObservedOutbox.Wrap(sp.GetRequiredService<OutboxPair>().Outbox, sp.GetServices<IOutboxEnqueueObserver>()));
         services.AddSingleton<ISyncFailureLog>(sp => sp.GetRequiredService<OutboxPair>().FailureLog);
         services.AddSingleton<IWritableSyncFailureLog>(sp => sp.GetRequiredService<OutboxPair>().FailureLog);
 

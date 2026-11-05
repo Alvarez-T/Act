@@ -82,8 +82,10 @@ Linking each day's genesis to the previous day's final hash makes **deleting a w
 
 **The sequencer** is the only writer of a chain:
 
-- One logical sequencer per active chain, with **exclusive ownership** through a YFex.Jobs lease (or `pg_try_advisory_lock(chain key hash)` on
-  Postgres when Jobs is not used). Many chains seal in parallel across server instances.
+- One logical sequencer per active chain, with **exclusive ownership** through `pg_try_advisory_lock(chain key hash)` (session lock held while the
+  sequencer runs; released on disconnect, so a crashed owner frees the chain). Decided 2026-11-04: not a YFex.Jobs lease. Jobs' `IJobStore.TryAcquireLeaseAsync` exists, but no
+  store implements it across servers (in-memory and EF grant it always; KeyValue locks within one process), and Jobs does not build one for
+  a single user; its run claim covers "run once", not long-held ownership. Many chains seal in parallel across server instances.
 - Loop: read unsealed inbox rows for the chain in `(received_at, entry_id)` order → compute hashes in memory → **one** insert of up to 1 000
   rows into `audit.seals` (insert-only, PK = chain key + index, unique entry id) → maybe write an anchor (§5).
 - Crash-safe: on restart it reads the last seal of the chain and continues. A partially written batch never exists (single statement).

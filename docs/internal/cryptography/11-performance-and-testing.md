@@ -53,9 +53,10 @@ Privacy 05 §9 budgets (`Pseudonymize` ≤ 1.2 µs, envelope seal ≤ 1.5 µs) r
 | **Fuzzing of parsers** | `TryReadHeader`, legacy readers, `MessageToken.Read`, key-ring file reader, `CanonicalReader` | seeded random mutations of golden inputs in a long-running test category (no package); must never throw anything but documented results |
 | **Consumer contract suites** | `IKeyRingStore`, `IRootKeyProvider`, `ISigningKeyStore`, `IPublicKeyDirectory` | abstract test classes in `.Testing`. Privacy.Data (SQL vault), Offline (registry) and Persistence (key-value ring store) inherit them |
 
-**Wycheproof** (Google's adversarial test vectors, Apache-2.0 JSON files) would add edge cases for ECDsa and AES-GCM. It is third-party
-content copied into the repo rather than a package, but it still needs the user's approval (⚑K14). Until then the negative tests above
-cover the same classes of bugs at a smaller scale.
+**Wycheproof and NIST ACVP** (approved and added 2026-10-27, 12 §5): adversarial Wycheproof vectors (Apache-2.0) for ECDSA P-256,
+RSA PKCS#1/PSS verify, ECDH P-256 points, AES-256-GCM and ML-KEM-768, and NIST ACVP ML-KEM-768 vectors, copied as data into
+`tests/YFex.Cryptography.Tests/Vectors/` (provenance and hashes in its README). They run through the library's entry points
+(`WycheproofTests`, `AcvpMLKemTests`); HKDF/HMAC/PBKDF2 vectors are not copied because they would reach only the BCL.
 
 ## 4. AOT smoke contents
 

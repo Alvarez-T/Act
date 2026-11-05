@@ -48,7 +48,7 @@
   </Folder>
   <Folder Name="/Data/">
     <Project Path="../YFex.Data/src/YFex.Data/YFex.Data.csproj" />
-    <Project Path="../YFex.Data/src/YFex.Sqlite/YFex.Sqlite.csproj" />
+    <Project Path="../YFex.Data/src/YFex.Data.Sqlite/YFex.Data.Sqlite.csproj" />
   </Folder>
   <Folder Name="/Security/">
     <Project Path="../YFex.Security/YFex.Security/YFex.Security.csproj" />

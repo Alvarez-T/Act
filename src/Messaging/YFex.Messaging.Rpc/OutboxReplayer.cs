@@ -40,6 +40,7 @@ public sealed class OutboxReplayer : BackgroundService
     private readonly TimeSpan _entryTtl;
     private readonly bool _keepExpired;
     private readonly IOutboxCallerCapture? _callerCapture;
+    private readonly IOutboxReplayRoute? _route;
     private readonly HashSet<Guid> _expiredWarned = [];
     private readonly ILogger<OutboxReplayer> _logger;
     private readonly SemaphoreSlim _trigger = new(0, 1);
@@ -71,6 +72,7 @@ public sealed class OutboxReplayer : BackgroundService
         _entryTtl = options.OutboxEntryTtl;
         _keepExpired = options.OutboxOptions.KeepExpiredEntries;
         _callerCapture = services.GetService(typeof(IOutboxCallerCapture)) as IOutboxCallerCapture;
+        _route = services.GetService(typeof(IOutboxReplayRoute)) as IOutboxReplayRoute;
         _logger = logger;
 
         _server.Changed += OnServerConnectionChanged;
@@ -259,6 +261,9 @@ public sealed class OutboxReplayer : BackgroundService
     // the generated AddYFexOutboxCommands().
     private async ValueTask<ReplayOutcome> ReplayAsync(OutboxEntry entry, CancellationToken ct)
     {
+        // Offline Phase 3: an entry with a signed envelope goes to central's intake (YFex.Offline.Rpc), not through the proxy.
+        if (_route is not null && await _route.TryReplayAsync(entry, ct).ConfigureAwait(false) is { } routed) return routed;
+
         if (!_commandRegistry.TryGetHandler(entry.CommandTypeName, out var handler))
             throw new InvalidOperationException(
                 $"No replay handler registered for command '{entry.CommandTypeName}'. " +

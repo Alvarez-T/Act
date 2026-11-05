@@ -136,6 +136,44 @@ public sealed class AuthorizationGateTests
     }
 
     [Fact]
+    public async Task RequireRecentAuthentication_answers_ReauthenticationRequired_until_the_caller_steps_up()   // authentication R1–R3
+    {
+        var fx = Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit)
+            .RequireRecentAuthentication(TimeSpan.FromMinutes(5), AssuranceLevel.MultiFactor)));
+        var stale = TestCaller.Authenticated("ana").WithPermissions(GatePermissions.OrdersEdit)
+            .AuthenticatedAt(DateTimeOffset.UtcNow.AddHours(-2), AssuranceLevel.MultiFactor).Build();
+        var result = await fx.SendAsync(Delete, stale);
+        result.TryGetError(out var error).Should().BeTrue();
+        error.Kind.Should().Be(ErrorKind.ReauthenticationRequired);
+        error.TryGetValue(out ReauthenticationRequired step).Should().BeTrue();
+        step.Requirement.MaxAge.Should().Be(TimeSpan.FromMinutes(5));
+        step.Requirement.Minimum.Should().Be(AssuranceLevel.MultiFactor);
+
+        var steppedUp = TestCaller.Authenticated("ana").WithPermissions(GatePermissions.OrdersEdit)
+            .AuthenticatedAt(DateTimeOffset.UtcNow, AssuranceLevel.MultiFactor).Build();
+        (await fx.SendAsync(Delete, steppedUp)).IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task RequireSitePresence_answers_SitePresenceRequired_until_the_caller_is_present()   // ⚑Z20, authentication R8
+    {
+        var fx = Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit).RequireSitePresence(TimeSpan.FromMinutes(10))));
+        var absent = TestCaller.Authenticated("ana").WithPermissions(GatePermissions.OrdersEdit).Build();
+        var result = await fx.SendAsync(Delete, absent);
+        result.TryGetError(out var error).Should().BeTrue();
+        error.Kind.Should().Be(ErrorKind.SitePresenceRequired);
+        error.TryGetValue(out SitePresenceRequired presence).Should().BeTrue();
+        presence.Requirement.MaxAge.Should().Be(TimeSpan.FromMinutes(10));
+
+        var old = TestCaller.Authenticated("ana").WithPermissions(GatePermissions.OrdersEdit).PresentAt(DateTimeOffset.UtcNow.AddHours(-1)).Build();
+        (await fx.SendAsync(Delete, old)).TryGetError(out var stale).Should().BeTrue();
+        stale.Kind.Should().Be(ErrorKind.SitePresenceRequired);
+
+        var present = TestCaller.Authenticated("ana").WithPermissions(GatePermissions.OrdersEdit).PresentAt(DateTimeOffset.UtcNow).Build();
+        (await fx.SendAsync(Delete, present)).IsSuccess.Should().BeTrue();
+    }
+
+    [Fact]
     public async Task Configuration_and_ForMessage_rows_merge_with_AND()
     {
         var fx = Build(new Config(c => c.RequirePermission(GatePermissions.OrdersEdit)), a => a.AddConfiguration(new DelegateConfig(b =>

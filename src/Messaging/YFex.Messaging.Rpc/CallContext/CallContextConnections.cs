@@ -105,7 +105,8 @@ public sealed class CallContextConnections
     /// <summary>
     /// Default capture: <see cref="HttpContext.User"/> (as authenticated by the host), the bearer token (Authorization
     /// header, else <c>access_token</c> query — browsers can't set WebSocket headers) and, with <c>WithTenant()</c>, the
-    /// tenant the host resolved for the upgrade request (<see cref="IScopeContext"/>).
+    /// tenant the host resolved for the upgrade request (<see cref="IScopeContext"/>) — with the request's
+    /// <see cref="YFex.Tenancy.Resolution.TenantImpersonation"/> when YFex.Web switched it to another tenant.
     /// </summary>
     public static CallIdentity Capture(HttpContext http, bool withTenant)
     {
@@ -119,6 +120,7 @@ public sealed class CallContextConnections
 
         // EffectiveIdentity tolerates a missing IScopeContext (no tenancy registered → ScopeOverride or None).
         var scope = withTenant ? http.RequestServices?.GetService<IScopeContext>().EffectiveIdentity() ?? default : default;
-        return new CallIdentity(http.User, token, scope);
+        var impersonation = withTenant ? http.Features.Get<YFex.Tenancy.Resolution.TenantImpersonation>() : null;
+        return new CallIdentity(http.User, token, scope, impersonation: impersonation);
     }
 }
