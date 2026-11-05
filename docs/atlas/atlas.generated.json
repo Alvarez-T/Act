@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-11-05T11:03:49-03:00",
-  "scanMs": 13778,
-  "contentHash": "B8EB55AE99BE9750",
+  "generatedAt": "2026-11-05T11:24:39-03:00",
+  "scanMs": 21253,
+  "contentHash": "3B9F77CE9A1D15BD",
   "root": "C:\\Dev\\YFex",
   "machine": "ALVAREZ-ASUS",
   "groups": [
@@ -97,19 +97,19 @@
           "repo": "YFex",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-05T10:54:05-03:00",
-          "lastSubject": "Pending work before framework repo split",
-          "dirty": 736,
-          "commits14d": 3
+          "lastCommit": "2026-11-05T11:24:12-03:00",
+          "lastSubject": "Move framework projects to sibling repos (atlas F01)",
+          "dirty": 0,
+          "commits14d": 4
         },
         {
           "repo": "YFex.Cqrs",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T11:24:09-03:00",
+          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -160,7 +160,7 @@
           "files": 13,
           "flags": 28,
           "lastDate": "2026-10-01",
-          "lastWrite": "2026-11-04T14:59:49",
+          "lastWrite": "2026-11-05T11:09:26",
           "components": [
             "YFex.Audit"
           ]
@@ -244,7 +244,7 @@
           "files": 15,
           "flags": 15,
           "lastDate": "2026-10-19",
-          "lastWrite": "2026-10-29T19:54:47",
+          "lastWrite": "2026-11-05T11:09:28",
           "components": [
             "YFex.Authentication"
           ]
@@ -326,7 +326,7 @@
           "files": 11,
           "flags": 8,
           "lastDate": "2026-10-02",
-          "lastWrite": "2026-11-04T15:24:38",
+          "lastWrite": "2026-11-05T11:09:28",
           "components": [
             "YFex.Authorization"
           ]
@@ -523,7 +523,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": null,
-          "lastWrite": "2026-11-04T15:38:09",
+          "lastWrite": "2026-11-05T11:09:37",
           "components": [
             "YFex.Capabilities"
           ]
@@ -589,7 +589,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": "2026-09-30",
-          "lastWrite": "2026-11-04T14:58:51",
+          "lastWrite": "2026-11-05T11:09:37",
           "components": [
             "YFex.Composer"
           ]
@@ -668,12 +668,12 @@
       "git": [
         {
           "repo": "YFex.Cqrs",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T11:24:09-03:00",
+          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -727,7 +727,7 @@
         "lines": 18255,
         "testFiles": 36,
         "aot": 7,
-        "lastChange": "2026-11-05T11:03:14"
+        "lastChange": "2026-11-05T11:10:11"
       },
       "docs": [
         {
@@ -738,7 +738,7 @@
           "files": 15,
           "flags": 8,
           "lastDate": "2026-10-27",
-          "lastWrite": "2026-10-27T16:33:53",
+          "lastWrite": "2026-11-05T11:09:29",
           "components": [
             "YFex.Cryptography"
           ]
@@ -811,7 +811,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": "2026-09-23",
-          "lastWrite": "2026-09-24T11:54:32",
+          "lastWrite": "2026-11-05T11:09:37",
           "components": [
             "YFex.CustomLogic"
           ]
@@ -824,7 +824,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": "2026-09-28",
-          "lastWrite": "2026-09-28T19:59:41",
+          "lastWrite": "2026-11-05T11:09:37",
           "components": [
             "YFex.CustomLogic"
           ]
@@ -892,7 +892,7 @@
           "files": 10,
           "flags": 13,
           "lastDate": "2026-10-27",
-          "lastWrite": "2026-10-27T14:07:01",
+          "lastWrite": "2026-11-05T11:09:30",
           "components": [
             "YFex.Data"
           ]
@@ -918,7 +918,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:26-03:00",
           "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 122,
+          "dirty": 123,
           "commits14d": 0
         }
       ]
@@ -985,7 +985,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:26-03:00",
           "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 122,
+          "dirty": 123,
           "commits14d": 0
         }
       ]
@@ -1095,7 +1095,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:27-03:00",
           "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 0,
+          "dirty": 1,
           "commits14d": 0
         }
       ]
@@ -1217,7 +1217,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": "2026-10-01",
-          "lastWrite": "2026-10-01T17:26:26",
+          "lastWrite": "2026-11-05T11:09:30",
           "components": [
             "YFex.Expressions"
           ]
@@ -1226,12 +1226,12 @@
       "git": [
         {
           "repo": "YFex.Expressions",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T11:24:06-03:00",
+          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -1324,7 +1324,7 @@
           "files": 8,
           "flags": 11,
           "lastDate": "2026-10-29",
-          "lastWrite": "2026-10-29T21:08:28",
+          "lastWrite": "2026-11-05T11:09:30",
           "components": [
             "YFex.Files"
           ]
@@ -1532,7 +1532,7 @@
           "files": 12,
           "flags": 37,
           "lastDate": "2026-10-31",
-          "lastWrite": "2026-11-03T10:53:23",
+          "lastWrite": "2026-11-05T11:09:31",
           "components": [
             "YFex.Installations"
           ]
@@ -1762,11 +1762,11 @@
         "tests": 2,
         "benchmarks": 1,
         "apps": 1,
-        "csFiles": 63,
-        "lines": 10988,
-        "testFiles": 10,
+        "csFiles": 65,
+        "lines": 11293,
+        "testFiles": 11,
         "aot": 3,
-        "lastChange": "2026-10-02T10:45:46"
+        "lastChange": "2026-11-05T11:23:39"
       },
       "docs": [
         {
@@ -1803,7 +1803,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:19-03:00",
           "lastSubject": "Initial commit: import existing project sources",
-          "dirty": 0,
+          "dirty": 13,
           "commits14d": 0
         }
       ]
@@ -1958,7 +1958,7 @@
           "files": 1,
           "flags": 1,
           "lastDate": null,
-          "lastWrite": "2026-10-19T16:00:06",
+          "lastWrite": "2026-11-05T11:09:38",
           "components": [
             "YFex.Messaging"
           ]
@@ -1967,12 +1967,12 @@
       "git": [
         {
           "repo": "YFex.Messaging",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T11:24:10-03:00",
+          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -2010,12 +2010,12 @@
       "git": [
         {
           "repo": "YFex.Mvvm",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T11:24:11-03:00",
+          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -2083,12 +2083,12 @@
       "git": [
         {
           "repo": "YFex.NavigatR",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T11:24:11-03:00",
+          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -2143,7 +2143,7 @@
           "files": 7,
           "flags": 13,
           "lastDate": "2026-10-14",
-          "lastWrite": "2026-10-20T14:59:27",
+          "lastWrite": "2026-11-05T11:09:33",
           "components": [
             "YFex.Networking"
           ]
@@ -2198,7 +2198,7 @@
           "files": 7,
           "flags": 14,
           "lastDate": "2026-11-04",
-          "lastWrite": "2026-11-04T16:10:58",
+          "lastWrite": "2026-11-05T11:09:33",
           "components": [
             "YFex.Notifications"
           ]
@@ -2259,7 +2259,7 @@
           "files": 12,
           "flags": 28,
           "lastDate": "2026-10-19",
-          "lastWrite": "2026-11-03T10:53:21",
+          "lastWrite": "2026-11-05T11:09:34",
           "components": [
             "YFex.Offline"
           ]
@@ -2454,18 +2454,27 @@
       "docs": [
         {
           "path": "YFex.Persistence/README.md",
-          "missing": true
+          "file": "YFex.Persistence/README.md",
+          "title": "YFex.Persistence",
+          "status": null,
+          "files": 1,
+          "flags": 0,
+          "lastDate": null,
+          "lastWrite": "2026-08-12T17:08:45",
+          "components": [
+            "YFex.Persistence"
+          ]
         }
       ],
       "git": [
         {
           "repo": "YFex.Persistence",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T11:24:06-03:00",
+          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -2484,22 +2493,24 @@
       ],
       "projects": [
         "YFex.Privacy.AotSmoke",
+        "YFex.Privacy",
         "YFex.Privacy.Generator",
-        "YFex.Privacy.Generator.Tests"
+        "YFex.Privacy.Generator.Tests",
+        "YFex.Privacy.Tests"
       ],
       "platforms": [],
       "metrics": {
-        "projects": 3,
-        "libraries": 0,
+        "projects": 5,
+        "libraries": 1,
         "generators": 1,
-        "tests": 1,
+        "tests": 2,
         "benchmarks": 0,
         "apps": 1,
-        "csFiles": 6,
-        "lines": 903,
-        "testFiles": 1,
-        "aot": 1,
-        "lastChange": "2026-10-02T10:46:28"
+        "csFiles": 11,
+        "lines": 1933,
+        "testFiles": 2,
+        "aot": 2,
+        "lastChange": "2026-11-05T11:24:13"
       },
       "docs": [
         {
@@ -2510,7 +2521,7 @@
           "files": 15,
           "flags": 26,
           "lastDate": "2026-10-02",
-          "lastWrite": "2026-11-05T11:03:01",
+          "lastWrite": "2026-11-05T11:09:35",
           "components": [
             "YFex.Privacy"
           ]
@@ -2536,7 +2547,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:19-03:00",
           "lastSubject": "Initial commit: import existing project sources",
-          "dirty": 0,
+          "dirty": 5,
           "commits14d": 0
         }
       ]
@@ -2723,7 +2734,7 @@
           "files": 14,
           "flags": 2,
           "lastDate": "2026-09-30",
-          "lastWrite": "2026-10-15T15:12:46",
+          "lastWrite": "2026-11-05T11:09:36",
           "components": [
             "YFex.Rules"
           ]
@@ -2732,12 +2743,12 @@
       "git": [
         {
           "repo": "YFex.Rules",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T11:24:08-03:00",
+          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -2941,12 +2952,12 @@
       "git": [
         {
           "repo": "YFex.State",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T11:24:07-03:00",
+          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -3018,10 +3029,10 @@
           "repo": "YFex",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-05T10:54:05-03:00",
-          "lastSubject": "Pending work before framework repo split",
-          "dirty": 736,
-          "commits14d": 3
+          "lastCommit": "2026-11-05T11:24:12-03:00",
+          "lastSubject": "Move framework projects to sibling repos (atlas F01)",
+          "dirty": 0,
+          "commits14d": 4
         },
         {
           "repo": "YFex.System",
@@ -3235,10 +3246,10 @@
           "repo": "YFex",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-05T10:54:05-03:00",
-          "lastSubject": "Pending work before framework repo split",
-          "dirty": 736,
-          "commits14d": 3
+          "lastCommit": "2026-11-05T11:24:12-03:00",
+          "lastSubject": "Move framework projects to sibling repos (atlas F01)",
+          "dirty": 0,
+          "commits14d": 4
         },
         {
           "repo": "YFex.UI",
@@ -3294,7 +3305,7 @@
           "files": 14,
           "flags": 2,
           "lastDate": "2026-09-30",
-          "lastWrite": "2026-10-15T15:12:46",
+          "lastWrite": "2026-11-05T11:09:36",
           "components": [
             "YFex.Rules",
             "YFex.Validation"
@@ -3304,12 +3315,12 @@
       "git": [
         {
           "repo": "YFex.Validation",
-          "isRepo": false,
-          "branch": null,
-          "lastCommit": null,
-          "lastSubject": null,
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T11:24:05-03:00",
+          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
           "dirty": 0,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -3431,10 +3442,10 @@
           "repo": "YFex",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-05T10:54:05-03:00",
-          "lastSubject": "Pending work before framework repo split",
-          "dirty": 736,
-          "commits14d": 3
+          "lastCommit": "2026-11-05T11:24:12-03:00",
+          "lastSubject": "Move framework projects to sibling repos (atlas F01)",
+          "dirty": 0,
+          "commits14d": 4
         }
       ]
     }
@@ -4158,6 +4169,16 @@
     },
     {
       "from": "YFex.Logging",
+      "to": "YFex.Privacy",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Logging → YFex.Privacy"
+      ]
+    },
+    {
+      "from": "YFex.Logging",
       "to": "YFex.Tenancy",
       "weight": 1,
       "analyzerOnly": false,
@@ -4555,6 +4576,16 @@
       "cycle": false,
       "refs": [
         "YFex.Persistence.Tenancy → YFex.Tenancy"
+      ]
+    },
+    {
+      "from": "YFex.Privacy",
+      "to": "YFex",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Privacy → YFex"
       ]
     },
     {
@@ -5144,7 +5175,7 @@
       "csFiles": 11,
       "lines": 1683,
       "lastChange": "2026-09-30T09:52:25",
-      "inSolution": true
+      "inSolution": false
     },
     {
       "name": "YFex",
@@ -5157,7 +5188,7 @@
       ],
       "aot": true,
       "refs": [],
-      "refsIn": 30,
+      "refsIn": 31,
       "packages": [
         "System.Reactive",
         "Vogen"
@@ -6534,7 +6565,7 @@
       "csFiles": 11,
       "lines": 1683,
       "lastChange": "2026-09-30T09:52:25",
-      "inSolution": true
+      "inSolution": false
     },
     {
       "name": "YFex.Cqrs.Tenancy",
@@ -6821,7 +6852,7 @@
       ],
       "csFiles": 25,
       "lines": 4325,
-      "lastChange": "2026-11-05T11:03:14",
+      "lastChange": "2026-11-05T11:10:11",
       "inSolution": true
     },
     {
@@ -9180,6 +9211,7 @@
       "aot": true,
       "refs": [
         "YFex",
+        "YFex.Privacy",
         "YFex.Tenancy",
         "YFex.Logging.Format"
       ],
@@ -9189,9 +9221,9 @@
         "Microsoft.Extensions.Logging.Abstractions",
         "Microsoft.Extensions.Configuration.Abstractions"
       ],
-      "csFiles": 35,
-      "lines": 6133,
-      "lastChange": "2026-10-02T10:43:16",
+      "csFiles": 36,
+      "lines": 6308,
+      "lastChange": "2026-11-05T11:23:13",
       "inSolution": true
     },
     {
@@ -9249,8 +9281,8 @@
       "refsIn": 4,
       "packages": [],
       "csFiles": 9,
-      "lines": 1387,
-      "lastChange": "2026-10-01T16:29:48",
+      "lines": 1403,
+      "lastChange": "2026-11-05T11:20:03",
       "inSolution": true
     },
     {
@@ -9341,9 +9373,9 @@
         "Microsoft.Extensions.Configuration",
         "Microsoft.Extensions.DependencyInjection"
       ],
-      "csFiles": 9,
-      "lines": 1423,
-      "lastChange": "2026-10-02T10:44:09",
+      "csFiles": 10,
+      "lines": 1537,
+      "lastChange": "2026-11-05T11:23:39",
       "inSolution": true
     },
     {
@@ -10849,6 +10881,24 @@
       "inSolution": true
     },
     {
+      "name": "YFex.Privacy",
+      "path": "YFex.Privacy/src/YFex.Privacy/YFex.Privacy.csproj",
+      "repo": "YFex.Privacy",
+      "component": "YFex.Privacy",
+      "kind": "library",
+      "tfms": [],
+      "aot": true,
+      "refs": [
+        "YFex"
+      ],
+      "refsIn": 3,
+      "packages": [],
+      "csFiles": 4,
+      "lines": 845,
+      "lastChange": "2026-11-05T11:14:39",
+      "inSolution": true
+    },
+    {
       "name": "YFex.Privacy.AotSmoke",
       "path": "YFex.Privacy/samples/YFex.Privacy.AotSmoke/YFex.Privacy.AotSmoke.csproj",
       "repo": "YFex.Privacy",
@@ -10858,14 +10908,15 @@
       "aot": true,
       "refs": [
         "YFex",
+        "YFex.Privacy",
         "YFex.Entity.Public",
         "YFex.Privacy.Generator*"
       ],
       "refsIn": 0,
       "packages": [],
       "csFiles": 1,
-      "lines": 39,
-      "lastChange": "2026-10-02T10:46:28",
+      "lines": 47,
+      "lastChange": "2026-11-05T11:24:13",
       "inSolution": true
     },
     {
@@ -10912,6 +10963,29 @@
       "csFiles": 1,
       "lines": 261,
       "lastChange": "2026-10-02T10:37:50",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Privacy.Tests",
+      "path": "YFex.Privacy/tests/YFex.Privacy.Tests/YFex.Privacy.Tests.csproj",
+      "repo": "YFex.Privacy",
+      "component": "YFex.Privacy",
+      "kind": "test",
+      "tfms": [],
+      "aot": false,
+      "refs": [
+        "YFex.Privacy"
+      ],
+      "refsIn": 0,
+      "packages": [
+        "Microsoft.NET.Test.Sdk",
+        "xunit",
+        "xunit.runner.visualstudio",
+        "FluentAssertions"
+      ],
+      "csFiles": 1,
+      "lines": 177,
+      "lastChange": "2026-11-05T11:19:04",
       "inSolution": true
     },
     {
@@ -12955,86 +13029,86 @@
         "repo": "YFex",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-11-05T10:54:05-03:00",
-        "lastSubject": "Pending work before framework repo split",
-        "dirty": 736,
-        "commits14d": 3
+        "lastCommit": "2026-11-05T11:24:12-03:00",
+        "lastSubject": "Move framework projects to sibling repos (atlas F01)",
+        "dirty": 0,
+        "commits14d": 4
       },
       "residue": [
-        "YFex.Cqrs/src/YFex.Cqrs",
-        "YFex.Cqrs/src/YFex.Cqrs.Analyzer",
-        "YFex.Messaging/src/YFex.Cqrs.Approvals",
-        "YFex.Messaging/tests/YFex.Cqrs.Approvals.Tests",
-        "YFex.Cqrs/src/YFex.Cqrs.Compensation",
-        "YFex.Cqrs/tests/YFex.Cqrs.Compensation.Tests",
-        "YFex.Cqrs/src/YFex.Cqrs.FluentValidation",
-        "YFex.Cqrs/tests/YFex.Cqrs.FluentValidation.Tests",
-        "YFex.Cqrs/src/YFex.Cqrs.SourceGenerator",
-        "YFex.Cqrs/tests/YFex.Cqrs.SourceGenerator.Test",
-        "YFex.Cqrs/src/YFex.Cqrs.Tenancy",
-        "YFex.Cqrs/tests/YFex.Cqrs.Tenancy.Tests",
+        "YFex/src/Cqrs/YFex.Cqrs",
+        "YFex/src/Cqrs/YFex.Cqrs.Analyzer",
+        "YFex/src/Cqrs/YFex.Cqrs.Approvals",
+        "YFex/src/Cqrs/YFex.Cqrs.Approvals.Tests",
+        "YFex/src/Cqrs/YFex.Cqrs.Compensation",
+        "YFex/src/Cqrs/YFex.Cqrs.Compensation.Tests",
+        "YFex/src/Cqrs/YFex.Cqrs.FluentValidation",
+        "YFex/src/Cqrs/YFex.Cqrs.FluentValidation.Tests",
+        "YFex/src/Cqrs/YFex.Cqrs.SourceGenerator",
+        "YFex/src/Cqrs/YFex.Cqrs.SourceGenerator.Test",
+        "YFex/src/Cqrs/YFex.Cqrs.Tenancy",
+        "YFex/src/Cqrs/YFex.Cqrs.Tenancy.Tests",
         "YFex/src/Database/YFex.Data",
         "YFex/src/Database/YFex.Oracle",
         "YFex/src/Database/YFex.Postgres",
         "YFex/src/Database/YFex.Sqlite",
         "YFex/src/Database/YFex.SqlServer",
-        "YFex.Expressions/src/YFex.Expressions",
-        "YFex.Rules/benchmark/YFex.Expressions.Benchmarks",
-        "YFex.Expressions/src/YFex.Expressions.Generator",
-        "YFex.Expressions/tests/YFex.Expressions.Generator.Tests",
-        "YFex.Expressions/tests/YFex.Expressions.Tests",
-        "YFex.Messaging/src/YFex.Messaging",
-        "YFex.Messaging/src/YFex.Messaging.Fusion",
-        "YFex.Messaging/src/YFex.Messaging.Generator",
-        "YFex.Messaging/src/YFex.Messaging.Rpc",
-        "YFex.Messaging/app/YFex.Messaging.Rpc.AotSample",
-        "YFex.Messaging/src/YFex.Messaging.Rpc.Generator",
-        "YFex.Messaging/tests/YFex.Messaging.Rpc.Tests",
-        "YFex.Messaging/src/YFex.Messaging.Rpc.Wolverine",
-        "YFex.NavigatR/src/YFex.NavigatR",
-        "YFex.NavigatR/src/YFex.NavigatR.SourceGenerator",
-        "YFex.NavigatR/tests/YFex.NavigatR.Tenancy.Tests",
-        "YFex.NavigatR/tests/YFex.NavigatR.Tests",
-        "YFex.Persistence/src/YFex.Persistence",
-        "YFex.Persistence/src/YFex.Persistence.Encryption",
-        "YFex.Persistence/tests/YFex.Persistence.Encryption.Tests",
-        "YFex.Persistence/src/YFex.Persistence.FileSystem",
-        "YFex.Persistence/src/YFex.Persistence.Generator",
-        "YFex.Persistence/src/YFex.Persistence.IndexedDb",
-        "YFex.Persistence/app/YFex.Persistence.Smoke",
-        "YFex.Persistence/src/YFex.Persistence.Sqlite",
-        "YFex.Persistence/src/YFex.Persistence.Tenancy",
-        "YFex.Persistence/tests/YFex.Persistence.Tenancy.Tests",
-        "YFex.Persistence/tests/YFex.Persistence.Tests",
-        "YFex.State/src/YFex.State",
-        "YFex.State/src/YFex.State.Blazor",
-        "YFex.State/src/YFex.State.Collections",
-        "YFex.State/src/YFex.State.Generator",
-        "YFex.State/src/YFex.State.History",
-        "YFex.State/src/YFex.State.History.Generator",
-        "YFex.State/src/YFex.State.History.Persistence",
-        "YFex.State/src/YFex.State.History.Testing",
-        "YFex.State/tests/YFex.State.History.Tests",
-        "YFex.State/src/YFex.State.Mvvm",
-        "YFex.State/app/YFex.State.Smoke",
-        "YFex.State/tests/YFex.State.Tests",
-        "YFex.Mvvm/src/YFex.Mvvm",
-        "YFex.Rules/src/YFex.Rules",
-        "YFex.Messaging/src/YFex.Rules.Admin",
-        "YFex.Messaging/tests/YFex.Rules.Admin.Tests",
-        "YFex.Rules/src/YFex.Rules.Data",
-        "YFex.Rules/tests/YFex.Rules.Data.Tests",
-        "YFex.Rules/src/YFex.Rules.Dynamic",
-        "YFex.Rules/tests/YFex.Rules.Dynamic.Tests",
-        "YFex.Rules/src/YFex.Rules.Generator",
-        "YFex.Rules/tests/YFex.Rules.Generator.Tests",
-        "YFex.Rules/tests/YFex.Rules.Tests",
-        "YFex.Validation/src/YFex.Validation",
-        "YFex.Validation/src/YFex.Validation.Generator",
-        "YFex.State/tests/YFex.Validation.Generator.Tests",
-        "YFex.Validation/app/YFex.Validation.Smoke",
-        "YFex.Validation/src/YFex.Validation.Testing",
-        "YFex.Validation/tests/YFex.Validation.Tests",
+        "YFex/src/Expressions/YFex.Expressions",
+        "YFex/src/Expressions/YFex.Expressions.Benchmarks",
+        "YFex/src/Expressions/YFex.Expressions.Generator",
+        "YFex/src/Expressions/YFex.Expressions.Generator.Tests",
+        "YFex/src/Expressions/YFex.Expressions.Tests",
+        "YFex/src/Messaging/YFex.Messaging",
+        "YFex/src/Messaging/YFex.Messaging.Fusion",
+        "YFex/src/Messaging/YFex.Messaging.Generator",
+        "YFex/src/Messaging/YFex.Messaging.Rpc",
+        "YFex/src/Messaging/YFex.Messaging.Rpc.AotSample",
+        "YFex/src/Messaging/YFex.Messaging.Rpc.Generator",
+        "YFex/src/Messaging/YFex.Messaging.Rpc.Tests",
+        "YFex/src/Messaging/YFex.Messaging.Rpc.Wolverine",
+        "YFex/src/Navigation/YFex.NavigatR",
+        "YFex/src/Navigation/YFex.NavigatR.SourceGenerator",
+        "YFex/src/Navigation/YFex.NavigatR.Tenancy.Tests",
+        "YFex/src/Navigation/YFex.NavigatR.Tests",
+        "YFex/src/Persistence/YFex.Persistence",
+        "YFex/src/Persistence/YFex.Persistence.Encryption",
+        "YFex/src/Persistence/YFex.Persistence.Encryption.Tests",
+        "YFex/src/Persistence/YFex.Persistence.FileSystem",
+        "YFex/src/Persistence/YFex.Persistence.Generator",
+        "YFex/src/Persistence/YFex.Persistence.IndexedDb",
+        "YFex/src/Persistence/YFex.Persistence.Smoke",
+        "YFex/src/Persistence/YFex.Persistence.Sqlite",
+        "YFex/src/Persistence/YFex.Persistence.Tenancy",
+        "YFex/src/Persistence/YFex.Persistence.Tenancy.Tests",
+        "YFex/src/Persistence/YFex.Persistence.Tests",
+        "YFex/src/State/YFex.State",
+        "YFex/src/State/YFex.State.Blazor",
+        "YFex/src/State/YFex.State.Collections",
+        "YFex/src/State/YFex.State.Generator",
+        "YFex/src/State/YFex.State.History",
+        "YFex/src/State/YFex.State.History.Generator",
+        "YFex/src/State/YFex.State.History.Persistence",
+        "YFex/src/State/YFex.State.History.Testing",
+        "YFex/src/State/YFex.State.History.Tests",
+        "YFex/src/State/YFex.State.Mvvm",
+        "YFex/src/State/YFex.State.Smoke",
+        "YFex/src/State/YFex.State.Tests",
+        "YFex/src/UI/YFex.Mvvm",
+        "YFex/src/Validation/YFex.Rules",
+        "YFex/src/Validation/YFex.Rules.Admin",
+        "YFex/src/Validation/YFex.Rules.Admin.Tests",
+        "YFex/src/Validation/YFex.Rules.Data",
+        "YFex/src/Validation/YFex.Rules.Data.Tests",
+        "YFex/src/Validation/YFex.Rules.Dynamic",
+        "YFex/src/Validation/YFex.Rules.Dynamic.Tests",
+        "YFex/src/Validation/YFex.Rules.Generator",
+        "YFex/src/Validation/YFex.Rules.Generator.Tests",
+        "YFex/src/Validation/YFex.Rules.Tests",
+        "YFex/src/Validation/YFex.Validation",
+        "YFex/src/Validation/YFex.Validation.Generator",
+        "YFex/src/Validation/YFex.Validation.Generator.Tests",
+        "YFex/src/Validation/YFex.Validation.Smoke",
+        "YFex/src/Validation/YFex.Validation.Testing",
+        "YFex/src/Validation/YFex.Validation.Tests",
         "YFex/src/XML/YFex.Xml/DevYFexYFex.Fiscal_geninspect",
         "YFex/src/XML/YFex.Xml.SourceGenerator/DevYFexYFex.Fiscal_geninspect",
         "YFex/src/YFex/DependencyInjection",
@@ -13192,12 +13266,12 @@
       "projects": 12,
       "git": {
         "repo": "YFex.Cqrs",
-        "isRepo": false,
-        "branch": null,
-        "lastCommit": null,
-        "lastSubject": null,
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T11:24:09-03:00",
+        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
         "dirty": 0,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [
         "YFex.Cqrs/src/YFex.Cqrs.SourceGenerator/Generated"
@@ -13223,7 +13297,7 @@
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:03:14"
+      "lastChange": "2026-11-05T11:10:11"
     },
     {
       "name": "YFex.CustomLogic",
@@ -13256,7 +13330,7 @@
         "branch": "main",
         "lastCommit": "2026-10-17T20:38:26-03:00",
         "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 122,
+        "dirty": 123,
         "commits14d": 0
       },
       "residue": [],
@@ -13296,7 +13370,7 @@
         "branch": "main",
         "lastCommit": "2026-10-17T20:38:27-03:00",
         "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 0,
+        "dirty": 1,
         "commits14d": 0
       },
       "residue": [
@@ -13332,12 +13406,12 @@
       "projects": 4,
       "git": {
         "repo": "YFex.Expressions",
-        "isRepo": false,
-        "branch": null,
-        "lastCommit": null,
-        "lastSubject": null,
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T11:24:06-03:00",
+        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
         "dirty": 0,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [
         "YFex.Expressions/src/YFex.Expressions.Generator/Generated"
@@ -13466,12 +13540,12 @@
         "branch": "main",
         "lastCommit": "2026-10-17T20:38:19-03:00",
         "lastSubject": "Initial commit: import existing project sources",
-        "dirty": 0,
+        "dirty": 13,
         "commits14d": 0
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-10-02T10:45:46"
+      "lastChange": "2026-11-05T11:23:39"
     },
     {
       "name": "YFex.LoggY",
@@ -13520,12 +13594,12 @@
       "projects": 13,
       "git": {
         "repo": "YFex.Messaging",
-        "isRepo": false,
-        "branch": null,
-        "lastCommit": null,
-        "lastSubject": null,
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T11:24:10-03:00",
+        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
         "dirty": 0,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [
         "YFex.Messaging/src/YFex.Messaging.Generator/Generated"
@@ -13541,12 +13615,12 @@
       "projects": 1,
       "git": {
         "repo": "YFex.Mvvm",
-        "isRepo": false,
-        "branch": null,
-        "lastCommit": null,
-        "lastSubject": null,
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T11:24:11-03:00",
+        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
         "dirty": 0,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [],
       "worktrees": [],
@@ -13560,12 +13634,12 @@
       "projects": 4,
       "git": {
         "repo": "YFex.NavigatR",
-        "isRepo": false,
-        "branch": null,
-        "lastCommit": null,
-        "lastSubject": null,
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T11:24:11-03:00",
+        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
         "dirty": 0,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [
         "YFex.NavigatR/src/YFex.NavigatR.SourceGenerator/Generated"
@@ -13664,12 +13738,12 @@
       "projects": 11,
       "git": {
         "repo": "YFex.Persistence",
-        "isRepo": false,
-        "branch": null,
-        "lastCommit": null,
-        "lastSubject": null,
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T11:24:06-03:00",
+        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
         "dirty": 0,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [
         "YFex.Persistence/src/YFex.Persistence.Data"
@@ -13682,19 +13756,19 @@
       "solutions": [
         "privacy.slnx"
       ],
-      "projects": 3,
+      "projects": 5,
       "git": {
         "repo": "YFex.Privacy",
         "isRepo": true,
         "branch": "main",
         "lastCommit": "2026-10-17T20:38:19-03:00",
         "lastSubject": "Initial commit: import existing project sources",
-        "dirty": 0,
+        "dirty": 5,
         "commits14d": 0
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-10-02T10:46:28"
+      "lastChange": "2026-11-05T11:24:13"
     },
     {
       "name": "YFex.Profiling",
@@ -13742,12 +13816,12 @@
       "projects": 9,
       "git": {
         "repo": "YFex.Rules",
-        "isRepo": false,
-        "branch": null,
-        "lastCommit": null,
-        "lastSubject": null,
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T11:24:08-03:00",
+        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
         "dirty": 0,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [
         "YFex.Rules/src/YFex.Rules.Generator/Generated"
@@ -13801,12 +13875,12 @@
       "projects": 14,
       "git": {
         "repo": "YFex.State",
-        "isRepo": false,
-        "branch": null,
-        "lastCommit": null,
-        "lastSubject": null,
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T11:24:07-03:00",
+        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
         "dirty": 0,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [
         "YFex.State/src/YFex.State.Generator/Generated",
@@ -13910,12 +13984,12 @@
       "projects": 5,
       "git": {
         "repo": "YFex.Validation",
-        "isRepo": false,
-        "branch": null,
-        "lastCommit": null,
-        "lastSubject": null,
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T11:24:05-03:00",
+        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
         "dirty": 0,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [
         "YFex.Validation/src/YFex.Validation.Generator/Generated"
@@ -14091,6 +14165,19 @@
       ]
     },
     {
+      "path": "YFex.Persistence/README.md",
+      "file": "YFex.Persistence/README.md",
+      "title": "YFex.Persistence",
+      "status": null,
+      "files": 1,
+      "flags": 0,
+      "lastDate": null,
+      "lastWrite": "2026-08-12T17:08:45",
+      "components": [
+        "YFex.Persistence"
+      ]
+    },
+    {
       "path": "YFex.Privacy/README.md",
       "file": "YFex.Privacy/README.md",
       "title": "YFex.Privacy",
@@ -14163,7 +14250,7 @@
       "files": 13,
       "flags": 28,
       "lastDate": "2026-10-01",
-      "lastWrite": "2026-11-04T14:59:49",
+      "lastWrite": "2026-11-05T11:09:26",
       "components": [
         "YFex.Audit"
       ]
@@ -14176,7 +14263,7 @@
       "files": 15,
       "flags": 15,
       "lastDate": "2026-10-19",
-      "lastWrite": "2026-10-29T19:54:47",
+      "lastWrite": "2026-11-05T11:09:28",
       "components": [
         "YFex.Authentication"
       ]
@@ -14200,7 +14287,7 @@
       "files": 11,
       "flags": 8,
       "lastDate": "2026-10-02",
-      "lastWrite": "2026-11-04T15:24:38",
+      "lastWrite": "2026-11-05T11:09:28",
       "components": [
         "YFex.Authorization"
       ]
@@ -14213,7 +14300,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": "2026-10-02",
-      "lastWrite": "2026-10-02T11:07:39",
+      "lastWrite": "2026-11-05T11:09:36",
       "components": []
     },
     {
@@ -14224,7 +14311,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": null,
-      "lastWrite": "2026-11-04T15:38:09",
+      "lastWrite": "2026-11-05T11:09:37",
       "components": [
         "YFex.Capabilities"
       ]
@@ -14237,7 +14324,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": "2026-09-30",
-      "lastWrite": "2026-11-04T14:58:51",
+      "lastWrite": "2026-11-05T11:09:37",
       "components": [
         "YFex.Composer"
       ]
@@ -14263,7 +14350,7 @@
       "files": 15,
       "flags": 8,
       "lastDate": "2026-10-27",
-      "lastWrite": "2026-10-27T16:33:53",
+      "lastWrite": "2026-11-05T11:09:29",
       "components": [
         "YFex.Cryptography"
       ]
@@ -14276,7 +14363,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": "2026-09-23",
-      "lastWrite": "2026-09-24T11:54:32",
+      "lastWrite": "2026-11-05T11:09:37",
       "components": [
         "YFex.CustomLogic"
       ]
@@ -14289,7 +14376,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": "2026-09-28",
-      "lastWrite": "2026-09-28T19:59:41",
+      "lastWrite": "2026-11-05T11:09:37",
       "components": [
         "YFex.CustomLogic"
       ]
@@ -14302,7 +14389,7 @@
       "files": 10,
       "flags": 13,
       "lastDate": "2026-10-27",
-      "lastWrite": "2026-10-27T14:07:01",
+      "lastWrite": "2026-11-05T11:09:30",
       "components": [
         "YFex.Data"
       ]
@@ -14341,7 +14428,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": "2026-10-01",
-      "lastWrite": "2026-10-01T17:26:26",
+      "lastWrite": "2026-11-05T11:09:30",
       "components": []
     },
     {
@@ -14352,7 +14439,7 @@
       "files": 1,
       "flags": 0,
       "lastDate": "2026-10-01",
-      "lastWrite": "2026-10-01T17:26:26",
+      "lastWrite": "2026-11-05T11:09:30",
       "components": [
         "YFex.Expressions"
       ]
@@ -14365,7 +14452,7 @@
       "files": 8,
       "flags": 11,
       "lastDate": "2026-10-29",
-      "lastWrite": "2026-10-29T21:08:28",
+      "lastWrite": "2026-11-05T11:09:30",
       "components": [
         "YFex.Files"
       ]
@@ -14391,7 +14478,7 @@
       "files": 12,
       "flags": 37,
       "lastDate": "2026-10-31",
-      "lastWrite": "2026-11-03T10:53:23",
+      "lastWrite": "2026-11-05T11:09:31",
       "components": [
         "YFex.Installations"
       ]
@@ -14469,7 +14556,7 @@
       "files": 7,
       "flags": 13,
       "lastDate": "2026-10-14",
-      "lastWrite": "2026-10-20T14:59:27",
+      "lastWrite": "2026-11-05T11:09:33",
       "components": [
         "YFex.Networking"
       ]
@@ -14482,7 +14569,7 @@
       "files": 7,
       "flags": 14,
       "lastDate": "2026-11-04",
-      "lastWrite": "2026-11-04T16:10:58",
+      "lastWrite": "2026-11-05T11:09:33",
       "components": [
         "YFex.Notifications"
       ]
@@ -14495,7 +14582,7 @@
       "files": 12,
       "flags": 28,
       "lastDate": "2026-10-19",
-      "lastWrite": "2026-11-03T10:53:21",
+      "lastWrite": "2026-11-05T11:09:34",
       "components": [
         "YFex.Offline"
       ]
@@ -14534,7 +14621,7 @@
       "files": 15,
       "flags": 26,
       "lastDate": "2026-10-02",
-      "lastWrite": "2026-11-05T11:03:01",
+      "lastWrite": "2026-11-05T11:09:35",
       "components": [
         "YFex.Privacy"
       ]
@@ -14621,7 +14708,7 @@
       "files": 14,
       "flags": 2,
       "lastDate": "2026-09-30",
-      "lastWrite": "2026-10-15T15:12:46",
+      "lastWrite": "2026-11-05T11:09:36",
       "components": [
         "YFex.Rules",
         "YFex.Validation"
@@ -14675,7 +14762,7 @@
       "files": 1,
       "flags": 1,
       "lastDate": null,
-      "lastWrite": "2026-10-19T16:00:06",
+      "lastWrite": "2026-11-05T11:09:38",
       "components": [
         "YFex.Messaging"
       ]
@@ -14764,7 +14851,8 @@
       "id": "F01",
       "severity": "high",
       "category": "layering",
-      "status": "open",
+      "status": "done",
+      "resolution": "2026-11-05: framework folders moved to sibling repos YFex.Cqrs, YFex.Messaging (incl. Cqrs.Approvals, Rules.Admin), YFex.NavigatR, YFex.Persistence, YFex.Validation, YFex.Rules, YFex.State, YFex.Expressions, YFex.Mvvm. Core repo now references nothing outside itself. Remaining repo cycles: F28, F29.",
       "title": "The core repo is not a leaf: it references satellite repos that reference it back",
       "components": [
         "YFex",
@@ -15168,6 +15256,38 @@
       "source": "curated"
     },
     {
+      "id": "F28",
+      "severity": "medium",
+      "category": "layering",
+      "status": "open",
+      "title": "Authorization and Messaging repos reference each other",
+      "components": [
+        "YFex.Authorization",
+        "YFex.Messaging",
+        "YFex.Installations"
+      ],
+      "detail": "YFex.Messaging.Rpc references YFex.Authorization, while YFex.Authorization.Installations (in the Authorization repo) references YFex.Messaging.Rpc. Surfaced by the F01 split on 2026-11-05; before it the edge pointed into the core repo.",
+      "recommendation": "Move YFex.Authorization.Installations out of the Authorization repo (e.g. into YFex.Installations or its own repo), or make Messaging.Rpc depend only on YFex.Authorization.Public.",
+      "source": "curated"
+    },
+    {
+      "id": "F29",
+      "severity": "low",
+      "category": "layering",
+      "status": "open",
+      "title": "YFex.UI repo depends on the framework through the Gallery sample",
+      "components": [
+        "YFex.UI",
+        "YFex.NavigatR",
+        "YFex.Mvvm",
+        "YFex.State",
+        "YFex.Validation"
+      ],
+      "detail": "YFex.Avalonia.Gallery (YFex.UI/src/Avalonia) references NavigatR, Mvvm, State.Mvvm and Validation, while NavigatR and Mvvm reference YFex.UI.Public: a repo cycle caused only by a sample app. Also YFex.Persistence.Tests has stale references to State projects (broken before the split) and does not build.",
+      "recommendation": "Move the Gallery to YFex.Mvvm/app (top layer). Move the State-dependent Persistence tests to YFex.State/tests and fix their references.",
+      "source": "curated"
+    },
+    {
       "id": "F27",
       "severity": "low",
       "category": "opportunity",
@@ -15304,30 +15424,30 @@
       "status": "open",
       "source": "auto",
       "title": "21 project reference(s) point to missing files",
-      "detail": "YFex/src/System/YFex.System.Windows.Security/YFex.System.Windows.Security.csproj → YFex/src/System/YFex.System/YFex.System.csproj\nYFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex.Persistence/src/YFex.Persistence/YFex.Persistence.csproj\nYFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex.Persistence/src/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj\nYFex.Authentication/src/YFex.Authentication.Rpc/YFex.Authentication.Rpc.csproj → YFex.Messaging/src/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj\nYFex.Cqrs/src/YFex.Cqrs.SourceGenerator/Sample.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj\nYFex.Cqrs/src/YFex.Cqrs.SourceGenerator/YFex.CQRS.SourceGenerator.Tests.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj\nYFex.Installations/src/YFex.Installations.Persistence/YFex.Installations.Persistence.csproj → YFex.Persistence/src/YFex.Persistence/YFex.Persistence.csproj\nYFex.Installations/src/YFex.Installations.Rpc/YFex.Installations.Rpc.csproj → YFex.Messaging/src/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj\nYFex.LoggY/YFex.LoggY/YFex.LoggY.csproj → ../Avalonia.Mcp/Avalonia.Mcp.Injector/Avalonia.Mcp.Injector.csproj\nYFex.Offline/src/YFex.Offline/YFex.Offline.csproj → YFex.Cqrs/src/YFex.Cqrs/YFex.Cqrs.csproj\nYFex.Offline/src/YFex.Offline.Central/YFex.Offline.Central.csproj → YFex.Cqrs/src/YFex.Cqrs/YFex.Cqrs.csproj\nYFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex.Persistence/src/YFex.Persistence/YFex.Persistence.csproj\nYFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex.Persistence/src/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj\nYFex.Offline/src/YFex.Offline.Rpc/YFex.Offline.Rpc.csproj → YFex.Messaging/src/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj\nYFex.Offline/src/YFex.Offline.Rules/YFex.Offline.Rules.csproj → YFex.Rules/src/YFex.Rules/YFex.Rules.csproj\nYFex.Offline/tests/YFex.Offline.Tests/YFex.Offline.Tests.csproj → YFex.Messaging/src/YFex.Rules.Admin/YFex.Rules.Admin.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.History/YFex.State.History.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.History.Persistence/YFex.State.History.Persistence.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State/YFex.State.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.Generator/YFex.State.Generator.csproj\nYFex.Time/src/YFex.Time.Persistence/YFex.Time.Persistence.csproj → YFex.Persistence/src/YFex.Persistence/YFex.Persistence.csproj",
+      "detail": "YFex/src/System/YFex.System.Windows.Security/YFex.System.Windows.Security.csproj → YFex/src/System/YFex.System/YFex.System.csproj\nYFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj\nYFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex/src/Persistence/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj\nYFex.Authentication/src/YFex.Authentication.Rpc/YFex.Authentication.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj\nYFex.Cqrs/src/YFex.Cqrs.SourceGenerator/Sample.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj\nYFex.Cqrs/src/YFex.Cqrs.SourceGenerator/YFex.CQRS.SourceGenerator.Tests.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj\nYFex.Installations/src/YFex.Installations.Persistence/YFex.Installations.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj\nYFex.Installations/src/YFex.Installations.Rpc/YFex.Installations.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj\nYFex.LoggY/YFex.LoggY/YFex.LoggY.csproj → ../Avalonia.Mcp/Avalonia.Mcp.Injector/Avalonia.Mcp.Injector.csproj\nYFex.Offline/src/YFex.Offline/YFex.Offline.csproj → YFex/src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj\nYFex.Offline/src/YFex.Offline.Central/YFex.Offline.Central.csproj → YFex/src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj\nYFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj\nYFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex/src/Persistence/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj\nYFex.Offline/src/YFex.Offline.Rpc/YFex.Offline.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj\nYFex.Offline/src/YFex.Offline.Rules/YFex.Offline.Rules.csproj → YFex/src/Validation/YFex.Rules/YFex.Rules.csproj\nYFex.Offline/tests/YFex.Offline.Tests/YFex.Offline.Tests.csproj → YFex/src/Validation/YFex.Rules.Admin/YFex.Rules.Admin.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.History/YFex.State.History.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.History.Persistence/YFex.State.History.Persistence.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State/YFex.State.csproj\nYFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.Generator/YFex.State.Generator.csproj\nYFex.Time/src/YFex.Time.Persistence/YFex.Time.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj",
       "components": [],
       "evidence": [
         "YFex/src/System/YFex.System.Windows.Security/YFex.System.Windows.Security.csproj → YFex/src/System/YFex.System/YFex.System.csproj",
-        "YFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex.Persistence/src/YFex.Persistence/YFex.Persistence.csproj",
-        "YFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex.Persistence/src/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj",
-        "YFex.Authentication/src/YFex.Authentication.Rpc/YFex.Authentication.Rpc.csproj → YFex.Messaging/src/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj",
+        "YFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj",
+        "YFex.Authentication/src/YFex.Authentication.Client/YFex.Authentication.Client.csproj → YFex/src/Persistence/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj",
+        "YFex.Authentication/src/YFex.Authentication.Rpc/YFex.Authentication.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj",
         "YFex.Cqrs/src/YFex.Cqrs.SourceGenerator/Sample.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj",
         "YFex.Cqrs/src/YFex.Cqrs.SourceGenerator/YFex.CQRS.SourceGenerator.Tests.csproj → YFex.Cqrs/src/src/YFex.CQRS.SourceGenerator.csproj",
-        "YFex.Installations/src/YFex.Installations.Persistence/YFex.Installations.Persistence.csproj → YFex.Persistence/src/YFex.Persistence/YFex.Persistence.csproj",
-        "YFex.Installations/src/YFex.Installations.Rpc/YFex.Installations.Rpc.csproj → YFex.Messaging/src/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj",
+        "YFex.Installations/src/YFex.Installations.Persistence/YFex.Installations.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj",
+        "YFex.Installations/src/YFex.Installations.Rpc/YFex.Installations.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj",
         "YFex.LoggY/YFex.LoggY/YFex.LoggY.csproj → ../Avalonia.Mcp/Avalonia.Mcp.Injector/Avalonia.Mcp.Injector.csproj",
-        "YFex.Offline/src/YFex.Offline/YFex.Offline.csproj → YFex.Cqrs/src/YFex.Cqrs/YFex.Cqrs.csproj",
-        "YFex.Offline/src/YFex.Offline.Central/YFex.Offline.Central.csproj → YFex.Cqrs/src/YFex.Cqrs/YFex.Cqrs.csproj",
-        "YFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex.Persistence/src/YFex.Persistence/YFex.Persistence.csproj",
-        "YFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex.Persistence/src/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj",
-        "YFex.Offline/src/YFex.Offline.Rpc/YFex.Offline.Rpc.csproj → YFex.Messaging/src/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj",
-        "YFex.Offline/src/YFex.Offline.Rules/YFex.Offline.Rules.csproj → YFex.Rules/src/YFex.Rules/YFex.Rules.csproj",
-        "YFex.Offline/tests/YFex.Offline.Tests/YFex.Offline.Tests.csproj → YFex.Messaging/src/YFex.Rules.Admin/YFex.Rules.Admin.csproj",
+        "YFex.Offline/src/YFex.Offline/YFex.Offline.csproj → YFex/src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj",
+        "YFex.Offline/src/YFex.Offline.Central/YFex.Offline.Central.csproj → YFex/src/Cqrs/YFex.Cqrs/YFex.Cqrs.csproj",
+        "YFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj",
+        "YFex.Offline/src/YFex.Offline.Persistence/YFex.Offline.Persistence.csproj → YFex/src/Persistence/YFex.Persistence.Encryption/YFex.Persistence.Encryption.csproj",
+        "YFex.Offline/src/YFex.Offline.Rpc/YFex.Offline.Rpc.csproj → YFex/src/Messaging/YFex.Messaging.Rpc/YFex.Messaging.Rpc.csproj",
+        "YFex.Offline/src/YFex.Offline.Rules/YFex.Offline.Rules.csproj → YFex/src/Validation/YFex.Rules/YFex.Rules.csproj",
+        "YFex.Offline/tests/YFex.Offline.Tests/YFex.Offline.Tests.csproj → YFex/src/Validation/YFex.Rules.Admin/YFex.Rules.Admin.csproj",
         "YFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.History/YFex.State.History.csproj",
         "YFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.History.Persistence/YFex.State.History.Persistence.csproj",
         "YFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State/YFex.State.csproj",
         "YFex.Persistence/tests/YFex.Persistence.Tests/YFex.Persistence.Tests.csproj → YFex.Persistence/tests/YFex.State.Generator/YFex.State.Generator.csproj",
-        "YFex.Time/src/YFex.Time.Persistence/YFex.Time.Persistence.csproj → YFex.Persistence/src/YFex.Persistence/YFex.Persistence.csproj"
+        "YFex.Time/src/YFex.Time.Persistence/YFex.Time.Persistence.csproj → YFex/src/Persistence/YFex.Persistence/YFex.Persistence.csproj"
       ]
     },
     {
@@ -15337,104 +15457,91 @@
       "status": "open",
       "source": "auto",
       "title": "79 empty or obj-only folder(s) in YFex",
-      "detail": "Left over after moves/renames; they confuse globbing tools and readers:\nYFex.Cqrs/src/YFex.Cqrs\nYFex.Cqrs/src/YFex.Cqrs.Analyzer\nYFex.Messaging/src/YFex.Cqrs.Approvals\nYFex.Messaging/tests/YFex.Cqrs.Approvals.Tests\nYFex.Cqrs/src/YFex.Cqrs.Compensation\nYFex.Cqrs/tests/YFex.Cqrs.Compensation.Tests\nYFex.Cqrs/src/YFex.Cqrs.FluentValidation\nYFex.Cqrs/tests/YFex.Cqrs.FluentValidation.Tests\nYFex.Cqrs/src/YFex.Cqrs.SourceGenerator\nYFex.Cqrs/tests/YFex.Cqrs.SourceGenerator.Test\nYFex.Cqrs/src/YFex.Cqrs.Tenancy\nYFex.Cqrs/tests/YFex.Cqrs.Tenancy.Tests\nYFex/src/Database/YFex.Data\nYFex/src/Database/YFex.Oracle\nYFex/src/Database/YFex.Postgres\nYFex/src/Database/YFex.Sqlite\nYFex/src/Database/YFex.SqlServer\nYFex.Expressions/src/YFex.Expressions\nYFex.Rules/benchmark/YFex.Expressions.Benchmarks\nYFex.Expressions/src/YFex.Expressions.Generator\nYFex.Expressions/tests/YFex.Expressions.Generator.Tests\nYFex.Expressions/tests/YFex.Expressions.Tests\nYFex.Messaging/src/YFex.Messaging\nYFex.Messaging/src/YFex.Messaging.Fusion\nYFex.Messaging/src/YFex.Messaging.Generator\nYFex.Messaging/src/YFex.Messaging.Rpc\nYFex.Messaging/app/YFex.Messaging.Rpc.AotSample\nYFex.Messaging/src/YFex.Messaging.Rpc.Generator\nYFex.Messaging/tests/YFex.Messaging.Rpc.Tests\nYFex.Messaging/src/YFex.Messaging.Rpc.Wolverine\nYFex.NavigatR/src/YFex.NavigatR\nYFex.NavigatR/src/YFex.NavigatR.SourceGenerator\nYFex.NavigatR/tests/YFex.NavigatR.Tenancy.Tests\nYFex.NavigatR/tests/YFex.NavigatR.Tests\nYFex.Persistence/src/YFex.Persistence\nYFex.Persistence/src/YFex.Persistence.Encryption\nYFex.Persistence/tests/YFex.Persistence.Encryption.Tests\nYFex.Persistence/src/YFex.Persistence.FileSystem\nYFex.Persistence/src/YFex.Persistence.Generator\nYFex.Persistence/src/YFex.Persistence.IndexedDb\nYFex.Persistence/app/YFex.Persistence.Smoke\nYFex.Persistence/src/YFex.Persistence.Sqlite\nYFex.Persistence/src/YFex.Persistence.Tenancy\nYFex.Persistence/tests/YFex.Persistence.Tenancy.Tests\nYFex.Persistence/tests/YFex.Persistence.Tests\nYFex.State/src/YFex.State\nYFex.State/src/YFex.State.Blazor\nYFex.State/src/YFex.State.Collections\nYFex.State/src/YFex.State.Generator\nYFex.State/src/YFex.State.History\nYFex.State/src/YFex.State.History.Generator\nYFex.State/src/YFex.State.History.Persistence\nYFex.State/src/YFex.State.History.Testing\nYFex.State/tests/YFex.State.History.Tests\nYFex.State/src/YFex.State.Mvvm\nYFex.State/app/YFex.State.Smoke\nYFex.State/tests/YFex.State.Tests\nYFex.Mvvm/src/YFex.Mvvm\nYFex.Rules/src/YFex.Rules\nYFex.Messaging/src/YFex.Rules.Admin\nYFex.Messaging/tests/YFex.Rules.Admin.Tests\nYFex.Rules/src/YFex.Rules.Data\nYFex.Rules/tests/YFex.Rules.Data.Tests\nYFex.Rules/src/YFex.Rules.Dynamic\nYFex.Rules/tests/YFex.Rules.Dynamic.Tests\nYFex.Rules/src/YFex.Rules.Generator\nYFex.Rules/tests/YFex.Rules.Generator.Tests\nYFex.Rules/tests/YFex.Rules.Tests\nYFex.Validation/src/YFex.Validation\nYFex.Validation/src/YFex.Validation.Generator\nYFex.State/tests/YFex.Validation.Generator.Tests\nYFex.Validation/app/YFex.Validation.Smoke\nYFex.Validation/src/YFex.Validation.Testing\nYFex.Validation/tests/YFex.Validation.Tests\nYFex/src/XML/YFex.Xml/DevYFexYFex.Fiscal_geninspect\nYFex/src/XML/YFex.Xml.SourceGenerator/DevYFexYFex.Fiscal_geninspect\nYFex/src/YFex/DependencyInjection\nYFex/src/YFex/DevYFexYFex.Fiscal_geninspect\nYFex/src/YFex/GenOut",
+      "detail": "Left over after moves/renames; they confuse globbing tools and readers:\nYFex/src/Cqrs/YFex.Cqrs\nYFex/src/Cqrs/YFex.Cqrs.Analyzer\nYFex/src/Cqrs/YFex.Cqrs.Approvals\nYFex/src/Cqrs/YFex.Cqrs.Approvals.Tests\nYFex/src/Cqrs/YFex.Cqrs.Compensation\nYFex/src/Cqrs/YFex.Cqrs.Compensation.Tests\nYFex/src/Cqrs/YFex.Cqrs.FluentValidation\nYFex/src/Cqrs/YFex.Cqrs.FluentValidation.Tests\nYFex/src/Cqrs/YFex.Cqrs.SourceGenerator\nYFex/src/Cqrs/YFex.Cqrs.SourceGenerator.Test\nYFex/src/Cqrs/YFex.Cqrs.Tenancy\nYFex/src/Cqrs/YFex.Cqrs.Tenancy.Tests\nYFex/src/Database/YFex.Data\nYFex/src/Database/YFex.Oracle\nYFex/src/Database/YFex.Postgres\nYFex/src/Database/YFex.Sqlite\nYFex/src/Database/YFex.SqlServer\nYFex/src/Expressions/YFex.Expressions\nYFex/src/Expressions/YFex.Expressions.Benchmarks\nYFex/src/Expressions/YFex.Expressions.Generator\nYFex/src/Expressions/YFex.Expressions.Generator.Tests\nYFex/src/Expressions/YFex.Expressions.Tests\nYFex/src/Messaging/YFex.Messaging\nYFex/src/Messaging/YFex.Messaging.Fusion\nYFex/src/Messaging/YFex.Messaging.Generator\nYFex/src/Messaging/YFex.Messaging.Rpc\nYFex/src/Messaging/YFex.Messaging.Rpc.AotSample\nYFex/src/Messaging/YFex.Messaging.Rpc.Generator\nYFex/src/Messaging/YFex.Messaging.Rpc.Tests\nYFex/src/Messaging/YFex.Messaging.Rpc.Wolverine\nYFex/src/Navigation/YFex.NavigatR\nYFex/src/Navigation/YFex.NavigatR.SourceGenerator\nYFex/src/Navigation/YFex.NavigatR.Tenancy.Tests\nYFex/src/Navigation/YFex.NavigatR.Tests\nYFex/src/Persistence/YFex.Persistence\nYFex/src/Persistence/YFex.Persistence.Encryption\nYFex/src/Persistence/YFex.Persistence.Encryption.Tests\nYFex/src/Persistence/YFex.Persistence.FileSystem\nYFex/src/Persistence/YFex.Persistence.Generator\nYFex/src/Persistence/YFex.Persistence.IndexedDb\nYFex/src/Persistence/YFex.Persistence.Smoke\nYFex/src/Persistence/YFex.Persistence.Sqlite\nYFex/src/Persistence/YFex.Persistence.Tenancy\nYFex/src/Persistence/YFex.Persistence.Tenancy.Tests\nYFex/src/Persistence/YFex.Persistence.Tests\nYFex/src/State/YFex.State\nYFex/src/State/YFex.State.Blazor\nYFex/src/State/YFex.State.Collections\nYFex/src/State/YFex.State.Generator\nYFex/src/State/YFex.State.History\nYFex/src/State/YFex.State.History.Generator\nYFex/src/State/YFex.State.History.Persistence\nYFex/src/State/YFex.State.History.Testing\nYFex/src/State/YFex.State.History.Tests\nYFex/src/State/YFex.State.Mvvm\nYFex/src/State/YFex.State.Smoke\nYFex/src/State/YFex.State.Tests\nYFex/src/UI/YFex.Mvvm\nYFex/src/Validation/YFex.Rules\nYFex/src/Validation/YFex.Rules.Admin\nYFex/src/Validation/YFex.Rules.Admin.Tests\nYFex/src/Validation/YFex.Rules.Data\nYFex/src/Validation/YFex.Rules.Data.Tests\nYFex/src/Validation/YFex.Rules.Dynamic\nYFex/src/Validation/YFex.Rules.Dynamic.Tests\nYFex/src/Validation/YFex.Rules.Generator\nYFex/src/Validation/YFex.Rules.Generator.Tests\nYFex/src/Validation/YFex.Rules.Tests\nYFex/src/Validation/YFex.Validation\nYFex/src/Validation/YFex.Validation.Generator\nYFex/src/Validation/YFex.Validation.Generator.Tests\nYFex/src/Validation/YFex.Validation.Smoke\nYFex/src/Validation/YFex.Validation.Testing\nYFex/src/Validation/YFex.Validation.Tests\nYFex/src/XML/YFex.Xml/DevYFexYFex.Fiscal_geninspect\nYFex/src/XML/YFex.Xml.SourceGenerator/DevYFexYFex.Fiscal_geninspect\nYFex/src/YFex/DependencyInjection\nYFex/src/YFex/DevYFexYFex.Fiscal_geninspect\nYFex/src/YFex/GenOut",
       "components": [
         "YFex.Xml"
       ],
       "evidence": [
-        "YFex.Cqrs/src/YFex.Cqrs",
-        "YFex.Cqrs/src/YFex.Cqrs.Analyzer",
-        "YFex.Messaging/src/YFex.Cqrs.Approvals",
-        "YFex.Messaging/tests/YFex.Cqrs.Approvals.Tests",
-        "YFex.Cqrs/src/YFex.Cqrs.Compensation",
-        "YFex.Cqrs/tests/YFex.Cqrs.Compensation.Tests",
-        "YFex.Cqrs/src/YFex.Cqrs.FluentValidation",
-        "YFex.Cqrs/tests/YFex.Cqrs.FluentValidation.Tests",
-        "YFex.Cqrs/src/YFex.Cqrs.SourceGenerator",
-        "YFex.Cqrs/tests/YFex.Cqrs.SourceGenerator.Test",
-        "YFex.Cqrs/src/YFex.Cqrs.Tenancy",
-        "YFex.Cqrs/tests/YFex.Cqrs.Tenancy.Tests",
+        "YFex/src/Cqrs/YFex.Cqrs",
+        "YFex/src/Cqrs/YFex.Cqrs.Analyzer",
+        "YFex/src/Cqrs/YFex.Cqrs.Approvals",
+        "YFex/src/Cqrs/YFex.Cqrs.Approvals.Tests",
+        "YFex/src/Cqrs/YFex.Cqrs.Compensation",
+        "YFex/src/Cqrs/YFex.Cqrs.Compensation.Tests",
+        "YFex/src/Cqrs/YFex.Cqrs.FluentValidation",
+        "YFex/src/Cqrs/YFex.Cqrs.FluentValidation.Tests",
+        "YFex/src/Cqrs/YFex.Cqrs.SourceGenerator",
+        "YFex/src/Cqrs/YFex.Cqrs.SourceGenerator.Test",
+        "YFex/src/Cqrs/YFex.Cqrs.Tenancy",
+        "YFex/src/Cqrs/YFex.Cqrs.Tenancy.Tests",
         "YFex/src/Database/YFex.Data",
         "YFex/src/Database/YFex.Oracle",
         "YFex/src/Database/YFex.Postgres",
         "YFex/src/Database/YFex.Sqlite",
         "YFex/src/Database/YFex.SqlServer",
-        "YFex.Expressions/src/YFex.Expressions",
-        "YFex.Rules/benchmark/YFex.Expressions.Benchmarks",
-        "YFex.Expressions/src/YFex.Expressions.Generator",
-        "YFex.Expressions/tests/YFex.Expressions.Generator.Tests",
-        "YFex.Expressions/tests/YFex.Expressions.Tests",
-        "YFex.Messaging/src/YFex.Messaging",
-        "YFex.Messaging/src/YFex.Messaging.Fusion",
-        "YFex.Messaging/src/YFex.Messaging.Generator",
-        "YFex.Messaging/src/YFex.Messaging.Rpc",
-        "YFex.Messaging/app/YFex.Messaging.Rpc.AotSample",
-        "YFex.Messaging/src/YFex.Messaging.Rpc.Generator",
-        "YFex.Messaging/tests/YFex.Messaging.Rpc.Tests",
-        "YFex.Messaging/src/YFex.Messaging.Rpc.Wolverine",
-        "YFex.NavigatR/src/YFex.NavigatR",
-        "YFex.NavigatR/src/YFex.NavigatR.SourceGenerator",
-        "YFex.NavigatR/tests/YFex.NavigatR.Tenancy.Tests",
-        "YFex.NavigatR/tests/YFex.NavigatR.Tests",
-        "YFex.Persistence/src/YFex.Persistence",
-        "YFex.Persistence/src/YFex.Persistence.Encryption",
-        "YFex.Persistence/tests/YFex.Persistence.Encryption.Tests",
-        "YFex.Persistence/src/YFex.Persistence.FileSystem",
-        "YFex.Persistence/src/YFex.Persistence.Generator",
-        "YFex.Persistence/src/YFex.Persistence.IndexedDb",
-        "YFex.Persistence/app/YFex.Persistence.Smoke",
-        "YFex.Persistence/src/YFex.Persistence.Sqlite",
-        "YFex.Persistence/src/YFex.Persistence.Tenancy",
-        "YFex.Persistence/tests/YFex.Persistence.Tenancy.Tests",
-        "YFex.Persistence/tests/YFex.Persistence.Tests",
-        "YFex.State/src/YFex.State",
-        "YFex.State/src/YFex.State.Blazor",
-        "YFex.State/src/YFex.State.Collections",
-        "YFex.State/src/YFex.State.Generator",
-        "YFex.State/src/YFex.State.History",
-        "YFex.State/src/YFex.State.History.Generator",
-        "YFex.State/src/YFex.State.History.Persistence",
-        "YFex.State/src/YFex.State.History.Testing",
-        "YFex.State/tests/YFex.State.History.Tests",
-        "YFex.State/src/YFex.State.Mvvm",
-        "YFex.State/app/YFex.State.Smoke",
-        "YFex.State/tests/YFex.State.Tests",
-        "YFex.Mvvm/src/YFex.Mvvm",
-        "YFex.Rules/src/YFex.Rules",
-        "YFex.Messaging/src/YFex.Rules.Admin",
-        "YFex.Messaging/tests/YFex.Rules.Admin.Tests",
-        "YFex.Rules/src/YFex.Rules.Data",
-        "YFex.Rules/tests/YFex.Rules.Data.Tests",
-        "YFex.Rules/src/YFex.Rules.Dynamic",
-        "YFex.Rules/tests/YFex.Rules.Dynamic.Tests",
-        "YFex.Rules/src/YFex.Rules.Generator",
-        "YFex.Rules/tests/YFex.Rules.Generator.Tests",
-        "YFex.Rules/tests/YFex.Rules.Tests",
-        "YFex.Validation/src/YFex.Validation",
-        "YFex.Validation/src/YFex.Validation.Generator",
-        "YFex.State/tests/YFex.Validation.Generator.Tests",
-        "YFex.Validation/app/YFex.Validation.Smoke",
-        "YFex.Validation/src/YFex.Validation.Testing",
-        "YFex.Validation/tests/YFex.Validation.Tests",
+        "YFex/src/Expressions/YFex.Expressions",
+        "YFex/src/Expressions/YFex.Expressions.Benchmarks",
+        "YFex/src/Expressions/YFex.Expressions.Generator",
+        "YFex/src/Expressions/YFex.Expressions.Generator.Tests",
+        "YFex/src/Expressions/YFex.Expressions.Tests",
+        "YFex/src/Messaging/YFex.Messaging",
+        "YFex/src/Messaging/YFex.Messaging.Fusion",
+        "YFex/src/Messaging/YFex.Messaging.Generator",
+        "YFex/src/Messaging/YFex.Messaging.Rpc",
+        "YFex/src/Messaging/YFex.Messaging.Rpc.AotSample",
+        "YFex/src/Messaging/YFex.Messaging.Rpc.Generator",
+        "YFex/src/Messaging/YFex.Messaging.Rpc.Tests",
+        "YFex/src/Messaging/YFex.Messaging.Rpc.Wolverine",
+        "YFex/src/Navigation/YFex.NavigatR",
+        "YFex/src/Navigation/YFex.NavigatR.SourceGenerator",
+        "YFex/src/Navigation/YFex.NavigatR.Tenancy.Tests",
+        "YFex/src/Navigation/YFex.NavigatR.Tests",
+        "YFex/src/Persistence/YFex.Persistence",
+        "YFex/src/Persistence/YFex.Persistence.Encryption",
+        "YFex/src/Persistence/YFex.Persistence.Encryption.Tests",
+        "YFex/src/Persistence/YFex.Persistence.FileSystem",
+        "YFex/src/Persistence/YFex.Persistence.Generator",
+        "YFex/src/Persistence/YFex.Persistence.IndexedDb",
+        "YFex/src/Persistence/YFex.Persistence.Smoke",
+        "YFex/src/Persistence/YFex.Persistence.Sqlite",
+        "YFex/src/Persistence/YFex.Persistence.Tenancy",
+        "YFex/src/Persistence/YFex.Persistence.Tenancy.Tests",
+        "YFex/src/Persistence/YFex.Persistence.Tests",
+        "YFex/src/State/YFex.State",
+        "YFex/src/State/YFex.State.Blazor",
+        "YFex/src/State/YFex.State.Collections",
+        "YFex/src/State/YFex.State.Generator",
+        "YFex/src/State/YFex.State.History",
+        "YFex/src/State/YFex.State.History.Generator",
+        "YFex/src/State/YFex.State.History.Persistence",
+        "YFex/src/State/YFex.State.History.Testing",
+        "YFex/src/State/YFex.State.History.Tests",
+        "YFex/src/State/YFex.State.Mvvm",
+        "YFex/src/State/YFex.State.Smoke",
+        "YFex/src/State/YFex.State.Tests",
+        "YFex/src/UI/YFex.Mvvm",
+        "YFex/src/Validation/YFex.Rules",
+        "YFex/src/Validation/YFex.Rules.Admin",
+        "YFex/src/Validation/YFex.Rules.Admin.Tests",
+        "YFex/src/Validation/YFex.Rules.Data",
+        "YFex/src/Validation/YFex.Rules.Data.Tests",
+        "YFex/src/Validation/YFex.Rules.Dynamic",
+        "YFex/src/Validation/YFex.Rules.Dynamic.Tests",
+        "YFex/src/Validation/YFex.Rules.Generator",
+        "YFex/src/Validation/YFex.Rules.Generator.Tests",
+        "YFex/src/Validation/YFex.Rules.Tests",
+        "YFex/src/Validation/YFex.Validation",
+        "YFex/src/Validation/YFex.Validation.Generator",
+        "YFex/src/Validation/YFex.Validation.Generator.Tests",
+        "YFex/src/Validation/YFex.Validation.Smoke",
+        "YFex/src/Validation/YFex.Validation.Testing",
+        "YFex/src/Validation/YFex.Validation.Tests",
         "YFex/src/XML/YFex.Xml/DevYFexYFex.Fiscal_geninspect",
         "YFex/src/XML/YFex.Xml.SourceGenerator/DevYFexYFex.Fiscal_geninspect",
         "YFex/src/YFex/DependencyInjection",
         "YFex/src/YFex/DevYFexYFex.Fiscal_geninspect",
         "YFex/src/YFex/GenOut"
       ]
-    },
-    {
-      "id": "AUTO-DIRTY-YFex",
-      "severity": "low",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex: 736 uncommitted changes, last commit 0 days ago",
-      "detail": "Branch main. Last commit 2026-11-05: Pending work before framework repo split",
-      "components": [
-        "YFex.Xml"
-      ],
-      "recommendation": "Commit per finished phase so the history matches the phase logs."
     },
     {
       "id": "AUTO-NOGIT-YFex.Authentication",
@@ -15512,19 +15619,6 @@
       ]
     },
     {
-      "id": "AUTO-NOGIT-YFex.Cqrs",
-      "severity": "high",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.Cqrs is not under version control",
-      "detail": "12 projects and 108 C# files with no git history.",
-      "components": [
-        "YFex.Cqrs"
-      ],
-      "recommendation": "git init and commit the current phase."
-    },
-    {
       "id": "AUTO-DIRTY-YFex.Cryptography",
       "severity": "medium",
       "category": "hygiene",
@@ -15559,7 +15653,7 @@
       "category": "hygiene",
       "status": "open",
       "source": "auto",
-      "title": "YFex.Data: 122 uncommitted changes, last commit 18 days ago",
+      "title": "YFex.Data: 123 uncommitted changes, last commit 18 days ago",
       "detail": "Branch main. Last commit 2026-10-17: Commit pending work-in-progress changes",
       "components": [
         "YFex.Data"
@@ -15580,19 +15674,6 @@
       "evidence": [
         "YFex.Expressions/src/YFex.Expressions.Generator/Generated"
       ]
-    },
-    {
-      "id": "AUTO-NOGIT-YFex.Expressions",
-      "severity": "high",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.Expressions is not under version control",
-      "detail": "4 projects and 24 C# files with no git history.",
-      "components": [
-        "YFex.Expressions"
-      ],
-      "recommendation": "git init and commit the current phase."
     },
     {
       "id": "AUTO-RESIDUE-YFex.Jobs",
@@ -15640,32 +15721,6 @@
       ]
     },
     {
-      "id": "AUTO-NOGIT-YFex.Messaging",
-      "severity": "high",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.Messaging is not under version control",
-      "detail": "13 projects and 157 C# files with no git history.",
-      "components": [
-        "YFex.Messaging"
-      ],
-      "recommendation": "git init and commit the current phase."
-    },
-    {
-      "id": "AUTO-NOGIT-YFex.Mvvm",
-      "severity": "high",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.Mvvm is not under version control",
-      "detail": "1 projects and 5 C# files with no git history.",
-      "components": [
-        "YFex.Mvvm"
-      ],
-      "recommendation": "git init and commit the current phase."
-    },
-    {
       "id": "AUTO-RESIDUE-YFex.NavigatR",
       "severity": "low",
       "category": "hygiene",
@@ -15679,19 +15734,6 @@
       "evidence": [
         "YFex.NavigatR/src/YFex.NavigatR.SourceGenerator/Generated"
       ]
-    },
-    {
-      "id": "AUTO-NOGIT-YFex.NavigatR",
-      "severity": "high",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.NavigatR is not under version control",
-      "detail": "4 projects and 40 C# files with no git history.",
-      "components": [
-        "YFex.NavigatR"
-      ],
-      "recommendation": "git init and commit the current phase."
     },
     {
       "id": "AUTO-RESIDUE-YFex.Persistence",
@@ -15709,19 +15751,6 @@
       ]
     },
     {
-      "id": "AUTO-NOGIT-YFex.Persistence",
-      "severity": "high",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.Persistence is not under version control",
-      "detail": "11 projects and 54 C# files with no git history.",
-      "components": [
-        "YFex.Persistence"
-      ],
-      "recommendation": "git init and commit the current phase."
-    },
-    {
       "id": "AUTO-RESIDUE-YFex.Rules",
       "severity": "low",
       "category": "hygiene",
@@ -15735,19 +15764,6 @@
       "evidence": [
         "YFex.Rules/src/YFex.Rules.Generator/Generated"
       ]
-    },
-    {
-      "id": "AUTO-NOGIT-YFex.Rules",
-      "severity": "high",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.Rules is not under version control",
-      "detail": "9 projects and 87 C# files with no git history.",
-      "components": [
-        "YFex.Rules"
-      ],
-      "recommendation": "git init and commit the current phase."
     },
     {
       "id": "AUTO-RESIDUE-YFex.State",
@@ -15764,19 +15780,6 @@
         "YFex.State/src/YFex.State.Generator/Generated",
         "YFex.State/src/YFex.State.History.Generator/Generated"
       ]
-    },
-    {
-      "id": "AUTO-NOGIT-YFex.State",
-      "severity": "high",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.State is not under version control",
-      "detail": "14 projects and 126 C# files with no git history.",
-      "components": [
-        "YFex.State"
-      ],
-      "recommendation": "git init and commit the current phase."
     },
     {
       "id": "AUTO-RESIDUE-YFex.System",
@@ -15842,19 +15845,6 @@
       "evidence": [
         "YFex.Validation/src/YFex.Validation.Generator/Generated"
       ]
-    },
-    {
-      "id": "AUTO-NOGIT-YFex.Validation",
-      "severity": "high",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.Validation is not under version control",
-      "detail": "5 projects and 41 C# files with no git history.",
-      "components": [
-        "YFex.Validation"
-      ],
-      "recommendation": "git init and commit the current phase."
     },
     {
       "id": "AUTO-RESIDUE-YFex.Web",
