@@ -1,7 +1,8 @@
 # YFex.Actors — who acts, in every library and every app — Plan
 
-> **Status:** PROPOSED 2026-11-05; **AC0 BUILT 2026-11-05** (the package only, no consumer moved — see 05 log). Decisions ⚑AC1–⚑AC12
-> (§6) wait for the user, except those marked *decided*; AC0 followed the recommendations of ⚑AC3, ⚑AC5, ⚑AC6, ⚑AC8, ⚑AC12.
+> **Status:** PROPOSED 2026-11-05; **AC0 BUILT 2026-11-05** (the package only, no consumer moved — see 05 log), revised the same day
+> for ⚑AC13–⚑AC17 (decided by the user). Open decisions: ⚑AC5–⚑AC12 (AC0 followed the recommendations of ⚑AC5, ⚑AC6, ⚑AC8, ⚑AC12);
+> ⚑AC3 is superseded by ⚑AC13.
 > **Repo:** `C:\Dev\YFex\YFex.Actors` (sibling, own `actors.slnx`, template YFex.Resilience / YFex.Time). Created 2026-11-05.
 > **Origin:** atlas F05 ("actor identity is defined three times"). ⚑RA8 (2026-11-04) decided to move the actor types out of
 > `YFex.Authorization.Public`; on 2026-11-05 the user chose a **separate package** over a core folder, because the actor model will be
@@ -67,7 +68,7 @@ storing names in records (never — names are resolved at read time).
 | `YFex.Actors.Testing` | net11.0 | `TestActors.As(...)`, session helpers, in-memory directory | `YFex.Actors.Directory` |
 | `YFex.Actors.Generator` *(⚑AC9, optional)* | netstandard2.0 | declared service/system actors → constants + directory entries; analyzer for the single-writer rule | Roslyn |
 
-The base package stays a **leaf above core**: no Tenancy (home scope is canonical text, ⚑AC3), no Cryptography (encoding through core's
+The base package stays a **leaf above core**: no Tenancy (the home is core's `TenancyPath`, ⚑AC13), no Cryptography (encoding through core's
 `ICanonicalValue<T>`), no DI. Every library that names an actor references only `YFex.Actors`.
 
 ## 4. Shape in one screen
@@ -77,9 +78,9 @@ The base package stays a **leaf above core**: no Tenancy (home scope is canonica
 ActorScope? now = ActorContext.Current;              // Actor = João, RealActor = Job:sales-report#42, Relation = Delegation
 
 // building actors (no hand-written prefixes)
-ActorIdentity cashier = ActorIdentity.User(accountId, homeScope: "0=farmaviva/1=loja7");
-ActorIdentity pos     = ActorIdentity.Device(installationId);
-ActorIdentity job     = ActorIdentity.Job("sales-report", instanceId);
+ActorIdentity cashier = ActorIdentity.User(accountId, home: TenancyPath.Parse("0=farmaviva/1=loja7"));
+ActorIdentity pos     = ActorIdentity.Device(installation.Id);          // InstallationId (⚑AC15)
+ActorIdentity job     = jobKey.ToActor(home);                           // YFex.Jobs' JobKey (⚑AC14, AC1)
 
 // a stored pointer and its text form
 ActorReference r = cashier;                          // "user:8f3a2c…@0=farmaviva/1=loja7"
@@ -111,7 +112,7 @@ using (ActorContext.Restore(snapshot)) await HandleAsync(ct);
 |---|---|---|---|
 | ⚑AC1 | Own package or core folder | **Decided 2026-11-05 (user): own package `YFex.Actors`** | core `YFex/src/YFex/Actors` |
 | ⚑AC2 | `ActorKind` numbering (= ⚑RA10) | **Decided 2026-11-05 (user): Audit's superset** `Anonymous 0, User 1, Service 2, Device 3, Job 4, Agent 5, System 6` | Authorization's numbers + appended kinds |
-| ⚑AC3 | `HomeScope` type (= ⚑RA11) | canonical scope text (`"0=acme/1=loja7"`), as today; Tenancy converts | Tenancy's `ScopeIdentity` (needs it in core first) |
+| ⚑AC3 | `HomeScope` type (= ⚑RA11) | **Superseded by ⚑AC13** (was: canonical scope text as a string) | Tenancy's `ScopeIdentity` |
 | ⚑AC4 | Stored formats that change | **Decided 2026-11-05 (user): clean break** — nothing is in production; Offline envelope/session and Audit entries move to the new encoding without v1 readers | version 2 + v1 readers |
 | ⚑AC5 | A `Partner`/`External` kind for organisations (Files Exchange partners, marketplace webhooks, suppliers' EDI)? | **no new kind**: they act as `Service` actors named `service:partner/acme` (03 §5) | add `ActorKind.External = 7` |
 | ⚑AC6 | Groups as actors (`group:managers`)? | **no**: groups are Authorization roles or Notifications recipient lists; an actor is always one party | `ActorKind.Group` |
@@ -121,3 +122,8 @@ using (ActorContext.Restore(snapshot)) await HandleAsync(ct);
 | ⚑AC10 | Stamps in YFex.Data | Data's generator fills `ActorStamp` columns from `ActorContext` on insert/update (opt-in per row type) | apps fill stamps by hand |
 | ⚑AC11 | Name snapshot (audit Q14) | names at read time only; erased people render as "removido (#h:…)" | encrypted name snapshot per entry |
 | ⚑AC12 | Maximum subject length | 128 UTF-8 bytes (fits `stackalloc` in the canonical encoding) | 256 |
+| ⚑AC13 | Type of the home | **Decided 2026-11-05 (user): a core value object `TenancyPath`** (namespace `YFex.Tenancy`, name chosen to avoid "scope" next to DI/ambient scopes): canonical text `{rank}={value}/…`, core owns the grammar, Tenancy's `ScopeIdentity` parses with it and converts; replaces every string scope (actor home, `InstallationIdentity.Scope`, Authentication home + `scope_home` claim, approval tokens, Offline) | keep a string |
+| ⚑AC14 | Job keys | **Decided 2026-11-05 (user): a `JobKey` value object owned by YFex.Jobs** (template + optional instance id, replaces `JobKeys` string helpers); YFex.Actors keeps a raw subject and no `#` rule; Jobs adds `jobKey.ToActor(home)` (AC1) | key shape in Actors |
+| ⚑AC15 | Device subjects | **Decided 2026-11-05 (user): `ActorIdentity.Device(InstallationId)`** (subject = Guid D text, `TryGetInstallation` reads it back) | string ids |
+| ⚑AC16 | Where work ran | **Decided 2026-11-05 (user): an optional origin `InstallationId`** on `ActorStamp` and `ActorSnapshot`, carried by `ActorScope.Origin`; set by the writer that enters the scope, never guessed; restored work keeps its original origin. Hosts, placements and stores are not actors | none |
+| ⚑AC17 | Home on every kind + identity rule | **Decided 2026-11-05 (user): every factory takes a home** (incl. `Job`, `System`); identity = kind + subject + home ("a subject is unique within kind + home") | home on some kinds only |

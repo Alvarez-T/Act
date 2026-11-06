@@ -92,3 +92,32 @@ kind prefix (`"user:"`, `"job:"`) passed where an actor is expected.
   - Atlas: F05 note updated, `YFex.Actors` component added, infrastructure map row added; regenerated with `yfexAtlas --bundle`.
   - **Next:** AC1 (04 order): `ActorScope.From` becomes Authorization's `caller.ToActorScope()`; Audit drops `AuditActor*`;
     Offline envelope/session and Audit codec write `TryWriteCanonical`; `SubjectOf` callers use `ActorClaims`.
+- 2026-11-05 — **AC0 revised for ⚑AC13–⚑AC17** (decided by the user after an analysis of home scope, job keys, installations, hosts
+  and where jobs run). Touched: YFex core (new type), YFex.Tenancy (grammar + conversions), YFex.Actors.
+  - **⚑AC13 `TenancyPath`** (core `YFex/src/YFex/Tenancy/TenancyPath.cs`, namespace `YFex.Tenancy`; the user chose the name over
+    `ScopePath` to avoid "scope" next to DI/ambient scopes): strict canonical text (ranks 0–255 without leading zeros, strictly
+    increasing, non-empty values, only `%25`/`%2F` escapes, no controls, ≤ 8 levels, ≤ 512 UTF-8 bytes), `IsValid`, `IsWithin`,
+    `Parent`, `Depth`, `ISpanFormattable`/`ISpanParsable`, canonical `length LE16 · UTF-8`, log value. YFex.Tenancy: `ScopeFormat`
+    rejects any text `TenancyPath.IsValid` rejects (one grammar), `ScopeIdentity.ToTenancyPath()`, `ScopeIdentity.From(path)`,
+    `path.ToScopeIdentity()`. Stricter than before: leading-zero ranks and empty values no longer parse; no literal in the ecosystem
+    used them (scan of every `ScopeIdentity.Parse("…")`), Jobs' 172 tests pass.
+  - **YFex.Actors:** `ActorIdentity(Kind, Subject, TenancyPath Home)` (`HomeScope`/`WithHomeScope`/`MaxHomeScopeBytes` removed,
+    `WithHome`); every factory takes a home (⚑AC17); `Device(InstallationId)` + `TryGetInstallation` (⚑AC15); `Job(string jobKey,
+    home)` only — the `#` rule and `Job(template, instanceId)` are gone, YFex.Jobs' `JobKey` owns the shape (⚑AC14, AC1);
+    `ActorScope.Origin`, `ActorSnapshot.Origin` (bytes gain `origin presence (1) [· installation id (16, big endian)]`),
+    `ActorStamp.Origin` (⚑AC16); `ActorClaims.HomeClaimType` (was `HomeScopeClaimType`), the claim parses as a `TenancyPath`.
+    Identity canonical bytes are unchanged (the home's canonical form is the old scope layout).
+  - **Deviation from the analysis text:** I had said a restored snapshot records the *replaying* machine as origin. Built instead:
+    origin lives on `ActorScope`, is set only by the writer that enters the scope (never read from `LocalInstallation` inside
+    `ActorContext`), and `Restore` keeps the **original** origin — an offline sale replayed at central still stamps Caixa 3; the
+    replay is Offline provenance. Deterministic and testable (no hidden process-global read).
+  - **Tests:** core 276 (42 new `TenancyPathTests`: grammar, limits, within/parent, golden bytes, 3 000-case property, 0-allocation
+    format/canonical, log value); Tenancy 34 (5 new conversion tests); Actors **146** (new: per-home identity, device installation,
+    job subject shape, home grammar in the text form, origin through capture → bytes → restore → stamp, origin never guessed,
+    snapshot origin golden bytes and rejections, property test with random homes and origins). AOT smoke: 0 IL warnings, exit 0.
+  - **Benchmarks:** unchanged within noise — `TryFormat` 6.1 ns / 0 B, identity `TryWriteCanonical` 14 ns / 0 B, snapshot (with
+    origin) 48 ns / 0 B, log write 27 ns / 0 B, `Capture` 17 ns / 0 B, `Restore`+dispose 50 ns / 256 B (the new `ActorScope`).
+  - **For AC1 (now larger):** replace string scopes with `TenancyPath` in `InstallationIdentity.Scope` (core), Installations,
+    Authentication (home + `scope_home` claim + `home_scope` column), Authorization approvals, Offline; Jobs gets `JobKey`
+    (replacing `JobKeys` and `JobInstanceIds` strings) with `ToActor(home)`, and `SchedulerOptions.InstallationId` becomes an
+    `InstallationId`; the HTTP/RPC middleware, desktop sign-in and job runner set `ActorScope.Origin`.

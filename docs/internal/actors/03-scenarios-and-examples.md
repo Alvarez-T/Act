@@ -8,7 +8,7 @@ Every example uses the API of 02. "Today" lines quote the current code or design
 
 ```csharp
 // sign-in (Authentication) → the desktop session actor (only Authorization's accessor writes it)
-ActorContext.SetSession(ActorScope.Of(ActorIdentity.User(account.Id, homeScope: "0=farmaviva/1=loja7"), session.Id));
+ActorContext.SetSession(ActorScope.Of(ActorIdentity.User(account.Id, account.Home), session.Id) with { Origin = installation.Id });
 
 // POS view-model: no more hard-coded "Operador 01" (POSViewModel.cs:78)
 OperatorName = (await actors.DescribeAsync(ActorContext.Session!.Actor, ct)).Name;   // "Maria Souza"
@@ -32,7 +32,7 @@ audit.Record("sale.item-cancelled", target: sale.Id, approvedBy: token.Approver)
 ### 1.3 Self-checkout or kiosk: the device is the actor
 
 ```csharp
-using (ActorContext.Enter(ActorScope.Of(ActorIdentity.Device(installation.Id, "0=farmaviva/1=loja7"))))
+using (ActorContext.Enter(ActorScope.Of(ActorIdentity.Device(installation.Id, installation.Home)) with { Origin = installation.Id }))
     await sales.FinalizeAsync(cart, ct);
 // Licensing counts device actors separately from user seats; Audit shows "Autoatendimento 2 — Loja 7"
 ```
@@ -87,7 +87,7 @@ claim = claim with { AssignedTo = ActorIdentity.Service("expense-ocr") };
 
 ```csharp
 // Jobs D2b: instance created by the controller, runs nightly as them (authorization 10 §2.3)
-using (ActorContext.Enter(ActorScope.Delegated(actor: owner, by: ActorIdentity.Job("month-close", instanceId))))
+using (ActorContext.Enter(ActorScope.Delegated(actor: owner, by: instanceKey.ToActor(instance.Home))))   // JobKey (⚑AC14)
     await closing.RunAsync(period, ct);
 // every entry posted: Created = (owner, real actor Job:month-close#7); Audit relation = Delegation
 ```
@@ -95,7 +95,7 @@ using (ActorContext.Enter(ActorScope.Delegated(actor: owner, by: ActorIdentity.J
 ### 2.4 Support fixes a tenant's data while impersonating
 
 ```csharp
-using (ActorContext.Enter(ActorScope.Impersonated(actor: tenantAdmin, by: ActorIdentity.User(supportId, "0=yfex"))))
+using (ActorContext.Enter(ActorScope.Impersonated(actor: tenantAdmin, by: ActorIdentity.User(supportId, TenancyPath.Parse("0=yfex")))))
     await orders.FixStatusAsync(id, ct);
 // stamp shows the admin; Audit and the record's RealActor show "Suporte YFex (Ana) como Admin Farmaviva"
 ```
@@ -185,7 +185,7 @@ log.SaleFinalized(sale.Id, ActorContext.Current!.Actor);   // ILogValue: "user:8
 ## 10. Tests
 
 ```csharp
-using var _ = TestActors.As(ActorIdentity.User("u1"), sessionScope: "0=t1");     // YFex.Actors.Testing
+using var _ = TestActors.As(ActorIdentity.User("u1"), sessionScope: TenancyPath.Parse("0=t1"));     // YFex.Actors.Testing
 using var __ = TestActors.Directory(("user:u1", "Test User"));
 await sut.CancelAsync(saleId);
 audit.Last.Actor.Should().Be(ActorIdentity.User("u1"));
