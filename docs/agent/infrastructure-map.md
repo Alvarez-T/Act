@@ -58,8 +58,7 @@ Other `YFex.*` folders may be infrastructure, product-specific libraries, experi
 - **Authorization makes decisions; Capabilities describes actions.** A capability manifest can read permission metadata but does not grant access.
 - **Logging and Audit differ.** Libraries probe logging through `YFex.Diagnostics` in core; composition roots install `YFex.Logging`. Audit records durable, tamper-evident facts through `YFex.Audit.Public` contracts and its engine.
 - **Networking discovers candidates; Installations decides trust.** Presence on a LAN never proves tenant membership. Trusted time belongs to `YFex.Time`; platform clock reads alone are insufficient for security decisions.
-- **Optional engines stay optional.** Consumers use `*.Public` or abstraction packages. Platform-specific behavior belongs in `.Windows`, `.MacOS`, or `.Linux` packages when provided.
-- **Preview C# unions are context dependent.** The `union` declaration may store value-type cases through `object`; the project's `[Union]` tagged struct is the nonboxing path where performance matters. Verify actual SDK and pattern behavior before migrating.
+- **Optional engines stay optional.** Where a library already ships a `*.Public` contracts package, consumers reference it; new libraries add one only when another library needs the contracts without the engine. Platform-specific behavior belongs in `.Windows`, `.MacOS`, or `.Linux` packages.
 
 ## Current documentation routes
 
