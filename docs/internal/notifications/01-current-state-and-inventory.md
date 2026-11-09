@@ -11,13 +11,13 @@
 | `ContactDestination`, `MaskedDestination` | `YFex.Authentication.Public/Contacts.cs:18, 74` | yes | move (⚑N3) |
 | `VerifiedContact` (destination, verified at, primary, usable for sign-in/recovery, **preferred channel**) | `Contacts.cs:77` | the type is account-specific | stays; read by the Authentication contact source (⚑N17) |
 | `Delivered` / `DeliveryRefused` / `DeliveryFailed`, `union DeliveryResult`, `DeliveryRefusal` | `YFex.Authentication.Public/Delivery.cs:1-35` | yes (except `NotOnWhatsApp`, which is still a channel fact) | move (⚑N3) |
-| `IChallengeSender`, `ChallengeMessage`, `IVerificationProvider`, `ISecurityNoticeSender`, `SecurityNotice(Kind)` | `Delivery.cs:12-80` | **no**: OTP and account-security semantics | stay in Authentication (⚑N2) |
+| `IChallengeSender`, `ChallengeMessage`, `IVerificationProvider`, `ISecurityNoticeSender`, `SecurityNotice(Kind)` | `Delivery.cs:12-80` | `IVerificationProvider` and code send/check: **yes**; challenge/security-notice semantics: no | `IVerificationProvider` → `.Verification`; the rest stays (⚑N2) |
 | `MessageTemplate` (placeholders parsed once into a span plan), `ChallengeTexts`, `ChallengeTemplates` | `YFex.Authentication.Delivery/ChallengeTemplates.cs:9, 77, 84` | overlaps core `MessageCatalog.TryFormat` | OTP texts stay; Notifications renders through `IMessageCatalog` (⚑N15); `MessageTemplate` is retired unless the N0 benchmark shows the catalog slower |
 | `IDeliveryEndpoints`, `ApiStoreDeliveryEndpoints` (over YFex.Web `IApiEndpointStore`, tenant then global), `StaticDeliveryEndpoints`, `DeliveryEndpointNames` | `DeliveryEndpoints.cs:12-62` | yes | move; names get a `notifications.` prefix with the old names as aliases |
 | `DeliveryHttp` helper, `DeliveryHttpClient` (a bare `HttpClient`, **no** retry/rate handlers, no Resilience) | `Senders.cs:12`, `DeliveryServiceCollectionExtensions.cs:111` | yes | replaced by `YFex.Web.Refit` endpoint clients (⚑N5) |
 | `SmtpDeliveryOptions`, `SmtpChallengeSender` (also `ISecurityNoticeSender`) | `Senders.cs:69, 86` | transport yes, sender no | transport → `.Email` (`IEmailProvider`); a thin OTP sender stays |
 | `EmailApiFormat`, `HttpEmailChallengeSender` | `Senders.cs:138, 147` | same | same |
-| `TwilioDeliveryOptions`, `TwilioChallengeSender`, `TwilioVerifyProvider` | `Senders.cs:230, 252, 332` | messaging yes; Verify no | messaging → `.Twilio` (`ISmsProvider`, `IWhatsAppProvider`); Verify stays |
+| `TwilioDeliveryOptions`, `TwilioChallengeSender`, `TwilioVerifyProvider` | `Senders.cs:230, 252, 332` | yes | messaging → `.Twilio` (`ISmsProvider`, `IWhatsAppProvider`); Verify → `.Twilio` as an `IVerificationProvider` of `.Verification` (⚑N2) |
 | `MetaWhatsAppOptions`, `MetaWhatsAppChallengeSender` (authentication templates, copy-code) | `Senders.cs:376, 395` | the Cloud API client yes; OTP template rules no | client → `.Meta` (`IWhatsAppProvider`) |
 | `DeliveryBuilder`, `EmailDeliveryBuilder`, `PhoneDeliveryBuilder`, `AddYFexAuthenticationDelivery` | `DeliveryServiceCollectionExtensions.cs:19-145` | — | becomes a façade over Notifications registration (05 §2) |
 

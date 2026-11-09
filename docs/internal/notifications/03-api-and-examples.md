@@ -81,7 +81,7 @@ builder.Services.AddYFexAuthenticationDelivery(d => d
     .Email(e => e.Smtp(smtp))                 // YFex.Notifications.Email underneath
     .Sms(s => s.Twilio(twilio))               // YFex.Notifications.Twilio (ISmsProvider)
     .WhatsApp(w => w.Meta(meta)));            // YFex.Notifications.Meta (IWhatsAppProvider)
-// IChallengeSender adapters render OTP texts and call the channel with Delivery.Inline; Twilio Verify stays in Authentication.
+// IChallengeSender adapters render OTP texts and call the channel with Delivery.Inline; codes come from YFex.Notifications.Verification (Twilio Verify is one of its providers, ⚑N2).
 ```
 
 ## 7. Jobs bridge (D2a seam, built)

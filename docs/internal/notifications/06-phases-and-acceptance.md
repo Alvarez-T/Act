@@ -21,13 +21,14 @@
 
 ## Phase N1 — Authentication on Notifications
 
-- `.Twilio`, `.Meta` as SMS/WhatsApp providers; `Authentication.Delivery` = OTP rules over channels; provider per scope from the endpoint
+- `.Twilio`, `.Meta` as SMS/WhatsApp providers; `.Verification` (generic code send/check, `IVerificationProvider`, Twilio Verify; ⚑N2); `Authentication.Delivery` = challenge rules over channels and `.Verification`; provider per scope from the endpoint
   (⚑N18); limits (⚑N9); scope template overrides (dynamic catalog layer); usage-meter seam (⚑N19, no-op default).
 - **Acceptance:**
   - WhatsApp → SMS fallback still reports "not on WhatsApp" inline;
   - the SMS budget refuses over-limit sends with `BudgetExhausted`;
   - two scopes send SMS through two different providers by endpoint data only;
   - a scope template overrides the default;
+  - a code is sent and checked through `.Verification` for a destination with no account (attempt limit, expiry on the trusted clock);
   - an app using `AddYFexAuthenticationDelivery` compiles unchanged.
 
 ## Phase N2 — durable, offline, audited, consented, contacts, receipts
@@ -40,7 +41,7 @@
   - **restart:** a pending send survives a restart and is sent exactly once; two central nodes never send the same record;
   - **offline:** a terminal's send made offline is sent by central after replay, with the terminal's caller as actor;
   - **consent:** a marketing send without consent is refused with `NoConsent`;
-  - **contacts:** an actor recipient resolves to the account's preferred verified contact; a contact-book entry is unusable until confirmed;
+  - **contacts:** an actor recipient resolves to the account's preferred verified contact; a contact-book entry is unusable until confirmed by a `.Verification` code;
   - **receipts:** a recorded Twilio "undelivered" callback marks the log `Failed`; a SendGrid hard bounce flags the destination and the next send is `Undeliverable`;
   - **opt-out:** a "PARAR" reply and a one-click unsubscribe both stop marketing to that destination and are audited;
   - **masking:** the log shows only masked destinations; **audit:** every send and inbound event is audited with actor and result.
@@ -97,3 +98,43 @@ agreed**; all designed/planned libraries are listed in 05. Added: ⚑N13 inbound
 seam, ⚑N20 rename to `INotificationSender`; new consumers/integrations: Time, Localization, Licensing, approval flows (Authorization,
 Installations pairing, Authentication step-up), Offline 08 reconcilers, Devices (GSM modem), CustomLogic, Orchestration, Composer.
 Open: ⚑N1–⚑N13, ⚑N15, ⚑N16, ⚑N18–⚑N20.
+
+### 2026-11-09 — Decisions (docs only, no code)
+
+User agreed ⚑N1 (new sibling repo), ⚑N3, ⚑N4, ⚑N5, ⚑N15, ⚑N16 (clock = core `ITrustedClock`, engine YFex.Time; scope time zone
+seam still proposed for N3), ⚑N20 (`INotificationSender`; it only sends — inbound goes to `INotificationActionHandler`, the in-app
+inbox is a separate query; YFex.UI `INotification` keeps its name). ⚑N2 = **option b**: the generic code send/check and Twilio
+Verify move to `YFex.Notifications.Verification` (phase N1) so codes work without an account (contact-book confirmation, POS
+customer phone, pickup codes, consent double opt-in); Authentication keeps only its challenge rules. Open: ⚑N6–⚑N13, ⚑N18, ⚑N19.
+
+### 2026-11-09 — Phase N0 BUILT (repo `YFex.Notifications`, not committed)
+
+- **Repo** `C:\Dev\YFex\YFex.Notifications` (`notifications.slnx`, `AGENTS.md`, README): `.Public` (leaf: core + YFex.Actors),
+  `YFex.Notifications` (engine), `.Generator`, `.Email`, `.Testing`, tests, AOT smoke, benchmarks.
+- **Moved (⚑N3):** `DeliveryChannel` (+ `Chat`, `Webhook`, `InApp` = `in-app`, `Push`; `Voice` kept), `ContactKind`, `ContactDestination`,
+  `MaskedDestination`, `Delivered` / `DeliveryRefused` / `DeliveryFailed` / `union DeliveryResult`, `DeliveryRefusal` (+ 6–11). Removed from
+  `YFex.Authentication.Public`; Authentication's `Directory.Build.props` adds `global using YFex.Notifications`, so its code and tests are unchanged
+  apart from the ArchitectureTests allow-list.
+- **Contracts:** `INotificationSender.SendAsync<TData>` (⚑N20) → `union SendResult(NotificationAccepted(Ids, Refused), InlineSent(Id, Result))`;
+  `NotificationRequest<TData> where TData : INotificationData` with `Scope` (`TenancyPath`) and `Culture`; `Recipient.To/Actor/Reference`;
+  `IContactSource` + `ContactLookup`; `INotificationChannel`, `IEmailProvider`, `RenderedMessage`, `ChannelCapabilities`, `ProviderContext`.
+- **Engine:** sender (contact sources in registration order, `NoContact` / `NoSender` / `UnsupportedDestination` per recipient; inline = exactly
+  one recipient and channel); renderer over core `MessageCatalog` layers with per-(key, channel) cached codes; public `INotificationOutbox` +
+  in-memory outbox (idempotency key + recipient index + channel, per scope); hosted `NotificationDispatcher` (stored retries via
+  `RetryDelay` 1 min → 6 h exponential, expiry 24 h measured on `GetTrustedNow()`; optional `IResiliencePipelineFactory` for timeout +
+  breaker/limiter resource, never a retry); public `EmailChannel`; `INotificationEndpoints` (`ApiStoreNotificationEndpoints`, static), endpoint
+  `notifications.email`.
+- **Email:** `SmtpEmailProvider`, `HttpApiEmailProvider` (SendGrid v3 / SES v2, `text/html` part when `HtmlBody`), `NotificationsHttpClient`
+  (no retry handler, no own timeout).
+- **Authentication (05 §2.1–2.2):** `EmailChallengeSender(INotificationChannel, ChallengeTemplates)` renders OTP texts and sends inline;
+  `SmtpChallengeSender` / `HttpEmailChallengeSender` keep their constructors on top of it (façade types `SmtpDeliveryOptions`,
+  `EmailApiFormat` kept for apps). Twilio, Meta and Verify are untouched until N1.
+- **Benchmark (⚑N15 decision):** `MessageCatalog.Render` 206 ns / 200 B (result string only) vs `MessageTemplate.Render` 102 ns / 584 B;
+  full `NotificationRenderer` path 766 ns / 200 B. **MessageCatalog stays** (meets ≤ 1 µs and no allocation beyond the result).
+- **Gates:** `notifications.slnx` Release 0 warnings; 11 tests green; AOT smoke win-x64 0 IL warnings, exe exits 0; Authentication 212 tests
+  green (count unchanged), Authentication AOT smoke 0 IL warnings and green. **Not run:** linux-x64 AOT through `linuxKit`.
+- **Environment:** the .NET 11 RC3 SDK (installed 2026-11-06) prunes `Microsoft.Extensions.*.Abstractions` package references (NU1510 as an
+  error) in every repo, including untouched ones; builds above used `-p:WarningsNotAsErrors=NU1510`. Ecosystem-wide fix still open.
+- **Deferred from the N0 list:** `Recipient.List` / `.Contact` (N2/N3), `ContactDestination` chat/webhook cases (N3), raw-text requests (N3),
+  provider templates and actions in `RenderedMessage` (N1/N3), per-scope template overrides (N1), delivery log and diagnostics (N2).
+
