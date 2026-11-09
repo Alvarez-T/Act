@@ -39,7 +39,7 @@ public partial record Customer(CustomerId Id, PartyName Name, CpfCnpj CpfCnpj, E
 
 - Record names drop the container's name: `GetByIdQuery`, not `GetCustomerByIdQuery`. The helper name is the record name without `Query` / `Command`.
 - Parameters are value objects, never raw `string` or `int`.
-- Behaviour goes in one `IAggregateConfiguration<T>` per contract, never on handlers or as extra attributes: validation, authorization, caching, invalidation, idempotency, offline queueing. Marker interfaces (`IQueueable`, `ICacheable`) are the only exception. Caller guide: [YFex.Cqrs](../../public/cqrs.md); validation: [validation](../../internal/validation/README.md). Check current symbols with RoselYn.MCP before copying an example.
+- Behaviour goes in one `IAggregateConfiguration<T>` per contract, never on handlers or as extra attributes: validation, authorization, caching, invalidation, idempotency, offline queueing. Marker interfaces (`IQueueable`, `ICacheable`) are the only exception. Caller guide: [YFex.Cqrs](../../public/cqrs.md); validation: [validation](../../internal/validation/README.md). Check current symbols with the RoslynMcp tools before copying an example.
 
 ## Structure and style
 

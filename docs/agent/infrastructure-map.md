@@ -1,6 +1,6 @@
 # YFex infrastructure map for agents
 
-Use this file only when a task crosses package or repository boundaries. This is a navigation index, not an API reference or a claim that every design phase is implemented. Verify current source with RoselYn.MCP and current phase logs before editing.
+Use this file only when a task crosses package or repository boundaries. This is a navigation index, not an API reference or a claim that every design phase is implemented. Verify current source with the RoslynMcp tools and current phase logs before editing.
 
 ## Choose the owner
 
@@ -47,12 +47,10 @@ Use this file only when a task crosses package or repository boundaries. This is
 
 Other `YFex.*` folders may be infrastructure, product-specific libraries, experiments, or planned work. Locate their solution and symbols before assigning ownership. Do not pull business modules (`YFex.Farma`, `YFex.Finance`, `YFex.Fiscal`, `YFex.Payment`, etc.) into a reusable infrastructure contract.
 
-`YFex.Axamly` contains design-time completion and preview tooling; `YFex.LoggY` is an Avalonia logging app; `YFex.Brain` currently exposes an entity model. `YFex.Avalonia` did not load as a RoselYn solution in this survey, while `YFex.UI` has the documented cross-framework control solution. Treat these as task-specific locations rather than default owners of framework contracts.
+`YFex.Axamly` contains design-time completion and preview tooling; `YFex.LoggY` is an Avalonia logging app; `YFex.Brain` currently exposes an entity model. `YFex.Avalonia` did not load as a RoslynMcp solution in this survey, while `YFex.UI` has the documented cross-framework control solution. Treat these as task-specific locations rather than default owners of framework contracts.
 
 ## Boundaries that repeatedly caused mistakes
 
-- **Core is types first.** A shared `Hash256` or `ITimeSource` can live there; key storage, clocks, networking, authorization, and audit engines do not.
-- **Validation and Rules stay domain neutral.** `Money`, `Tenant`, and `Store` may be application values, never built into the general rule engine's core contract. Use a type extension point when the app decides the value domain.
 - **Persistence and Data serve different purposes.** Persistence is app-state storage and offline durability; Data is database access, SQL, mapping, and migration. Put bridging adapters at their boundary.
 - **Authentication proves who; Authorization decides what.** Authentication tokens carry identity facts (subject, session, methods, assurance), never permissions.
 - **Authorization makes decisions; Capabilities describes actions.** A capability manifest can read permission metadata but does not grant access.
@@ -68,8 +66,8 @@ Other `YFex.*` folders may be infrastructure, product-specific libraries, experi
 - Generator architecture: [`docs/internal/source-generators.md`](../internal/source-generators.md). Check current generator APIs semantically before copying old examples.
 - Running code on Android (headless emulator, USB handhelds, `androidKit probe`): [`android-testing.md`](android-testing.md).
 - Running code on Linux (WSL2 `yfex-linux` + Docker distro matrix, swtpm, Secret Service, `linuxKit verify-crypto`): [`linux-testing.md`](linux-testing.md).
-- Former full agent files: [`AGENTS archive`](AGENTS-archive-2026-10-09.md) and [`CLAUDE archive`](CLAUDE-archive-2026-10-09.md). They preserve detailed examples, but their build matrix, status notes, and API examples may be stale.
+- Former full agent file: [`AGENTS archive`](AGENTS-archive-2026-10-09.md). It preserves detailed examples, but their build matrix, status notes, and API examples may be stale.
 
 ## Efficient task input
 
-Give the target repo/assembly and the intended caller; state the invariant, allowed dependencies, performance budget if measured, API shape if fixed, and what counts as done. A short example of the desired call site and one counterexample from this ecosystem are more useful than a full source dump. For a bug, name the symbol and observed failure; the agent can discover the surrounding code through RoselYn.MCP.
+Give the target repo/assembly and the intended caller; state the invariant, allowed dependencies, performance budget if measured, API shape if fixed, and what counts as done. A short example of the desired call site and one counterexample from this ecosystem are more useful than a full source dump. For a bug, name the symbol and observed failure; the agent can discover the surrounding code through the RoslynMcp tools.

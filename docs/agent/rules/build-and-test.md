@@ -1,6 +1,6 @@
 # Building and testing YFex
 
-- **Generator DLL locks:** RoselYn.MCP locks generator DLLs under `bin/`. Build and test with `--artifacts-path C:/Temp/<repo>-artifacts` (or in Release), and run `dotnet build-server shutdown` when a build reports locked files.
+- **Generator DLL locks:** the RoslynMcp server locks generator DLLs under `bin/`. Build and test with `--artifacts-path C:/Temp/<repo>-artifacts` (or in Release), and run `dotnet build-server shutdown` when a build reports locked files.
 - **Solutions:** when a solution restore fails because of a missing sibling project, build the affected projects one by one.
 - **Restore failure NU1301** (private feed returns 401):
   ```
@@ -16,5 +16,7 @@
 - **Generators:** generated containers must be `partial` all the way up.
   - A project declaring `[Sensitive]` must reference `YFex.Privacy.Generator` as an analyzer.
   - View models with validation rules need both the State and Validation generators.
-- **AOT apps:** set `InvariantGlobalization=false` (`Money` needs pt-BR culture data).
+- **AOT apps:** set `InvariantGlobalization=false` (`Money` needs pt-BR culture data; with `true`, `string.Normalize` also becomes a no-op).
+- **Stale AOT smoke:** a failed publish can leave an old smoke exe that still "passes". Never pipe `dotnet publish` into `head`, which hides the errors. Check the exe timestamp.
+- **Benchmarks:** BenchmarkDotNet in these repos needs `InProcessEmitToolchain`.
 - **Other platforms:** use the `linux-testing` and `android-testing` skills (`../linux-testing.md`, `../android-testing.md`).

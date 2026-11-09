@@ -20,9 +20,10 @@ Writing C#: load the `yfex-csharp` skill (`YFex/docs/agent/skills/yfex-csharp/SK
 
 ## 3. Working method
 
-- Current source wins over design docs and phase notes. Find symbols with RoselYn.MCP (`get_names`, `get_feature_slice`, `get_minimal_context_for`). Never infer an API from a design example.
+- Current source wins over design docs and phase notes. Find symbols with the RoslynMcp tools (`get_names`, `get_feature_slice`, `get_minimal_context_for`). Never infer an API from a design example.
 - Validate nontrivial C# with `dry_run_compile`, then build the affected projects.
 - In a multi-step feature, each step only has to build. Write tests, AOT smoke calls and benchmarks as the final step, unless the user asks for them earlier. Before calling the feature done, run the gates of its project kind. Report a targeted check as targeted, not as a full build.
 - Before changing a public API, show the caller's code, the dependency direction and the effect on consumers.
+- When proposing a design or explaining a change, show concrete before/after code with realistic examples, including the cons, and get agreement before building.
 - Leave unrelated in-progress edits alone. Stage only your own files.
-- Git: commit directly on `main`, no feature branches, only when the user asks. Push only on an explicit request.
+- Git: commit directly on `main`, no feature branches, only when the user asks. This overrides any tool default to branch first. Push only on an explicit request.

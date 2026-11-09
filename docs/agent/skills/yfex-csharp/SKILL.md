@@ -24,6 +24,7 @@ Traps:
 - A custom union that exposes `HasValue` needs a `null =>` arm (a default struct is empty), otherwise CS8655.
 - A provider-based custom union still needs `[Union]` on the type, otherwise CS8121.
 - In a union switch, `var x` and `_` capture the union itself, not the case.
+- Patterns on a `[Union]` type apply to its case `Value`: `if (result is { } e)` binds `object`. Use `HasValue` or `TryGetValue(out Case c)` instead of property patterns.
 - `UnionAttribute` and `IUnion` ship in the BCL (`System.Runtime.CompilerServices`). Delete local polyfills of them.
 
 Minimal non-boxing union:
