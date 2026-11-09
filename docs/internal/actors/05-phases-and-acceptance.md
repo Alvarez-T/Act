@@ -121,3 +121,50 @@ kind prefix (`"user:"`, `"job:"`) passed where an actor is expected.
     Authentication (home + `scope_home` claim + `home_scope` column), Authorization approvals, Offline; Jobs gets `JobKey`
     (replacing `JobKeys` and `JobInstanceIds` strings) with `ToActor(home)`, and `SchedulerOptions.InstallationId` becomes an
     `InstallationId`; the HTTP/RPC middleware, desktop sign-in and job runner set `ActorScope.Origin`.
+
+- 2026-11-05 — **AC1a built: consumers moved, old types deleted, F05 closed.** Before touching them, the five repos with old
+  uncommitted work were built, tested and committed alone (user decision): Authorization `7013e0a`, Offline `acb3749`,
+  Capabilities `0f4920d`, Jobs `b486626`, Search `67cce6f`.
+  - **Authorization:** `Actor.cs` deleted; `.Public` references YFex.Actors (LeafGuardTests now allow core + YFex.Actors);
+    `ActorScope.From(caller)` → `caller.ToActorScope()` (`ActorScopeExtensions` in `.Public`); `AuthorizationContext.SubjectOf`
+    deleted (→ `ActorClaims.SubjectOf`); **approval `Approver` is an `ActorIdentity`** (`ApprovalToken`, `ApprovalGrant`,
+    `ApprovalEvent`); token body tag 2 → **3** (approver = length-prefixed actor canonical bytes), golden re-pinned; directory and
+    history checks pass `Approver.Subject`. Actor-facing scope strings convert with `TenancyPath.Parse` at the boundary.
+  - **Audit:** `AuditActorKind`, `AuditActor` and Audit's `ActorRelation` deleted; entries, scopes, `IAuditActorSource`,
+    `FixedAuditActorSource`, `AuditCapture` use `ActorIdentity`/`ActorRelation`; the codec writes `length (LE16) · ActorIdentity
+    canonical bytes`; the engine reads **`ActorContext.Current` first** (actor, real actor, relation and now the session id) and asks
+    registered sources only when no scope is active (new test).
+  - **Offline:** envelope, session and site-coordination formats write the actor through `CanonicalWriter.Write(in actor)`; the
+    "empty subject + User = anonymous" guess is gone; any kind may act offline (limits are ActorIdentity's); version tags
+    **1 → 2** for envelope, session and coordination (the tests' own rule: "bump the version tag"), goldens re-pinned; the
+    coordination approval carries the approver's text form.
+  - **Authentication / Messaging / Cqrs.Approvals:** `new ActorIdentity(x)` → `ActorIdentity.User(x)`; `CallContext.SubjectOf`
+    deleted; RPC enters `context.Caller.ToActorScope() ?? ActorScope.Anonymous`; the MemoryPack `ApprovalToken` formatter writes and
+    parses the approver's text form (wire version 1 → 2). Authentication's `.Public` leaf rule allows YFex.Actors.
+  - **Cqrs, NavigatR, Capabilities, Jobs, Search:** `using YFex.Actors;` and test fakes.
+  - **New, found while migrating:** commands carrying approval tokens are JSON-serialized, and `TenancyPath.Parent` sent
+    System.Text.Json into endless recursion. Added `[JsonConverter]`s (text form) on `TenancyPath` (core), `ActorIdentity` and
+    `ActorReference`; `ActorSnapshot` deserializes through its primary constructor (`[method: JsonConstructor]`); tests in core and
+    Actors and a source-generated `JsonSerializerContext` in the Actors AOT smoke.
+  - **Architecture test** (`YFex.Actors.Tests/EcosystemArchitectureTests`): scans every `C:\Dev\YFex\YFex*` repo (pruned walk,
+    ~1 s) — no actor type or `AuditActor*` declared outside YFex.Actors, no `static string? SubjectOf(` reader outside
+    `ActorClaims`; guards that > 100 files were scanned.
+  - **Tests (Release):** Actors 153 · core 278 · Tenancy 34 · Authorization 168 · Audit 33 · Offline 144 · Authentication 212 ·
+    Messaging 307 (2 skipped, as before) · Cqrs 37 · Capabilities 48 · Search 58 · Jobs 172 · NavigatR 139 with the **5 pre-existing
+    failures** listed in its AGENTS.md (unchanged). EventSourcing, Installations, Mvvm, Orchestration, Rules and Web build. Messaging's
+    `YFex.Messaging.Rpc.AotSample` fails restore on NU1902 (MessagePack 3.1.7 advisory) — pre-existing, not AC1; published once with
+    `-p:NuGetAudit=false` it has 0 IL warnings and runs (exit 0).
+  - **AOT smokes** (`dotnet publish -c Release -r win-x64`, then run): Actors, Audit, Offline, Authentication, Capabilities, Jobs —
+    0 IL2xxx/IL3xxx warnings, exit 0 each. Authorization has no AOT smoke project (its code is covered through the Authentication,
+    Offline and Capabilities smokes).
+  - **Gotchas:** an idempotent rewrite matters (a second pass re-swapped `(Kind, Subject)` arguments); target-typed `new("x")` for an
+    `ActorIdentity` property compiles against the old ctor only — search for it; xUnit/FluentAssertions golden messages carry the
+    actual bytes, so re-pinning was scripted from the failure output and every changed golden was reviewed as a version/actor change.
+  - **Not done → AC1b (next):** replace the remaining **string scopes with `TenancyPath`** (core `InstallationIdentity.Scope`,
+    Authentication home + `home_scope` column + `scope_home` claim, `IAuthorizationContext.Scope`, `ApproverScope`, Offline scopes);
+    **`JobKey`** in Jobs (replacing `JobKeys`/`JobInstanceIds` strings) with `ToActor(home)`, and `SchedulerOptions.InstallationId`
+    as an `InstallationId`; **origin writers** (HTTP/RPC middleware from the caller's installation, desktop sign-in, job runner);
+    Offline envelope creation from `ActorContext.Capture()` and replay through `Restore`; Messaging outbox `ActorSnapshot`; Tenancy
+    projector fed by `ActorClaims.SubjectOf`. Design docs still to point at YFex.Actors (04 list): authorization-consolidation 10
+    (has another session's uncommitted edits — left alone), audit 02 §3, offline envelope docs, notifications 02/05, Jobs Plan D
+    §6.1, licensing 06, privacy 07.

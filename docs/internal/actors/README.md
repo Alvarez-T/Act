@@ -1,7 +1,8 @@
 # YFex.Actors — who acts, in every library and every app — Plan
 
 > **Status:** PROPOSED 2026-11-05; **AC0 BUILT 2026-11-05** (the package only, no consumer moved — see 05 log), revised the same day
-> for ⚑AC13–⚑AC17 (decided by the user). Open decisions: ⚑AC5–⚑AC12 (AC0 followed the recommendations of ⚑AC5, ⚑AC6, ⚑AC8, ⚑AC12);
+> for ⚑AC13–⚑AC17 (decided by the user); **AC1a BUILT 2026-11-05** (consumers moved, old types deleted, F05 closed;
+> AC1b — string scopes → `TenancyPath`, `JobKey`, origin writers — next). Open decisions: ⚑AC5–⚑AC12 (AC0 followed the recommendations of ⚑AC5, ⚑AC6, ⚑AC8, ⚑AC12);
 > ⚑AC3 is superseded by ⚑AC13.
 > **Repo:** `C:\Dev\YFex\YFex.Actors` (sibling, own `actors.slnx`, template YFex.Resilience / YFex.Time). Created 2026-11-05.
 > **Origin:** atlas F05 ("actor identity is defined three times"). ⚑RA8 (2026-11-04) decided to move the actor types out of
@@ -101,7 +102,7 @@ using (ActorContext.Restore(snapshot)) await HandleAsync(ct);
 | Phase | What | Unblocks |
 |---|---|---|
 | AC0 ✅ 2026-11-05 | repo, types (Audit numbering), reference text, encoding, principal reader, context capture/restore, stamps | F05, Jobs D2b |
-| AC1 | move consumers: Authorization.Public, Audit, Offline, Authentication, Messaging, Cqrs, NavigatR, Capabilities, Jobs, Search | delete old types |
+| AC1 (a ✅ 2026-11-05, b next) | move consumers: Authorization.Public, Audit, Offline, Authentication, Messaging, Cqrs, NavigatR, Capabilities, Jobs, Search | delete old types |
 | AC2 | directory contract + composite + Testing; sources in Authentication, Installations, Jobs, Capabilities | Audit ⚑A29, Notifications N2 |
 | AC3 | YFex.Data stamp convention (generated fill from `ActorContext`), UI "who" control | ERP screens |
 | AC4 | generator/analyzer (⚑AC9), if accepted | — |

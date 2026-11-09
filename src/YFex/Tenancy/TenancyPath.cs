@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.Unicode;
 using YFex.Canonical;
 using YFex.Diagnostics;
@@ -22,8 +24,10 @@ namespace YFex.Tenancy;
 /// <c>/</c> are written <c>%25</c> and <c>%2F</c> (no other escape is valid); no control characters, well-formed UTF-16; at most
 /// <see cref="MaxLength"/> UTF-8 bytes. Equality is ordinal on the text.
 /// </para>
-/// <para>Canonical bytes: <c>length (2, little endian, 0 = none) · UTF-8 text</c>. Logged as its text.</para>
+/// <para>Canonical bytes: <c>length (2, little endian, 0 = none) · UTF-8 text</c>. Logged as its text. JSON: the text, null for
+/// <see cref="None"/>.</para>
 /// </summary>
+[JsonConverter(typeof(TenancyPathJsonConverter))]
 public readonly record struct TenancyPath :
     ICanonicalValue<TenancyPath>, ILogValue<TenancyPath>, ISpanFormattable, ISpanParsable<TenancyPath>
 {
@@ -235,4 +239,20 @@ public readonly record struct TenancyPath :
     /// <summary>Logs the text.</summary>
     static void ILogValue<TenancyPath>.Write(in TenancyPath value, ref LogWriter writer, ushort field)
         => writer.Write(field, value._text);
+}
+
+/// <summary>JSON as the canonical text (null for <see cref="TenancyPath.None"/>).</summary>
+public sealed class TenancyPathJsonConverter : JsonConverter<TenancyPath>
+{
+    public override TenancyPath Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        if (reader.TokenType == JsonTokenType.Null) return default;
+        return TenancyPath.TryParse(reader.GetString(), out TenancyPath path) ? path : throw new JsonException("Not a tenancy path.");
+    }
+
+    public override void Write(Utf8JsonWriter writer, TenancyPath value, JsonSerializerOptions options)
+    {
+        if (value.IsNone) writer.WriteNullValue();
+        else writer.WriteStringValue(value.ToString());
+    }
 }
