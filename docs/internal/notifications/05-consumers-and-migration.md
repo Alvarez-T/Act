@@ -20,7 +20,7 @@
 | **YFex.Resilience** | built | none. Dispatcher pipeline (timeout, retry, breaker per provider/scope resource) through `IResiliencePipelineFactory` | no | N0 |
 | **YFex core — Localization** | built | none. Templates are message codes in `IMessageCatalog` layers (⚑N15); a generated module catalog per consumer | no | N0 |
 | **YFex core — Time / YFex.Time** | built | none for the clock (`ITrustedClock`). **Proposal:** a shared `IScopeTimeZones` contract in core or Tenancy, adapted by Jobs (`IJobScopeTimeZones`) and used by Notifications (⚑N16) | no | N3 (quiet hours) |
-| **YFex core — actor types** | decided (⚑RA8), not built | `ActorIdentity` & co. move to core; `.Public` then depends on core only. N2 run-as sends wait for the core move → Authorization resolver | no for Notifications | before N2 |
+| **YFex.Actors — actor types** | built (actors AC0–AC1b, 2026-11-05/09; ⚑RA8 became a separate package, ⚑AC1) | `ActorIdentity`, `ActorScope`, `ActorContext`, `ActorSnapshot` (sender capture for the outbox) come from YFex.Actors. N2 run-as sends still wait for the Authorization resolver | no for Notifications | before N2 |
 | **YFex.Authorization** | built | none required. Notifications declares its own `[PermissionCatalog]` (⚑N12). New bridge **`YFex.Authorization.Notifications`**: approval requested/decided notices from `ApprovalEvents` (link opens the screen, never approves). Run-as caller from authorization-consolidation 10 | no | N2 (permissions), N3 (approvals) |
 | **YFex.Installations** | built | (a) pairing waiting for admin approval (`PairingPending`, I5) → notice to the scope's admins (bridge in Installations); (b) push tokens per installation and device registration for `.Push` (N4) | no | N3 (a), N4 (b) |
 | **YFex.UI** | built (`INotification`, `IToast`, hosts) | `YFex.Notifications.InApp.Client` shows inbox events through `INotification` / `IToast`; notification-centre view over the inbox query later. ⚑N20 renames `INotifications` → `INotificationSender` to avoid confusion with UI's `INotification` | no | N3; view after N3 |
@@ -58,7 +58,7 @@
 
 | Before | Needs | Owner |
 |---|---|---|
-| N2 run-as sends | actor types in core (⚑RA8) → Authorization run-as resolver | YFex core, YFex.Authorization |
+| N2 run-as sends | actor types (YFex.Actors, built) → Authorization run-as resolver | YFex.Authorization |
 | N2 marketing sends | Privacy ⚑P9 consent ledger (else refused / app seam) | YFex.Privacy |
 | N3 in-app | `EventChannelHost` wiring behind `EnableServerPushedEvents()` | YFex Messaging |
 | N3 quiet hours | `IScopeTimeZones` (else per-scope option) | YFex core / Tenancy + Jobs adapter |

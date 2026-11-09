@@ -59,7 +59,7 @@ public readonly record struct RenderedMessage(
 public readonly record struct Recipient                         // [Union]-style tagged struct; cold path
 {
     public static Recipient To(ContactDestination destination);  // a concrete e-mail / phone / chat id / webhook endpoint
-    public static Recipient Actor(ActorIdentity actor);          // resolved through the contact sources (§4)
+    public static Recipient Actor(ActorIdentity actor);          // YFex.Actors; resolved through the contact sources (§4)
     public static Recipient Reference(string reference);        // an app id, e.g. Jobs' "user:42", "group:managers" → contact sources
     public static Recipient List(RecipientListKey list);         // stored per scope as data ("store managers of site 7")
     public static Recipient Contact(ContactId contact);          // a contact-book entry (§4)

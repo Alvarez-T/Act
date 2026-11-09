@@ -2,7 +2,7 @@
 
 > **Status:** PROPOSED 2026-11-05; **AC0 BUILT 2026-11-05** (the package only, no consumer moved — see 05 log), revised the same day
 > for ⚑AC13–⚑AC17 (decided by the user); **AC1a BUILT 2026-11-05** (consumers moved, old types deleted, F05 closed;
-> AC1b — string scopes → `TenancyPath`, `JobKey`, origin writers — next). Open decisions: ⚑AC5–⚑AC12 (AC0 followed the recommendations of ⚑AC5, ⚑AC6, ⚑AC8, ⚑AC12);
+> **AC1b BUILT 2026-11-09** — string scopes → `TenancyPath`, `JobKey`, origin writers, capture/restore; AC2 next). Open decisions: ⚑AC5–⚑AC12 (AC0 followed the recommendations of ⚑AC5, ⚑AC6, ⚑AC8, ⚑AC12);
 > ⚑AC3 is superseded by ⚑AC13.
 > **Repo:** `C:\Dev\YFex\YFex.Actors` (sibling, own `actors.slnx`, template YFex.Resilience / YFex.Time). Created 2026-11-05.
 > **Origin:** atlas F05 ("actor identity is defined three times"). ⚑RA8 (2026-11-04) decided to move the actor types out of

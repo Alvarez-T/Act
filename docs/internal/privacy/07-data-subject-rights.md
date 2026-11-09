@@ -23,6 +23,10 @@
   ledger entry and erasure is scoped by `KeyScope(tenant)`. A request never crosses tenants.
 - A subject is identified by `DataSubjectReference(Person, "customer", "<customer id>")`. Id types carry `[DataSubjectKey("customer")]`
   once (02 §4).
+- **People who act** (staff, account holders) appear in records as YFex.Actors `ActorIdentity` values (`user:8f3a2c@0=farmaviva`), whose
+  subject is the opaque account id, never a name. Their data subject is the account (`DataSubjectReference(Person, "user", subject)`);
+  erasure marks that subject erased in the actor directory (`ActorState.Erased`, actors AC2), so audit entries keep the opaque id and
+  render "removido" — the chain is never rewritten.
 - **Natural identifiers resolve to subjects** through the identifier column: by blind index when the column is encrypted
   (`Pseudonymize(cpf, Identifier("cpf"))`), by canonical value otherwise. The request record, the erasure log and the audit keep only
   the pseudonym, never the clear identifier. The **resolver is generated** from the inventory: any

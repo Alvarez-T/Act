@@ -23,7 +23,7 @@ public sealed record OfflineEnvelope(
     Guid IdempotencyKey,                     // created once; also sent as the "yfex-idempotency" header on ONLINE calls (Phase 0)
     InstallationId Installation, long InstallationSequence,          // gap-free per installation, persisted — replay order no longer depends on the wall clock
     string CommandType, ReadOnlyMemory<byte> Payload,
-    ActorIdentity Actor, ActorIdentity? RealActor,    // from the session — not from whoever is connected at replay (F4)
+    ActorIdentity Actor, ActorIdentity? RealActor,    // YFex.Actors; from the session, else ActorContext.Capture() at enqueue (F4)
     Guid Session,                            // the OfflineSession (05 §5) the actor was signed in with
     string Scope,                            // the scope at creation time — not the scope at replay (F4)
     OfflineProvenance Provenance,            // mode, coordinated by, snapshot version, trusted time, flags (05 §6)
@@ -40,9 +40,12 @@ public enum ReceiptOutcome : byte { Applied = 1, AppliedWithFindings = 2, Reject
 ```
 
 - **Who is the caller at replay?** The connection belongs to the **installation** (installation assertion or mTLS), which holds the internal
-  permission `offline.replay`. Central verifies the envelope signature and then enters `ActorContext` with
-  `Actor = envelope.Actor` and `OfflineContext.Current = envelope.Provenance`. Ana's 10:00 sales stay Ana's even if Bruno is logged in
-  at 14:00. Audit and logging read the same `ActorContext` (⚑Z3).
+  permission `offline.replay`. Central verifies the envelope signature and then restores the envelope's actor
+  (`ActorContext.Restore(new ActorSnapshot(envelope.Actor, envelope.RealActor, …, Origin: envelope.Installation))`, YFex.Actors) and
+  `OfflineContext.Current = envelope.Provenance`. Ana's 10:00 sales stay Ana's even if Bruno is logged in at 14:00, and their origin stays
+  the terminal that rang them up: the replay at central is provenance, not origin (actors ⚑AC16). Audit and logging read the same
+  `ActorContext` (⚑Z3). Built in actors AC1b (2026-11-09): the terminal fills the envelope from the offline session, else from the
+  outbox row's `ActorSnapshot` captured at enqueue.
 - The envelope is created **once**, at the first dispatch, even online. A call that ends "in doubt" is re-sent with the same key
   ([04](04-connectivity-and-failover.md) §4).
 

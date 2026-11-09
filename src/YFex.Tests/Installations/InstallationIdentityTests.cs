@@ -1,5 +1,6 @@
 using Xunit;
 using YFex.Installations;
+using YFex.Tenancy;
 
 namespace YFex.Tests.Installations;
 
@@ -10,7 +11,7 @@ public sealed class LocalInstallationCollection;
 public sealed class InstallationIdentityTests
 {
     private static InstallationIdentity Identity() => new(new(Guid.NewGuid()), InstallationRole.Terminal,
-        "", "CAIXA-02", new InstallationNotEnrolled());
+        TenancyPath.None, "CAIXA-02", new InstallationNotEnrolled());
 
     [Fact]
     public void Lifecycle_data_is_available_through_exhaustive_union_matching()
@@ -45,7 +46,7 @@ public sealed class InstallationIdentityTests
             LocalInstallation.Publish(identity);
             LocalInstallation.Publish(identity with { });
             LocalInstallation.Publish(identity with { Status = new InstallationNotEnrolled() });
-            var enrolled = identity with { Scope = "0=farmaviva/1=loja-centro",
+            var enrolled = identity with { Scope = TenancyPath.Parse("0=farmaviva/1=loja-centro"),
                 Status = new InstallationEnrolled(new(DateTimeOffset.UnixEpoch, DateTimeOffset.UnixEpoch.AddDays(90))) };
             LocalInstallation.Publish(enrolled);
             Assert.Equal(2, received.Count);

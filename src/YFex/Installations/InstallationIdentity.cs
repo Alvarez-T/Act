@@ -1,4 +1,5 @@
 using YFex.Cryptography;
+using YFex.Tenancy;
 
 namespace YFex.Installations;
 
@@ -23,7 +24,7 @@ public enum InstallationRevokedBy : byte { Central = 1, SiteBroker = 2 }
 /// <summary>Enrollment lifecycle states; each state carries only its applicable data.</summary>
 public readonly union InstallationStatus(InstallationNotEnrolled, InstallationEnrolled, InstallationProvisional, InstallationRevoked);
 
-/// <summary>Immutable identity metadata. Scope is canonical tenancy text, interpreted by the runtime.</summary>
+/// <summary>Immutable identity metadata. <see cref="Scope"/> is where the installation belongs in the tenancy hierarchy (never <see cref="TenancyPath.None"/> once enrolled).</summary>
 /// <remarks>DisplayName is for display only. Possessing this value does not prove enrollment or authority.</remarks>
-public sealed record InstallationIdentity(InstallationId Id, InstallationRole Role, string Scope,
+public sealed record InstallationIdentity(InstallationId Id, InstallationRole Role, TenancyPath Scope,
     string DisplayName, InstallationStatus Status);

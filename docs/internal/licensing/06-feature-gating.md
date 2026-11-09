@@ -34,7 +34,7 @@ public enum DenialKind { …, JustificationRequired = 7, Unavailable = 8 }
 - **The denial says why.** When a required permission was removed by availability, the gate returns
   `Denial(DenialKind.Unavailable, Missing: delivery.dispatch, Code: "delivery")` — even if the user also lacks it, because no role
   change can fix it. The app's error presenter shows "not in your plan" (01 §4).
-- **Service actors are masked too.** A marketplace webhook running as `ActorKind.Service` with every permission still loses
+- **Service actors are masked too.** A marketplace webhook running as `ActorKind.Service` (YFex.Actors) with every permission still loses
   `delivery.*` when the tenant's delivery module ended. Server automations need no extra checks.
 - **Never masked** (enforced by licensing, documented by the hook): licensing's own permissions, keep-lists and — per state — base
   (04 §3 table).

@@ -168,3 +168,32 @@ kind prefix (`"user:"`, `"job:"`) passed where an actor is expected.
     projector fed by `ActorClaims.SubjectOf`. Design docs still to point at YFex.Actors (04 list): authorization-consolidation 10
     (has another session's uncommitted edits — left alone), audit 02 §3, offline envelope docs, notifications 02/05, Jobs Plan D
     §6.1, licensing 06, privacy 07.
+
+- 2026-11-09 — **AC1b built: TenancyPath sweep, JobKey, origin writers, capture/restore.** AC1a committed first (user decision), one
+  commit per repo with only its files; other sessions' uncommitted work left out.
+  - **TenancyPath:** core `InstallationIdentity.Scope`; `IAuthorizationContext.Scope`, `ApprovalToken/ApprovalGrant/ApprovalEvent.ApproverScope`,
+    `ApprovalExpectation.Scope`, `IPermissionDirectory`/`IPermissionHistory`/`IRoleDirectory` scope parameters, `ImpersonationEvent.TargetScope`;
+    Authentication `HomeScope` → `Home` (session, caller, account, session record, `ListByHomeAsync`). **Deviation:** Installations' and
+    Offline's signed payloads (certificate claims, roster, receipts, presence, revocations, envelope scope, `PermissionSnapshot.Scope`) keep
+    their canonical text and convert at the boundary; DB columns (`home_scope`), the `scope_home` claim and wire texts are unchanged.
+  - **JobKey (⚑AC14), engine-wide (user decision):** `YFex.Jobs.Primitives.JobKey` (grammar = actor subject: ≤ 128 UTF-8 bytes, no
+    controls, no `@`, one `#` between template and instance; `Of`, `Instance`, `NewInstance` (UUIDv7), `Parse/TryParse`, `ToActor(home)`,
+    JSON text) replaces `JobKeys`/`JobInstanceIds` in every contract: `IJobStore`, rows/views/history/overrides, `IJobControl`, `JobRef`
+    (string still converts), descriptors, settings, Templates' instances API, Capabilities. Generated typed keys are `static readonly JobKey`;
+    new **YJOB010** (invalid `[Job]` key), YJOB009 checks template keys with the same rules. Stores keep text. Engine internals keyed by
+    run key stay strings. `SchedulerOptions.InstallationId` is an `InstallationId?`.
+  - **Origin writers (⚑AC16):** `caller.ToActorScope(origin)` + `ActorScopeExtensions.OriginOf(principal)` (token `installation` claim);
+    HTTP middleware (token's installation); RPC `CallContext.Origin` from new `ICallOriginSource` (YFex.Installations.Rpc: asserted
+    installation) else the token's; desktop/terminal session accessors: `LocalInstallation.Current`; Jobs dispatcher: every run enters
+    `jobKey.ToActor(scope)` with the scheduler's installation (except `UnscopedJobsInheritAmbientScope`, which keeps the session).
+  - **Capture/restore:** Messaging `OutboxEntry.Actor` (ActorSnapshot bytes, trailing member) captured at enqueue, restored on replay;
+    Offline `QueuedCommand.Actor` fills the envelope when there is no offline session; central replay restores the envelope's actor
+    with the terminal as origin. YFex.Web `HttpScopeContext` user rung via `ActorClaims.SubjectOf`.
+  - **Docs:** audit 02 §3, offline 08, notifications 02/05, Jobs Plan D §6.1, licensing 06, privacy 07. authorization-consolidation 10 not
+    edited (another session's uncommitted edits).
+  - **Bugs found:** `JobKey != null` (always true) → `IsEmpty`; metric/trace tags boxed `JobKey` → text.
+  - **Tests (Release):** core 278 · Actors 153 · Tenancy 34 · Installations 274 · Authorization 168 · Audit 33 · Offline 144 ·
+    Authentication 212 · Messaging 316 (2 skipped) · Cqrs 57 · Capabilities 48 · Search 58 · Jobs 196 (24 new JobKey/YJOB010) ·
+    NavigatR 139 with its 5 known failures. AOT smokes Actors, Audit, Offline, Authentication, Capabilities, Jobs: 0 IL warnings, exit 0.
+  - **Gotchas:** builds need `-p:WarningsNotAsErrors="NU1510;NU1902"` while another session's package cleanup is half done.
+  - **Next:** AC2 (names at read time; waits on Audit ⚑A29 / Notifications); Jobs D2b chain (Authorization resolver → Audit → grant).

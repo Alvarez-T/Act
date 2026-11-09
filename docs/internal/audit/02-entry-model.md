@@ -133,63 +133,36 @@ Two different things are called "impersonation" in the ecosystem today, and an A
 | AI agent executes a tool call started by a user | `agent:pricing-assistant` (`Agent`) | `maria` (the human who started it) | `AgentOnBehalf` |
 | Scheduled job | `job:estoque.reprocessar` (`Job`) | the user who scheduled/overrode it, if known | `Delegation` or `None` |
 
-```csharp
-/// <summary>Closed set: the library decides retention/permissions/rendering per kind.</summary>
-public enum AuditActorKind : byte { Anonymous = 0, User = 1, Service = 2, Device = 3, Job = 4, Agent = 5, System = 6 }
-
-/// <summary>Closed set: how the real actor relates to the effective one.</summary>
-public enum ActorRelation : byte { None = 0, TenantImpersonation = 1, UserImpersonation = 2, Delegation = 3, AgentOnBehalf = 4 }
-
-/// <summary>
-/// An identity as recorded: kind + stable id (the subject key, e.g. NameIdentifier/sub) + home tenant when it differs from the
-/// entry's tenant. NEVER a display name or e-mail: names are resolved at read time (09 §2), so erasing a person never touches the chain.
-/// </summary>
-public readonly record struct AuditActor(AuditActorKind Kind, string Id, string? HomeTenant = null)
-{
-    public static AuditActor Anonymous => new(AuditActorKind.Anonymous, "");
-}
-```
-
-**Ambient actor (new, core).** Today the real actor is lost after the Web middleware returns. `ActorContext` is set **once** by whoever
-establishes identity (Web middleware, Rpc `CallContextMiddleware`, Avalonia login, job runner, agent loop) and read by every
-audit producer. It lives in YFex core (namespace `YFex.Auditing`) because Tenancy, Web, Rpc, Jobs and Automation all set it and must
-not reference the audit engine.
+**The actor types live in YFex.Actors** (actors AC1, 2026-11-05; atlas F05). Audit's own `AuditActorKind`, `AuditActor` and
+`ActorRelation` were deleted; entries hold `YFex.Actors.ActorIdentity`, and the codec writes its canonical bytes. The model is in
+`../actors/02-model-and-core-types.md`; in short:
 
 ```csharp
-public sealed class ActorContext
-{
-    public static ActorContext? Current { get; }                         // AsyncLocal, flows across await
-    public AuditActor Actor { get; }
-    public AuditActor? RealActor { get; }
-    public ActorRelation Relation { get; }
-    public string? SessionId { get; }
-    public string? DeviceId { get; }
+using YFex.Actors;
 
-    /// <summary>Makes this context ambient until the returned scope is disposed (restores the previous one).</summary>
-    public static ActorContext.Activation Enter(in AuditActor actor, in AuditActor? realActor = null,
-        ActorRelation relation = ActorRelation.None, string? sessionId = null, string? deviceId = null);
-    public readonly struct Activation : global::System.IDisposable { public void Dispose(); }
-}
+// kind numbers = this design's former AuditActorKind numbering (⚑AC2 / ⚑RA10): Anonymous 0 … System 6
+ActorIdentity cashier = ActorIdentity.User("8f3a2c", TenancyPath.Parse("0=farmaviva/1=loja7"));   // never a name or e-mail
+ActorIdentity job     = jobKey.ToActor(home);                                                    // YFex.Jobs' JobKey (⚑AC14)
 
-/// <summary>
-/// Fallback when no ActorContext is ambient: adapters per host (CallContext, IPrincipalAccessor, desktop session).
-/// Registered in DI; the engine asks them in order. One call per audited operation, not per field.
-/// </summary>
-public interface IAuditActorSource
-{
-    bool TryGetActor(out AuditActor actor, out AuditActor? realActor, out ActorRelation relation);
-}
+// ambient actor: actor, real actor, relation, session and origin (the installation where the work started, ⚑AC16)
+ActorScope? who = ActorContext.Current;
+ActorSnapshot stored = ActorContext.Capture();          // outbox rows, job queues, offline envelopes
+using (ActorContext.Restore(stored)) { /* replay */ }   // keeps the original origin
 ```
 
-Who sets it (01 §3, phase 2/4):
+`IAuditActorSource` stays as the fallback when no scope is ambient (`TryGetActor(out ActorIdentity actor, out ActorIdentity? realActor,
+out ActorRelation relation)`); the engine reads `ActorContext.Current` first (actor, real actor, relation, session id).
 
-| Host | Change |
+Who sets it (one writer per host; libraries only read `ActorContext.Current`):
+
+| Host | Writer |
 |---|---|
-| YFex.Web `TenantResolutionMiddleware` | After a successful impersonation: `ActorContext.Enter(actor, realActor: actor with HomeTenant, TenantImpersonation)` around `next(context)` |
-| Messaging.Rpc `CallContext` | New `RealSubject`, `Relation`, `SessionId`, `DeviceId` (from the identity source, e.g. claims `act` (RFC 8693 actor claim) / `yfex:device`); `CallContextMiddleware` enters `ActorContext` with the call context |
-| Desktop / POS login | The app's session service enters `ActorContext` for the logged user; supervisor overrides enter a nested `Delegation` scope |
-| YFex.Jobs dispatcher | `Job` actor (job key); `RealActor` = the user who created/overrode the schedule when known |
-| Automation agent loop | `Agent` actor; real actor = the trigger's user |
+| YFex.Authorization `YFexAuthorizationMiddleware` (HTTP) | Enters `caller.ToActorScope(origin)` for the request; origin = the installation the token is bound to |
+| Messaging.Rpc `CallContext` | Enters the call's scope; origin = YFex.Installations.Rpc's asserted installation (`ICallOriginSource`), else the token's bound installation |
+| Desktop / POS sign-in | `AmbientPrincipalAccessor` / `SnapshotPrincipalAccessor` set the session scope; origin = the local installation |
+| YFex.Jobs dispatcher | Each run enters its job actor (`jobKey.ToActor(scope)`), origin = the scheduler's installation; run-as is Plan D2b |
+| Offline replay at central | Restores the envelope's actor with the terminal as origin (the replay itself is Offline provenance) |
+| Automation agent loop | `Agent` actor; real actor = the trigger's user (`ActorScope.OnBehalf`) |
 
 ## 4. Tenant scope
 
@@ -289,8 +262,8 @@ for the root audited operation, so nested entries still share one), `OperationId
 | Type | Kind | Purpose |
 |---|---|---|
 | `AuditEntryId`, `AuditAction`, `AuditCategory`, `AuditTarget`, `AuditReason`, `AuditApproval`, `AuditDecision` | structs | values above |
-| `AuditActorKind`, `ActorRelation`, `ChangeKind`, `ValueTreatment`, `ApprovalSource`, `AuditEntryFlags`, `AuditDurability` | enums | closed sets |
-| `AuditActor`, `ActorContext`, `IAuditActorSource` | struct / class / interface | §3 |
+| `ChangeKind`, `ValueTreatment`, `ApprovalSource`, `AuditEntryFlags`, `AuditDurability` | enums | closed sets (actor kinds and relations: YFex.Actors) |
+| `IAuditActorSource` | interface | §3 (`ActorIdentity`, `ActorContext`: YFex.Actors) |
 | `ChangeWriter` | `ref struct` | writes targets and changes into the scope's pooled buffer (04 §2) |
 | `IAuditChanges<TSelf>`, `AuditEntityDescriptor` | interface (static abstract) / class | generated per `[AuditChanges]` type (04 §2) |
 | `AuditDescriptor`, `AuditDescriptor<T>`, `AuditDescriptorFor<T>` | classes / static slot | generated per audited message/event/`[Audit]` method (03 §3) |
