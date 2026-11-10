@@ -171,6 +171,40 @@ YFex.Authorization.Public (no YFex.Time reference: the trusted-time contracts ar
 persisting `LocalState` sealed in `IKeyValueStore`, reading `LicensedInstallation` from Installations) — needed before an app can use it;
 it fits LC-P2 together with the Authorization hook. Gating (LC-P2), central (P3), vendor service (P4), check-in (P5).
 
+### LC-P2 — 2026-11-09 ✅
+
+The user approved the proposal (2026-11-09): the Authorization hook, `.Base(...)` for read-only masking, `TenantRoot` = SHA-256 of the DER
+tenant root certificate.
+
+- **YFex.Authorization (A1, A2, A4):** `IPermissionAvailability` (`UnavailableIn(scope)` returns a precomputed set; `Explain` on the
+  denial path only), applied by `AuthorizationContextFactory` after every source and by `AuthorizationContext.FromSnapshot(snapshot,
+  availability)`; `IAuthorizationContext.Unavailable` / `ExplainUnavailable` (default members); **`DenialKind.Unavailable = 10`** (8 and 9
+  were taken by step-up and site presence); `Denial.UnavailableOf` and `Denial.ForMissing` (unavailable → restricted while impersonating
+  → missing), used by the policy evaluator and resource requirements; tenant impersonation keeps the mask; `SnapshotPrincipalAccessor`
+  takes the availabilities and, as an `IAuthorizationChangeObserver`, rebuilds `Current` on `AllPermissionsChanged` before
+  `Changed` subscribers re-check. 5 new tests (105 total).
+- **YFex.Licensing:** `ProductBuilder.Base(...)` + `LicensedProduct.BasePermissions` (manifest gains `"base"`; a base permission inside
+  a module fails); `LicensePermissionAvailability` (masks unavailable modules minus their keep-lists, and the base minus the product
+  keep-list when base is off; codes = module id or `base`; recomputed only on `ILicense.Changed`, then
+  `IAuthorizationSignals.AllPermissionsChanged()`); `AddYFexLicensing(l => l.Product(...).TrustVendorKeys(...).Configure(...))`
+  (`ILicense` for one product, `Licenses.For(product)` for several, the availability, `LicensingHostedService`);
+  `peers.LicensingBundles()` (vendor publisher + gossip of the three kinds); `InstallationLicense.Restore`.
+- **Hosted service:** restores the local state in `StartingAsync` (the later instant wins, the earliest pending start wins), looks for the
+  bundle store every 2 s until it exists, then loads the stored key list, Licenses and the scope unit's ActivationList and follows
+  `BundleStore.Accepted`; re-reads the installation (from `LocalInstallation`, `InstallationStateStore` for the tenant root and the
+  evidence key) when it changes; evaluates every minute; persists the local state every 5 minutes and at stop in the app's
+  `IKeyValueStore` (register an encrypted one).
+- **Gates:** Licensing 60 tests on Windows and Linux; Authorization 105 + 44 + 12 + 12 on Windows; AOT smoke (now also DI + gating
+  through Authorization and Persistence) 0 IL warnings, exit 0.
+
+**Known limits / found:**
+- Until the bundle store exists (the first seconds of start-up) a read-only product shows its base masked: fail-closed; keep-lists work.
+- Central masks per process, not per tenant (one `ILicense` per product): per-tenant licenses and seat-aware masking (A3) are LC-P3.
+- `YFex.Authorization.Tests.LeafGuardTests.Public_project_declares_only_the_core_and_actors_references` fails on Linux (pre-existing:
+  `Path.GetFileName` on a `..\`-style include path). Reported, not fixed (Authorization's test).
+- The Linux SDK (11.0.100-preview.4) and the Windows one (rc.3) disagree on patterns over nullable unions; licensing reads the case through
+  `Value` there.
+
 **Found:** YFex.Installations and YFex.Networking fail to restore with SDK 11.0.100-rc.3 (NU1510 as error: they reference
 `Microsoft.Extensions.DependencyInjection.Abstractions` / `Hosting.Abstractions`, which the SDK now prunes). Licensing builds with
 `-p:WarningsNotAsErrors=NU1510` until their owners remove the references.

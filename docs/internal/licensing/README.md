@@ -2,7 +2,8 @@
 
 > **Status:** ⚑LC1–LC22 approved 2026-11-09 (§6). **LC-P1 BUILT 2026-11-09** (repo `C:\Dev\YFex\YFex.Licensing`: catalog,
 > documents, vendor keys, evaluator; 50 tests on Windows and Linux, AOT 0 warnings) — see [10 §5](10-phases-and-acceptance.md).
-> Next: LC-P2 gating, blocked on Authorization A1–A4 (not requested yet).
+> **LC-P2 BUILT 2026-11-09** (Authorization hook A1/A2/A4 + licensing gating + `AddYFexLicensing`). Next: LC-P3 central seats
+> (with A3, seat-aware masking at central).
 > **Why:** the user asked (2026-10-07, Installations session) whether YFex.Installations could control the license. The agreed answer
 > ([installations 10](../installations/10-licensing-boundary.md), ⚑I23): licensing is a **separate library built on Installations**.
 > Installations answers *"which installed copy is this, and is that other copy ours?"*; Licensing answers *"what has this customer
