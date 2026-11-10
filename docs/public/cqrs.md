@@ -187,34 +187,43 @@ var registry = CompiledMessagingRegistry.Build(
 
 ### Step 1: Declare Message Records
 
-Records are nested under a domain aggregate. The source generator uses this nesting to scope the emitted static helpers:
+Messages are nested in the public contract: the record named after the concept (`Customer`, never `CustomerDto`). It hosts `Queries`, `Commands` and `Events` static classes, and the source generator uses this nesting to scope the emitted static helpers:
 
 ```csharp
 using YFex.Cqrs;
 
-public partial class Customer
+public partial record Customer(CustomerId Id, PartyName Name, CpfCnpj CpfCnpj, Email Email)
 {
     public static partial class Queries
     {
-        public partial record GetByIdQuery(Guid Id) : IQuery<Customer>;
+        public partial record GetByIdQuery(CustomerId Id) : IQuery<Customer>;
         public partial record ListQuery(int Page, int PageSize) : IQuery<PagedResult<Customer>>;
     }
 
     public static partial class Commands
     {
-        public partial record CreateCommand(string Name, string Email) : ICommand<Customer>;
-        public partial record UpdateNameCommand(Guid Id, string NewName) : ICommand;
+        public partial record CreateCommand(PartyName Name, Email Email) : ICommand<Customer>;
+        public partial record UpdateNameCommand(CustomerId Id, PartyName NewName) : ICommand;
     }
 
     public static partial class Events
     {
-        public partial record Created(Guid Id, string Name) : IEvent;
-        public partial record NameUpdated(Guid Id, string OldName, string NewName) : IEvent;
+        public partial record Created(CustomerId Id, PartyName Name) : IEvent;
+        public partial record NameUpdated(CustomerId Id, PartyName OldName, PartyName NewName) : IEvent;
     }
 }
 ```
 
-> **Warning:** Every record and every enclosing class must be `partial`. The source generator extends them with static call helpers.
+The container can also be a `partial class`, `partial record struct` or `partial struct`. The generated part repeats the container's keyword and accessibility. Domain projects use the record form ([domain rules](../agent/rules/domain.md)), with value-object parameters.
+
+> **Warning:** The container, the `Queries` / `Commands` / `Events` classes and every message record must be `partial`, and the nested classes must also be `static`. The container must be a top-level, non-generic type. The generator reports misuse instead of skipping it silently:
+>
+> | ID | Severity | Cause |
+> |---|---|---|
+> | YFCQRS001 | Error | Container is not `partial` |
+> | YFCQRS002 | Error | `Queries` / `Commands` / `Events` is not a `static partial class` |
+> | YFCQRS003 | Warning | Message is not a `partial record` |
+> | YFCQRS004 | Error | Container is nested in another type, generic or file-local |
 
 ### Step 2: Create a Configuration Class
 
@@ -262,13 +271,13 @@ The source generator emits static methods that route through `YFexDispatcherProv
 Result<Customer> result = await Customer.Queries.GetById(customerId);
 
 // Command with result
-QueueableResult<Customer> created = await Customer.Commands.Create("Alice", "alice@example.com");
+QueueableResult<Customer> created = await Customer.Commands.Create(name, email);
 
 // Void command
-QueueableResult updated = await Customer.Commands.UpdateName(id, "Bob");
+QueueableResult updated = await Customer.Commands.UpdateName(id, newName);
 
 // Event
-await Customer.Events.RaiseCreated(new Customer.Events.Created(id, "Alice"));
+await Customer.Events.Raise(new Customer.Events.Created(id, name));
 ```
 
 ---

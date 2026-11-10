@@ -171,6 +171,9 @@ permission fail it with `jobs.run-as.forbidden` (Plan D ⚑J22).
 
 ### 2.7 One actor model in YFex core (⚑RA8, decided 2026-11-04)
 
+> **2026-11-05 update:** the user chose a separate package **`YFex.Actors`** instead of the core folder; ⚑RA10 = Audit's numbering,
+> ⚑RA11 = namespace `YFex.Actors`, home scope stays text; stored formats break cleanly. Plan: [actors/](../actors/README.md).
+
 The user chose to **move the actor types to YFex core** (`YFex/src/YFex`, base types every library may reference), instead of keeping
 two models mapped by name. Five-plus libraries name them today (Authorization, Audit, Authentication, Offline, Capabilities, Jobs,
 Search; tests in Cqrs, Messaging, NavigatR, Rules.Admin).

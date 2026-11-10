@@ -140,7 +140,7 @@ Checks against cycles and layering rules:
 | YFex.Persistence.Encryption | yes | becomes a thin adapter (09 §2) |
 | YFex.Messaging.Rpc | yes | `EventChannel` audience tokens (C4). Already layer 4, heavy dependencies anyway |
 | YFex.Cqrs | no | |
-| YFex.Web / Web.Data | Web.Data yes; `YFex.Web` keeps `ISecretProtector` (or obsoletes it, 09 §4) | |
+| YFex.Web / Web.Data | Web.Data yes; `ISecretProtector` moved to YFex.Cryptography (2026-11-05, atlas F08) | |
 | YFex.Devices | optional later | remoting reuses Offline's installation certificates (⚑O6), not a direct dependency |
 | YFex.Fiscal | later, certificates only | NF-e XMLDSig needs `System.Security.Cryptography.Xml` (package, ⚑K14). Stays in Fiscal |
 | YFex.Payment | no (P-class) | webhook formats are provider-mandated; C9 fix uses core canonical encoding |

@@ -204,7 +204,7 @@ and has a uniqueness test. This table is the cross-library view:
 | Domain | Owner | Used for |
 |---|---|---|
 | `yfex.store.v1` | Persistence.Encryption | sealing context of `IKeyValueStore` values (parts: store, key) |
-| `yfex.web.secret.v1` | Web.Data | credential columns (parts: tenant, table, column, row id) |
+| `yfex.secret.v1` | Cryptography `SealedSecretProtector` (was `yfex.web.secret.v1` in Web.Data until 2026-11-05, atlas F08) | secrets in app rows (parts: tenant, table, column, row id) |
 | `yfex.secret-store.v1` | YFex.Cryptography | §7 `FileSecretStore` (parts: secret name; built 2026-10-18 as the generic store Automation adopts, 12 §4 question 3) |
 | `yfex.credential-verifier.v1` | Offline | offline login verifiers at rest |
 | `yfex.key-wrap.v1`, `yfex.key-ring-file.v1` | YFex.Cryptography | §7 |

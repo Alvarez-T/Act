@@ -88,17 +88,19 @@ Everything that comes **back** after a send. Four kinds, one receiver (`YFex.Not
 
 ## 5. Limits, licensing, time (⚑N9, ⚑N16, ⚑N19)
 
-- Per (scope, channel): a rate (token bucket) and a daily spend budget; over-limit → `DeliveryRefused(RateLimited | BudgetExhausted)`.
-  `CostPerMessage` from the provider's capabilities feeds the budget.
+- **Rate** per (scope, channel): a YFex.Resilience resource (`RateLimiterPolicy`, `PerScope = true`, built) → `RateLimited`.
+- **Budget** per (scope, channel): the generic YFex.Resilience **quota** (⚑N9; counter per key, Tenancy scope and period on
+  `ITrustedClock`, durable shared store) → `BudgetExhausted`. Notifications only declares the quotas; `CostPerMessage` from the
+  provider's capabilities is the amount consumed. The same quota serves AI spend and Authentication's OTP budget.
 - Authentication's stricter OTP rules (country allow-list, per-destination cooldowns, SMS budget) stay in Authentication and run
   **before** the channel call. Generic limits run after.
 - **Time:** "day", "quiet hours" and every expiry use `ITrustedClock` (core contract, YFex.Time engine) — a wrong PC clock must not
   reset a budget or revive an expired link. The scope's time zone comes from a shared `IScopeTimeZones` seam (proposed for core/Tenancy,
   adapted from Jobs' `IJobScopeTimeZones`); until it exists, a per-scope Notifications option. Quiet hours delay `Operational` and
   `Marketing` sends to the window's end; `Transactional` and critical alerts ignore them.
-- **Licensing (optional seam):** each send adds to meter `notifications.{channel}.sent` (`IUsageMeter`, licensing 07: totals only, no
+- **Licensing (optional seam; concepts owned by YFex.Licensing, ⚑N19):** each send adds to meter `notifications.{channel}.sent` (`IUsageMeter`, licensing 07: totals only, no
   person); a channel can be tied to a license module (licensing 06) → `DeliveryRefused(NotLicensed)`. Service actors are masked by the
-  license like any other (licensing 06 §1). Default seam: no meter, no gate.
+  license like any other (licensing 06 §1). Default seam: no meter, no gate. Meters never block; cost blocking is the quota above.
 - Webhook channel: HMAC-SHA256 signature over the body with a per-endpoint secret (YFex.Cryptography); no redirects; an allow-list of hosts.
 
 ## 6. Security and permissions (⚑N12)

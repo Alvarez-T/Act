@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-11-05T12:48:11-03:00",
-  "scanMs": 10392,
-  "contentHash": "451FBF0A3856C891",
+  "generatedAt": "2026-11-05T23:24:17-03:00",
+  "scanMs": 15253,
+  "contentHash": "C437C82430E81399",
   "root": "C:\\Dev\\YFex",
   "machine": "ALVAREZ-ASUS",
   "groups": [
@@ -71,11 +71,11 @@
         "tests": 1,
         "benchmarks": 0,
         "apps": 1,
-        "csFiles": 129,
-        "lines": 17515,
-        "testFiles": 20,
+        "csFiles": 132,
+        "lines": 17984,
+        "testFiles": 22,
         "aot": 1,
-        "lastChange": "2026-11-05T12:35:22"
+        "lastChange": "2026-11-05T22:54:40"
       },
       "docs": [
         {
@@ -96,20 +96,93 @@
         {
           "repo": "YFex",
           "isRepo": true,
-          "branch": "privacy/tier1-scrubber-and-leaks",
-          "lastCommit": "2026-11-05T12:37:08-03:00",
-          "lastSubject": "Atlas: F29 no longer lists Persistence.Tests (fixed)",
-          "dirty": 13,
-          "commits14d": 7
+          "branch": "main",
+          "lastCommit": "2026-11-05T22:34:35-03:00",
+          "lastSubject": "core: TenancyPath value object; actors plan decisions AC13-AC17",
+          "dirty": 12,
+          "commits14d": 13
         },
         {
           "repo": "YFex.Cqrs",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-05T11:24:09-03:00",
-          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
+          "lastCommit": "2026-11-05T13:12:34-03:00",
+          "lastSubject": "Command .Retry takes YFex.Resilience.RetryPolicy (atlas F04)",
+          "dirty": 1,
+          "commits14d": 2
+        }
+      ]
+    },
+    {
+      "id": "YFex.Actors",
+      "name": "Actors",
+      "group": "foundation",
+      "status": "building",
+      "progress": 55,
+      "summary": "One actor model for every library and app: ActorKind, ActorIdentity (text form + canonical bytes), ActorScope, ambient ActorContext with capture/restore for stored work, ActorStamp, ActorClaims, IActorDirectory contracts. Leaf above core.",
+      "next": "AC1b: string scopes to TenancyPath (Installations, Authentication, Authorization scope, Offline), JobKey in Jobs, origin writers (middleware, desktop sign-in, job runner).",
+      "pending": [],
+      "curated": true,
+      "repos": [
+        "YFex.Actors"
+      ],
+      "projects": [
+        "YFex.Actors.Benchmarks",
+        "YFex.Actors.AotSmoke",
+        "YFex.Actors",
+        "YFex.Actors.Tests"
+      ],
+      "platforms": [],
+      "metrics": {
+        "projects": 4,
+        "libraries": 1,
+        "generators": 0,
+        "tests": 1,
+        "benchmarks": 1,
+        "apps": 1,
+        "csFiles": 24,
+        "lines": 2365,
+        "testFiles": 12,
+        "aot": 2,
+        "lastChange": "2026-11-05T23:17:40"
+      },
+      "docs": [
+        {
+          "path": "YFex/docs/internal/actors/README.md",
+          "file": "YFex/docs/internal/actors/README.md",
+          "title": "YFex.Actors — who acts, in every library and every app — Plan",
+          "status": "Status: PROPOSED 2026-11-05; AC0 BUILT 2026-11-05 (the package only, no consumer moved — see 05 log), revised the same day for ⚑AC13–⚑AC17 (decided by the user); AC1a BUILT 2026-11-05 (consumers moved, old types deleted, F05 closed; AC1b — string scopes → TenancyPath, JobKey, origin writers — next). Open decisions: ⚑AC5–⚑AC12 (AC0 followed the recommendations of ⚑AC5, ⚑AC6, ⚑AC8, ⚑AC12); ⚑AC3 is superseded by ⚑AC13.",
+          "files": 1,
+          "flags": 23,
+          "lastDate": "2026-11-05",
+          "lastWrite": "2026-11-05T23:18:57",
+          "components": [
+            "YFex.Actors"
+          ]
+        },
+        {
+          "path": "YFex.Actors/README.md",
+          "file": "YFex.Actors/README.md",
+          "title": "YFex.Actors",
+          "status": null,
+          "files": 1,
+          "flags": 4,
+          "lastDate": "2026-11-05",
+          "lastWrite": "2026-11-05T23:19:17",
+          "components": [
+            "YFex.Actors"
+          ]
+        }
+      ],
+      "git": [
+        {
+          "repo": "YFex.Actors",
+          "isRepo": true,
+          "branch": "main",
+          "lastCommit": "2026-11-05T22:34:46-03:00",
+          "lastSubject": "Actors: TenancyPath home, Device(InstallationId), origin (AC13-AC17)",
           "dirty": 7,
-          "commits14d": 1
+          "commits14d": 2
         }
       ]
     },
@@ -149,7 +222,7 @@
         "lines": 4610,
         "testFiles": 5,
         "aot": 3,
-        "lastChange": "2026-10-04T09:24:44"
+        "lastChange": "2026-11-05T22:43:33"
       },
       "docs": [
         {
@@ -186,7 +259,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:38:19-03:00",
           "lastSubject": "Initial commit: import existing project sources",
-          "dirty": 0,
+          "dirty": 13,
           "commits14d": 0
         }
       ]
@@ -230,10 +303,10 @@
         "benchmarks": 0,
         "apps": 1,
         "csFiles": 99,
-        "lines": 21543,
+        "lines": 21557,
         "testFiles": 19,
         "aot": 12,
-        "lastChange": "2026-11-05T12:03:34"
+        "lastChange": "2026-11-05T23:06:18"
       },
       "docs": [
         {
@@ -270,7 +343,7 @@
           "branch": "main",
           "lastCommit": "2026-11-05T12:38:25-03:00",
           "lastSubject": "Initial import of YFex.Authentication",
-          "dirty": 0,
+          "dirty": 15,
           "commits14d": 1
         }
       ]
@@ -311,11 +384,11 @@
         "tests": 4,
         "benchmarks": 1,
         "apps": 0,
-        "csFiles": 98,
-        "lines": 11177,
-        "testFiles": 24,
+        "csFiles": 97,
+        "lines": 11009,
+        "testFiles": 23,
         "aot": 5,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T22:50:02"
       },
       "docs": [
         {
@@ -326,7 +399,7 @@
           "files": 11,
           "flags": 8,
           "lastDate": "2026-10-02",
-          "lastWrite": "2026-11-05T11:09:28",
+          "lastWrite": "2026-11-05T16:17:12",
           "components": [
             "YFex.Authorization"
           ]
@@ -350,10 +423,10 @@
           "repo": "YFex.Authorization",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-10-17T20:38:25-03:00",
+          "lastCommit": "2026-11-05T22:42:17-03:00",
           "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 44,
-          "commits14d": 0
+          "dirty": 33,
+          "commits14d": 1
         }
       ]
     },
@@ -594,10 +667,10 @@
         "benchmarks": 0,
         "apps": 1,
         "csFiles": 43,
-        "lines": 4169,
+        "lines": 4171,
         "testFiles": 13,
         "aot": 1,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T23:08:44"
       },
       "docs": [
         {
@@ -632,10 +705,10 @@
           "repo": "YFex.Capabilities",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-10-17T20:38:26-03:00",
+          "lastCommit": "2026-11-05T22:42:18-03:00",
           "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 28,
-          "commits14d": 0
+          "dirty": 2,
+          "commits14d": 1
         }
       ]
     },
@@ -720,7 +793,7 @@
         "lines": 9724,
         "testFiles": 17,
         "aot": 1,
-        "lastChange": "2026-11-05T11:37:45"
+        "lastChange": "2026-11-05T23:19:41"
       },
       "docs": [
         {
@@ -755,10 +828,10 @@
           "repo": "YFex.Cqrs",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-05T11:24:09-03:00",
-          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-          "dirty": 7,
-          "commits14d": 1
+          "lastCommit": "2026-11-05T13:12:34-03:00",
+          "lastSubject": "Command .Retry takes YFex.Resilience.RetryPolicy (atlas F04)",
+          "dirty": 1,
+          "commits14d": 2
         }
       ]
     },
@@ -808,11 +881,11 @@
         "tests": 6,
         "benchmarks": 1,
         "apps": 1,
-        "csFiles": 106,
-        "lines": 18255,
-        "testFiles": 36,
+        "csFiles": 108,
+        "lines": 18589,
+        "testFiles": 37,
         "aot": 7,
-        "lastChange": "2026-11-05T11:10:11"
+        "lastChange": "2026-11-05T13:24:41"
       },
       "docs": [
         {
@@ -823,7 +896,7 @@
           "files": 15,
           "flags": 8,
           "lastDate": "2026-10-27",
-          "lastWrite": "2026-11-05T12:48:00",
+          "lastWrite": "2026-11-05T15:39:34",
           "components": [
             "YFex.Cryptography"
           ]
@@ -849,7 +922,7 @@
           "branch": "main",
           "lastCommit": "2026-10-17T20:44:53-03:00",
           "lastSubject": "Initial commit: import existing project sources",
-          "dirty": 68,
+          "dirty": 71,
           "commits14d": 0
         }
       ]
@@ -1178,10 +1251,10 @@
           "repo": "YFex.Domain",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-10-17T20:38:27-03:00",
-          "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 4,
-          "commits14d": 0
+          "lastCommit": "2026-11-05T13:03:47-03:00",
+          "lastSubject": "Cpf and Telefone implement IExtractable",
+          "dirty": 1,
+          "commits14d": 1
         }
       ]
     },
@@ -1726,10 +1799,10 @@
         "benchmarks": 0,
         "apps": 4,
         "csFiles": 174,
-        "lines": 28624,
+        "lines": 28626,
         "testFiles": 18,
         "aot": 10,
-        "lastChange": "2026-11-05T12:42:18"
+        "lastChange": "2026-11-05T23:10:36"
       },
       "docs": [
         {
@@ -1764,10 +1837,10 @@
           "repo": "YFex.Jobs",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-03T21:57:47-03:00",
-          "lastSubject": "YFex.Jobs Plan D phase D0: user surface (YFex.Jobs.Templates)",
-          "dirty": 93,
-          "commits14d": 5
+          "lastCommit": "2026-11-05T22:42:19-03:00",
+          "lastSubject": "Commit pending work-in-progress changes",
+          "dirty": 2,
+          "commits14d": 7
         }
       ]
     },
@@ -1885,11 +1958,11 @@
         {
           "repo": "YFex.Logging",
           "isRepo": true,
-          "branch": "privacy/tier1-scrubber-and-leaks",
-          "lastCommit": "2026-11-05T12:24:20-03:00",
-          "lastSubject": "Scrub free text with YFex.Privacy and add Redaction settings",
-          "dirty": 2,
-          "commits14d": 1
+          "branch": "main",
+          "lastCommit": "2026-11-05T13:03:47-03:00",
+          "lastSubject": "Redaction: Detect<T>() for IExtractable value objects",
+          "dirty": 0,
+          "commits14d": 2
         }
       ]
     },
@@ -2016,10 +2089,10 @@
         "benchmarks": 0,
         "apps": 1,
         "csFiles": 157,
-        "lines": 20104,
+        "lines": 20113,
         "testFiles": 62,
         "aot": 6,
-        "lastChange": "2026-11-05T11:39:12"
+        "lastChange": "2026-11-05T23:20:38"
       },
       "docs": [
         {
@@ -2054,10 +2127,10 @@
           "repo": "YFex.Messaging",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-05T11:24:10-03:00",
-          "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-          "dirty": 1,
-          "commits14d": 1
+          "lastCommit": "2026-11-05T13:12:35-03:00",
+          "lastSubject": "Test: command .Retry folds into the ResilienceSpec (atlas F04)",
+          "dirty": 15,
+          "commits14d": 2
         }
       ]
     },
@@ -2132,10 +2205,10 @@
         "benchmarks": 0,
         "apps": 0,
         "csFiles": 40,
-        "lines": 5798,
+        "lines": 5799,
         "testFiles": 10,
         "aot": 0,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T23:08:44"
       },
       "docs": [
         {
@@ -2172,7 +2245,7 @@
           "branch": "main",
           "lastCommit": "2026-11-05T11:24:11-03:00",
           "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-          "dirty": 0,
+          "dirty": 1,
           "commits14d": 1
         }
       ]
@@ -2330,10 +2403,10 @@
         "benchmarks": 1,
         "apps": 1,
         "csFiles": 113,
-        "lines": 25241,
+        "lines": 25262,
         "testFiles": 20,
         "aot": 10,
-        "lastChange": "2026-11-05T12:03:34"
+        "lastChange": "2026-11-05T23:03:49"
       },
       "docs": [
         {
@@ -2368,10 +2441,10 @@
           "repo": "YFex.Offline",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-10-30T14:22:30-03:00",
-          "lastSubject": "Offline Phase 4c and 4d: custody and coordination on the site broker",
-          "dirty": 26,
-          "commits14d": 4
+          "lastCommit": "2026-11-05T22:42:18-03:00",
+          "lastSubject": "Commit pending work-in-progress changes",
+          "dirty": 21,
+          "commits14d": 5
         }
       ]
     },
@@ -2559,10 +2632,10 @@
           "repo": "YFex.Persistence",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-11-05T12:37:08-03:00",
-          "lastSubject": "Fix Persistence tests for the key-value store API",
-          "dirty": 6,
-          "commits14d": 2
+          "lastCommit": "2026-11-05T13:02:59-03:00",
+          "lastSubject": "Move Windows key store out of Persistence.Encryption (atlas AUTO-PLATFORM)",
+          "dirty": 0,
+          "commits14d": 3
         }
       ]
     },
@@ -2571,9 +2644,9 @@
       "name": "Privacy",
       "group": "identity",
       "status": "building",
-      "progress": 38,
+      "progress": 45,
       "summary": "Data classification on value-object types ([Sensitive], DataSensitivity in core), masks, scrubbing; later consent by purpose, pseudonyms, crypto-shredding and data-subject rights.",
-      "next": "TextScrubber + logging Redaction and the Web credential leak done 2026-11-05. PortableSecretStore sealed and IExtractable (Cpf/Telefone, TextScrubber.Add<T>) built 2026-11-05. Tier 1 remainder: Profiling scrubber/hashing, UI mask presenter. Tier 2 is built with the features that need it (health, loyalty, rights, AI). Runtime types live in core; the repo holds only the generator.",
+      "next": "Tier 1 done 2026-11-05 (TextScrubber, logging Redaction, IExtractable, PropertyRedactor in Profiling, Web credential and PortableSecretStore leaks) except the UI mask presenter (last). Next: Phase 2 Pseudonymizer (Profiling hashing, logging Hash mode). Runtime types live in core; the repo holds the generator and the runtime engines.",
       "pending": [],
       "curated": true,
       "repos": [
@@ -2594,11 +2667,11 @@
         "tests": 2,
         "benchmarks": 0,
         "apps": 1,
-        "csFiles": 12,
-        "lines": 2071,
-        "testFiles": 3,
+        "csFiles": 15,
+        "lines": 2482,
+        "testFiles": 4,
         "aot": 2,
-        "lastChange": "2026-11-05T12:43:17"
+        "lastChange": "2026-11-05T13:15:10"
       },
       "docs": [
         {
@@ -2609,7 +2682,7 @@
           "files": 15,
           "flags": 26,
           "lastDate": "2026-11-05",
-          "lastWrite": "2026-11-05T12:45:27",
+          "lastWrite": "2026-11-05T13:16:17",
           "components": [
             "YFex.Privacy"
           ]
@@ -2632,11 +2705,11 @@
         {
           "repo": "YFex.Privacy",
           "isRepo": true,
-          "branch": "privacy/tier1-scrubber-and-leaks",
-          "lastCommit": "2026-11-05T12:24:19-03:00",
-          "lastSubject": "Add TextScrubber runtime (privacy 06)",
-          "dirty": 7,
-          "commits14d": 1
+          "branch": "main",
+          "lastCommit": "2026-11-05T13:19:10-03:00",
+          "lastSubject": "Add NameConventions and PropertyRedactor (privacy 02 §5.2, 06 §6)",
+          "dirty": 0,
+          "commits14d": 3
         }
       ]
     },
@@ -2669,11 +2742,11 @@
         "tests": 1,
         "benchmarks": 0,
         "apps": 0,
-        "csFiles": 67,
-        "lines": 3393,
+        "csFiles": 68,
+        "lines": 3494,
         "testFiles": 16,
         "aot": 0,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T13:14:46"
       },
       "docs": [
         {
@@ -2695,10 +2768,10 @@
           "repo": "YFex.Profiling",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-10-17T20:38:31-03:00",
-          "lastSubject": "Commit pending work-in-progress changes",
+          "lastCommit": "2026-11-05T13:19:09-03:00",
+          "lastSubject": "Redact telemetry with YFex.Privacy's PropertyRedactor",
           "dirty": 2,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -2768,10 +2841,10 @@
           "repo": "YFex.Resilience",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-10-17T20:38:31-03:00",
-          "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 13,
-          "commits14d": 0
+          "lastCommit": "2026-11-05T13:12:34-03:00",
+          "lastSubject": "RetryDelay + RetryBudget: Polly-free delays for stored retries (atlas F04)",
+          "dirty": 11,
+          "commits14d": 1
         }
       ]
     },
@@ -2868,10 +2941,10 @@
         "benchmarks": 0,
         "apps": 0,
         "csFiles": 27,
-        "lines": 1908,
+        "lines": 1909,
         "testFiles": 8,
         "aot": 0,
-        "lastChange": "2026-11-05T11:02:40"
+        "lastChange": "2026-11-05T23:08:44"
       },
       "docs": [
         {
@@ -2893,10 +2966,10 @@
           "repo": "YFex.Search",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-10-17T20:38:32-03:00",
+          "lastCommit": "2026-11-05T22:42:24-03:00",
           "lastSubject": "Commit pending work-in-progress changes",
-          "dirty": 4,
-          "commits14d": 0
+          "dirty": 1,
+          "commits14d": 1
         }
       ]
     },
@@ -3116,11 +3189,11 @@
         {
           "repo": "YFex",
           "isRepo": true,
-          "branch": "privacy/tier1-scrubber-and-leaks",
-          "lastCommit": "2026-11-05T12:37:08-03:00",
-          "lastSubject": "Atlas: F29 no longer lists Persistence.Tests (fixed)",
-          "dirty": 13,
-          "commits14d": 7
+          "branch": "main",
+          "lastCommit": "2026-11-05T22:34:35-03:00",
+          "lastSubject": "core: TenancyPath value object; actors plan decisions AC13-AC17",
+          "dirty": 12,
+          "commits14d": 13
         },
         {
           "repo": "YFex.System",
@@ -3159,11 +3232,11 @@
         "tests": 1,
         "benchmarks": 0,
         "apps": 0,
-        "csFiles": 38,
-        "lines": 1450,
-        "testFiles": 4,
+        "csFiles": 40,
+        "lines": 1516,
+        "testFiles": 5,
         "aot": 2,
-        "lastChange": "2026-10-29T19:26:54"
+        "lastChange": "2026-11-05T17:03:35"
       },
       "docs": [
         {
@@ -3185,10 +3258,10 @@
           "repo": "YFex.Tenancy",
           "isRepo": true,
           "branch": "main",
-          "lastCommit": "2026-10-17T20:38:33-03:00",
-          "lastSubject": "Commit pending work-in-progress changes",
+          "lastCommit": "2026-11-05T22:34:40-03:00",
+          "lastSubject": "Tenancy: parse with core's TenancyPath grammar; conversions",
           "dirty": 1,
-          "commits14d": 0
+          "commits14d": 1
         }
       ]
     },
@@ -3333,11 +3406,11 @@
         {
           "repo": "YFex",
           "isRepo": true,
-          "branch": "privacy/tier1-scrubber-and-leaks",
-          "lastCommit": "2026-11-05T12:37:08-03:00",
-          "lastSubject": "Atlas: F29 no longer lists Persistence.Tests (fixed)",
-          "dirty": 13,
-          "commits14d": 7
+          "branch": "main",
+          "lastCommit": "2026-11-05T22:34:35-03:00",
+          "lastSubject": "core: TenancyPath value object; actors plan decisions AC13-AC17",
+          "dirty": 12,
+          "commits14d": 13
         },
         {
           "repo": "YFex.UI",
@@ -3419,7 +3492,7 @@
       "status": "done",
       "progress": 80,
       "summary": "Outbound HTTP API clients (Refit): per-scope endpoints and credentials, token handling, sealed secrets in SQL (Web.Data), ASP.NET Core glue.",
-      "next": "Move ISecretProtector to Cryptography (F08); confirm the web-tenancy plan status.",
+      "next": "Confirm the web-tenancy plan status.",
       "pending": [],
       "curated": true,
       "repos": [
@@ -3445,11 +3518,11 @@
         "tests": 4,
         "benchmarks": 0,
         "apps": 1,
-        "csFiles": 86,
-        "lines": 6468,
-        "testFiles": 27,
+        "csFiles": 78,
+        "lines": 5430,
+        "testFiles": 24,
         "aot": 1,
-        "lastChange": "2026-11-05T11:38:27"
+        "lastChange": "2026-11-05T13:25:28"
       },
       "docs": [
         {
@@ -3460,7 +3533,7 @@
           "files": 1,
           "flags": 0,
           "lastDate": null,
-          "lastWrite": "2026-11-04T16:10:41",
+          "lastWrite": "2026-11-05T15:39:17",
           "components": [
             "YFex.Web"
           ]
@@ -3484,10 +3557,10 @@
         {
           "repo": "YFex.Web",
           "isRepo": true,
-          "branch": "privacy/tier1-scrubber-and-leaks",
+          "branch": "main",
           "lastCommit": "2026-11-05T12:24:20-03:00",
           "lastSubject": "Stop credential records from printing their secrets",
-          "dirty": 25,
+          "dirty": 38,
           "commits14d": 1
         }
       ]
@@ -3529,16 +3602,26 @@
         {
           "repo": "YFex",
           "isRepo": true,
-          "branch": "privacy/tier1-scrubber-and-leaks",
-          "lastCommit": "2026-11-05T12:37:08-03:00",
-          "lastSubject": "Atlas: F29 no longer lists Persistence.Tests (fixed)",
-          "dirty": 13,
-          "commits14d": 7
+          "branch": "main",
+          "lastCommit": "2026-11-05T22:34:35-03:00",
+          "lastSubject": "core: TenancyPath value object; actors plan decisions AC13-AC17",
+          "dirty": 12,
+          "commits14d": 13
         }
       ]
     }
   ],
   "edges": [
+    {
+      "from": "YFex.Actors",
+      "to": "YFex",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Actors → YFex"
+      ]
+    },
     {
       "from": "YFex.Audit",
       "to": "YFex",
@@ -3548,6 +3631,16 @@
       "refs": [
         "YFex.Audit → YFex",
         "YFex.Audit.Public → YFex"
+      ]
+    },
+    {
+      "from": "YFex.Audit",
+      "to": "YFex.Actors",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Audit.Public → YFex.Actors"
       ]
     },
     {
@@ -3666,6 +3759,16 @@
       "cycle": false,
       "refs": [
         "YFex.Authorization.Public → YFex"
+      ]
+    },
+    {
+      "from": "YFex.Authorization",
+      "to": "YFex.Actors",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Authorization.Public → YFex.Actors"
       ]
     },
     {
@@ -4803,6 +4906,16 @@
     },
     {
       "from": "YFex.Profiling",
+      "to": "YFex.Privacy",
+      "weight": 1,
+      "analyzerOnly": false,
+      "cycle": false,
+      "refs": [
+        "YFex.Profiling → YFex.Privacy"
+      ]
+    },
+    {
+      "from": "YFex.Profiling",
       "to": "YFex.System",
       "weight": 2,
       "analyzerOnly": false,
@@ -5399,14 +5512,14 @@
       ],
       "aot": true,
       "refs": [],
-      "refsIn": 31,
+      "refsIn": 32,
       "packages": [
         "System.Reactive",
         "Vogen"
       ],
-      "csFiles": 98,
-      "lines": 13201,
-      "lastChange": "2026-11-05T12:35:22",
+      "csFiles": 99,
+      "lines": 13459,
+      "lastChange": "2026-11-05T22:54:22",
       "inSolution": true
     },
     {
@@ -5430,9 +5543,88 @@
         "FluentAssertions",
         "System.IO.Hashing"
       ],
-      "csFiles": 20,
-      "lines": 2631,
-      "lastChange": "2026-10-16T10:27:39",
+      "csFiles": 22,
+      "lines": 2842,
+      "lastChange": "2026-11-05T22:54:40",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Actors",
+      "path": "YFex.Actors/src/YFex.Actors/YFex.Actors.csproj",
+      "repo": "YFex.Actors",
+      "component": "YFex.Actors",
+      "kind": "library",
+      "tfms": [],
+      "aot": true,
+      "refs": [
+        "YFex"
+      ],
+      "refsIn": 5,
+      "packages": [],
+      "csFiles": 10,
+      "lines": 877,
+      "lastChange": "2026-11-05T22:55:11",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Actors.AotSmoke",
+      "path": "YFex.Actors/samples/YFex.Actors.AotSmoke/YFex.Actors.AotSmoke.csproj",
+      "repo": "YFex.Actors",
+      "component": "YFex.Actors",
+      "kind": "sample",
+      "tfms": [],
+      "aot": true,
+      "refs": [
+        "YFex.Actors"
+      ],
+      "refsIn": 0,
+      "packages": [],
+      "csFiles": 1,
+      "lines": 95,
+      "lastChange": "2026-11-05T22:54:40",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Actors.Benchmarks",
+      "path": "YFex.Actors/benchmarks/YFex.Actors.Benchmarks/YFex.Actors.Benchmarks.csproj",
+      "repo": "YFex.Actors",
+      "component": "YFex.Actors",
+      "kind": "benchmark",
+      "tfms": [],
+      "aot": false,
+      "refs": [
+        "YFex.Actors"
+      ],
+      "refsIn": 0,
+      "packages": [
+        "BenchmarkDotNet"
+      ],
+      "csFiles": 1,
+      "lines": 131,
+      "lastChange": "2026-11-05T17:09:25",
+      "inSolution": true
+    },
+    {
+      "name": "YFex.Actors.Tests",
+      "path": "YFex.Actors/tests/YFex.Actors.Tests/YFex.Actors.Tests.csproj",
+      "repo": "YFex.Actors",
+      "component": "YFex.Actors",
+      "kind": "test",
+      "tfms": [],
+      "aot": false,
+      "refs": [
+        "YFex.Actors"
+      ],
+      "refsIn": 0,
+      "packages": [
+        "Microsoft.NET.Test.Sdk",
+        "xunit",
+        "xunit.runner.visualstudio",
+        "FluentAssertions"
+      ],
+      "csFiles": 12,
+      "lines": 1262,
+      "lastChange": "2026-11-05T23:17:40",
       "inSolution": true
     },
     {
@@ -5453,8 +5645,8 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions"
       ],
       "csFiles": 7,
-      "lines": 1058,
-      "lastChange": "2026-10-03T00:43:13",
+      "lines": 1076,
+      "lastChange": "2026-11-05T22:42:01",
       "inSolution": true
     },
     {
@@ -5473,8 +5665,8 @@
       "refsIn": 0,
       "packages": [],
       "csFiles": 1,
-      "lines": 61,
-      "lastChange": "2026-10-03T10:35:47",
+      "lines": 62,
+      "lastChange": "2026-11-05T22:42:59",
       "inSolution": true
     },
     {
@@ -5532,13 +5724,14 @@
       "tfms": [],
       "aot": true,
       "refs": [
-        "YFex"
+        "YFex",
+        "YFex.Actors"
       ],
       "refsIn": 3,
       "packages": [],
       "csFiles": 10,
-      "lines": 1592,
-      "lastChange": "2026-10-04T09:24:21",
+      "lines": 1549,
+      "lastChange": "2026-11-05T22:42:01",
       "inSolution": true
     },
     {
@@ -5555,8 +5748,8 @@
       "refsIn": 1,
       "packages": [],
       "csFiles": 2,
-      "lines": 309,
-      "lastChange": "2026-10-03T00:47:31",
+      "lines": 310,
+      "lastChange": "2026-11-05T22:42:01",
       "inSolution": true
     },
     {
@@ -5584,8 +5777,8 @@
         "Microsoft.Extensions.DependencyInjection"
       ],
       "csFiles": 4,
-      "lines": 671,
-      "lastChange": "2026-10-04T09:24:44",
+      "lines": 694,
+      "lastChange": "2026-11-05T22:43:33",
       "inSolution": true
     },
     {
@@ -5607,8 +5800,8 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions"
       ],
       "csFiles": 26,
-      "lines": 6602,
-      "lastChange": "2026-10-19T11:13:28",
+      "lines": 6607,
+      "lastChange": "2026-11-05T23:04:42",
       "inSolution": true
     },
     {
@@ -5636,7 +5829,7 @@
       "packages": [],
       "csFiles": 1,
       "lines": 415,
-      "lastChange": "2026-10-29T19:52:46",
+      "lastChange": "2026-11-05T23:05:31",
       "inSolution": true
     },
     {
@@ -5678,8 +5871,8 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions"
       ],
       "csFiles": 6,
-      "lines": 1406,
-      "lastChange": "2026-11-05T12:03:34",
+      "lines": 1407,
+      "lastChange": "2026-11-05T23:04:43",
       "inSolution": true
     },
     {
@@ -5697,8 +5890,8 @@
       "refsIn": 2,
       "packages": [],
       "csFiles": 4,
-      "lines": 690,
-      "lastChange": "2026-10-27T13:54:02",
+      "lines": 691,
+      "lastChange": "2026-11-05T23:04:43",
       "inSolution": true
     },
     {
@@ -5795,8 +5988,8 @@
       "refsIn": 5,
       "packages": [],
       "csFiles": 17,
-      "lines": 2265,
-      "lastChange": "2026-10-19T11:03:26",
+      "lines": 2268,
+      "lastChange": "2026-11-05T23:04:43",
       "inSolution": true
     },
     {
@@ -5877,8 +6070,8 @@
         "Microsoft.Data.Sqlite"
       ],
       "csFiles": 19,
-      "lines": 4275,
-      "lastChange": "2026-10-27T13:59:07",
+      "lines": 4279,
+      "lastChange": "2026-11-05T23:06:18",
       "inSolution": true
     },
     {
@@ -5902,8 +6095,8 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions"
       ],
       "csFiles": 20,
-      "lines": 2056,
-      "lastChange": "2026-10-30T13:27:33",
+      "lines": 2064,
+      "lastChange": "2026-11-05T22:48:46",
       "inSolution": true
     },
     {
@@ -5924,8 +6117,8 @@
         "Microsoft.AspNetCore.Authentication.JwtBearer"
       ],
       "csFiles": 4,
-      "lines": 227,
-      "lastChange": "2026-10-29T19:27:27",
+      "lines": 228,
+      "lastChange": "2026-11-05T22:45:14",
       "inSolution": true
     },
     {
@@ -5952,8 +6145,8 @@
         "Microsoft.AspNetCore.TestHost"
       ],
       "csFiles": 1,
-      "lines": 292,
-      "lastChange": "2026-10-29T19:31:51",
+      "lines": 293,
+      "lastChange": "2026-11-05T22:46:37",
       "inSolution": true
     },
     {
@@ -6067,8 +6260,8 @@
       "refsIn": 3,
       "packages": [],
       "csFiles": 8,
-      "lines": 763,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 764,
+      "lastChange": "2026-11-05T22:47:45",
       "inSolution": true
     },
     {
@@ -6120,8 +6313,8 @@
         "Microsoft.CodeAnalysis.CSharp"
       ],
       "csFiles": 6,
-      "lines": 1027,
-      "lastChange": "2026-10-17T21:33:24",
+      "lines": 1029,
+      "lastChange": "2026-11-05T22:49:15",
       "inSolution": true
     },
     {
@@ -6135,13 +6328,14 @@
       ],
       "aot": true,
       "refs": [
-        "YFex"
+        "YFex",
+        "YFex.Actors"
       ],
       "refsIn": 22,
       "packages": [],
       "csFiles": 27,
-      "lines": 3160,
-      "lastChange": "2026-10-29T21:06:27",
+      "lines": 3046,
+      "lastChange": "2026-11-05T22:48:14",
       "inSolution": true
     },
     {
@@ -6161,8 +6355,8 @@
       "refsIn": 8,
       "packages": [],
       "csFiles": 4,
-      "lines": 288,
-      "lastChange": "2026-10-29T19:32:25",
+      "lines": 290,
+      "lastChange": "2026-11-05T22:48:46",
       "inSolution": true
     },
     {
@@ -6190,9 +6384,9 @@
         "FluentAssertions",
         "Microsoft.Extensions.DependencyInjection"
       ],
-      "csFiles": 16,
-      "lines": 1801,
-      "lastChange": "2026-10-30T13:27:33",
+      "csFiles": 15,
+      "lines": 1732,
+      "lastChange": "2026-11-05T22:50:02",
       "inSolution": true
     },
     {
@@ -6695,8 +6889,8 @@
       "refsIn": 0,
       "packages": [],
       "csFiles": 1,
-      "lines": 102,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 103,
+      "lastChange": "2026-11-05T23:08:44",
       "inSolution": true
     },
     {
@@ -6828,8 +7022,8 @@
         "FluentAssertions"
       ],
       "csFiles": 10,
-      "lines": 885,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 886,
+      "lastChange": "2026-11-05T23:08:44",
       "inSolution": true
     },
     {
@@ -6857,7 +7051,7 @@
       ],
       "csFiles": 56,
       "lines": 4582,
-      "lastChange": "2026-11-05T11:37:45",
+      "lastChange": "2026-11-05T23:19:41",
       "inSolution": true
     },
     {
@@ -7120,9 +7314,9 @@
       "packages": [
         "Microsoft.Extensions.DependencyInjection.Abstractions"
       ],
-      "csFiles": 43,
-      "lines": 7524,
-      "lastChange": "2026-10-27T16:27:38",
+      "csFiles": 44,
+      "lines": 7727,
+      "lastChange": "2026-11-05T13:24:16",
       "inSolution": true
     },
     {
@@ -7338,9 +7532,9 @@
         "FluentAssertions",
         "Microsoft.Extensions.DependencyInjection"
       ],
-      "csFiles": 25,
-      "lines": 4325,
-      "lastChange": "2026-11-05T11:10:11",
+      "csFiles": 26,
+      "lines": 4456,
+      "lastChange": "2026-11-05T13:24:41",
       "inSolution": true
     },
     {
@@ -9338,8 +9532,8 @@
         "Microsoft.Extensions.Hosting"
       ],
       "csFiles": 2,
-      "lines": 670,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 671,
+      "lastChange": "2026-11-05T23:10:36",
       "inSolution": true
     },
     {
@@ -9688,8 +9882,8 @@
         "Microsoft.CodeAnalysis.CSharp"
       ],
       "csFiles": 17,
-      "lines": 4573,
-      "lastChange": "2026-11-05T12:42:18",
+      "lines": 4574,
+      "lastChange": "2026-11-05T23:10:36",
       "inSolution": true
     },
     {
@@ -9934,8 +10128,8 @@
         "MemoryPack"
       ],
       "csFiles": 1,
-      "lines": 103,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 104,
+      "lastChange": "2026-11-05T22:47:45",
       "inSolution": true
     },
     {
@@ -9963,8 +10157,8 @@
         "Microsoft.Extensions.DependencyInjection"
       ],
       "csFiles": 2,
-      "lines": 424,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 426,
+      "lastChange": "2026-11-05T22:47:45",
       "inSolution": true
     },
     {
@@ -10064,8 +10258,8 @@
         "Microsoft.Extensions.Logging.Abstractions"
       ],
       "csFiles": 47,
-      "lines": 6596,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 6595,
+      "lastChange": "2026-11-05T23:20:38",
       "inSolution": true
     },
     {
@@ -10143,8 +10337,8 @@
         "Microsoft.Extensions.Logging"
       ],
       "csFiles": 17,
-      "lines": 2091,
-      "lastChange": "2026-11-05T11:03:12",
+      "lines": 2095,
+      "lastChange": "2026-11-05T22:47:45",
       "inSolution": true
     },
     {
@@ -10210,8 +10404,8 @@
         "Microsoft.Extensions.Logging.Abstractions"
       ],
       "csFiles": 37,
-      "lines": 4785,
-      "lastChange": "2026-11-05T11:39:12",
+      "lines": 4787,
+      "lastChange": "2026-11-05T22:47:45",
       "inSolution": true
     },
     {
@@ -10268,8 +10462,8 @@
         "Microsoft.Extensions.DependencyInjection"
       ],
       "csFiles": 6,
-      "lines": 910,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 911,
+      "lastChange": "2026-11-05T22:46:39",
       "inSolution": true
     },
     {
@@ -10391,8 +10585,8 @@
         "xunit.runner.visualstudio"
       ],
       "csFiles": 9,
-      "lines": 2876,
-      "lastChange": "2026-11-05T11:02:40",
+      "lines": 2877,
+      "lastChange": "2026-11-05T23:08:44",
       "inSolution": true
     },
     {
@@ -10609,8 +10803,8 @@
         "Microsoft.Extensions.Hosting.Abstractions"
       ],
       "csFiles": 49,
-      "lines": 9937,
-      "lastChange": "2026-11-05T12:03:34",
+      "lines": 9935,
+      "lastChange": "2026-11-05T22:55:49",
       "inSolution": true
     },
     {
@@ -10636,8 +10830,8 @@
         "Microsoft.Extensions.DependencyInjection"
       ],
       "csFiles": 1,
-      "lines": 490,
-      "lastChange": "2026-10-30T23:22:07",
+      "lines": 491,
+      "lastChange": "2026-11-05T22:52:47",
       "inSolution": true
     },
     {
@@ -10661,8 +10855,8 @@
         "Microsoft.Data.Sqlite"
       ],
       "csFiles": 2,
-      "lines": 318,
-      "lastChange": "2026-10-27T13:56:48",
+      "lines": 319,
+      "lastChange": "2026-11-05T22:51:49",
       "inSolution": true
     },
     {
@@ -10680,8 +10874,8 @@
       "refsIn": 3,
       "packages": [],
       "csFiles": 8,
-      "lines": 2272,
-      "lastChange": "2026-10-30T23:13:10",
+      "lines": 2274,
+      "lastChange": "2026-11-05T22:51:50",
       "inSolution": true
     },
     {
@@ -10701,8 +10895,8 @@
       "refsIn": 5,
       "packages": [],
       "csFiles": 11,
-      "lines": 2303,
-      "lastChange": "2026-11-05T12:03:34",
+      "lines": 2305,
+      "lastChange": "2026-11-05T22:51:50",
       "inSolution": true
     },
     {
@@ -10742,8 +10936,8 @@
       "refsIn": 4,
       "packages": [],
       "csFiles": 7,
-      "lines": 930,
-      "lastChange": "2026-10-29T23:32:30",
+      "lines": 932,
+      "lastChange": "2026-11-05T22:51:51",
       "inSolution": true
     },
     {
@@ -10862,8 +11056,8 @@
         "Microsoft.Data.Sqlite"
       ],
       "csFiles": 20,
-      "lines": 5909,
-      "lastChange": "2026-11-05T12:03:34",
+      "lines": 5924,
+      "lastChange": "2026-11-05T23:03:49",
       "inSolution": true
     },
     {
@@ -11410,11 +11604,11 @@
       "refs": [
         "YFex"
       ],
-      "refsIn": 3,
+      "refsIn": 4,
       "packages": [],
-      "csFiles": 4,
-      "lines": 904,
-      "lastChange": "2026-11-05T12:39:57",
+      "csFiles": 6,
+      "lines": 1202,
+      "lastChange": "2026-11-05T13:12:23",
       "inSolution": true
     },
     {
@@ -11434,8 +11628,8 @@
       "refsIn": 0,
       "packages": [],
       "csFiles": 1,
-      "lines": 52,
-      "lastChange": "2026-11-05T12:43:17",
+      "lines": 59,
+      "lastChange": "2026-11-05T13:15:10",
       "inSolution": true
     },
     {
@@ -11503,9 +11697,9 @@
         "xunit.runner.visualstudio",
         "FluentAssertions"
       ],
-      "csFiles": 2,
-      "lines": 251,
-      "lastChange": "2026-11-05T12:41:02",
+      "csFiles": 3,
+      "lines": 357,
+      "lastChange": "2026-11-05T13:12:37",
       "inSolution": true
     },
     {
@@ -11522,13 +11716,14 @@
         "YFex",
         "YFex.Persistence",
         "YFex.Persistence.FileSystem",
-        "YFex.System"
+        "YFex.System",
+        "YFex.Privacy"
       ],
       "refsIn": 4,
       "packages": [],
-      "csFiles": 34,
-      "lines": 1151,
-      "lastChange": "2026-11-05T11:02:40",
+      "csFiles": 35,
+      "lines": 1217,
+      "lastChange": "2026-11-05T13:13:40",
       "inSolution": true
     },
     {
@@ -11555,8 +11750,8 @@
         "coverlet.collector"
       ],
       "csFiles": 16,
-      "lines": 1102,
-      "lastChange": "2026-08-19T10:51:19",
+      "lines": 1137,
+      "lastChange": "2026-11-05T13:14:46",
       "inSolution": true
     },
     {
@@ -12018,8 +12213,8 @@
         "FluentAssertions"
       ],
       "csFiles": 8,
-      "lines": 778,
-      "lastChange": "2026-10-29T21:13:24",
+      "lines": 779,
+      "lastChange": "2026-11-05T23:08:44",
       "inSolution": true
     },
     {
@@ -12624,9 +12819,9 @@
       "packages": [
         "Microsoft.Extensions.DependencyInjection.Abstractions"
       ],
-      "csFiles": 16,
-      "lines": 701,
-      "lastChange": "2026-09-28T17:07:23",
+      "csFiles": 17,
+      "lines": 721,
+      "lastChange": "2026-11-05T17:03:25",
       "inSolution": true
     },
     {
@@ -12673,9 +12868,9 @@
         "FluentAssertions",
         "Microsoft.Extensions.DependencyInjection"
       ],
-      "csFiles": 4,
-      "lines": 308,
-      "lastChange": "2026-09-28T17:13:31",
+      "csFiles": 5,
+      "lines": 354,
+      "lastChange": "2026-11-05T17:03:35",
       "inSolution": true
     },
     {
@@ -13265,9 +13460,9 @@
       ],
       "refsIn": 7,
       "packages": [],
-      "csFiles": 17,
-      "lines": 622,
-      "lastChange": "2026-11-05T11:36:42",
+      "csFiles": 16,
+      "lines": 544,
+      "lastChange": "2026-11-05T13:25:28",
       "inSolution": true
     },
     {
@@ -13316,9 +13511,9 @@
         "Microsoft.Extensions.DependencyInjection.Abstractions",
         "Microsoft.Extensions.Options"
       ],
-      "csFiles": 11,
-      "lines": 1137,
-      "lastChange": "2026-10-04T18:11:19",
+      "csFiles": 7,
+      "lines": 626,
+      "lastChange": "2026-11-05T13:25:28",
       "inSolution": true
     },
     {
@@ -13345,8 +13540,8 @@
         "xunit",
         "xunit.runner.visualstudio"
       ],
-      "csFiles": 11,
-      "lines": 1099,
+      "csFiles": 8,
+      "lines": 650,
       "lastChange": "2026-10-29T19:31:52",
       "inSolution": true
     },
@@ -13551,11 +13746,11 @@
       "git": {
         "repo": "YFex",
         "isRepo": true,
-        "branch": "privacy/tier1-scrubber-and-leaks",
-        "lastCommit": "2026-11-05T12:37:08-03:00",
-        "lastSubject": "Atlas: F29 no longer lists Persistence.Tests (fixed)",
-        "dirty": 13,
-        "commits14d": 7
+        "branch": "main",
+        "lastCommit": "2026-11-05T22:34:35-03:00",
+        "lastSubject": "core: TenancyPath value object; actors plan decisions AC13-AC17",
+        "dirty": 12,
+        "commits14d": 13
       },
       "residue": [
         "YFex/src/Cqrs/YFex.Cqrs",
@@ -13639,7 +13834,26 @@
         "YFex/src/YFex/GenOut"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T12:35:22"
+      "lastChange": "2026-11-05T22:54:40"
+    },
+    {
+      "name": "YFex.Actors",
+      "solutions": [
+        "actors.slnx"
+      ],
+      "projects": 4,
+      "git": {
+        "repo": "YFex.Actors",
+        "isRepo": true,
+        "branch": "main",
+        "lastCommit": "2026-11-05T22:34:46-03:00",
+        "lastSubject": "Actors: TenancyPath home, Device(InstallationId), origin (AC13-AC17)",
+        "dirty": 7,
+        "commits14d": 2
+      },
+      "residue": [],
+      "worktrees": [],
+      "lastChange": "2026-11-05T23:17:40"
     },
     {
       "name": "YFex.Audit",
@@ -13653,12 +13867,12 @@
         "branch": "main",
         "lastCommit": "2026-10-17T20:38:19-03:00",
         "lastSubject": "Initial commit: import existing project sources",
-        "dirty": 0,
+        "dirty": 13,
         "commits14d": 0
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-10-04T09:24:44"
+      "lastChange": "2026-11-05T22:43:33"
     },
     {
       "name": "YFex.Authentication",
@@ -13672,12 +13886,12 @@
         "branch": "main",
         "lastCommit": "2026-11-05T12:38:25-03:00",
         "lastSubject": "Initial import of YFex.Authentication",
-        "dirty": 0,
+        "dirty": 15,
         "commits14d": 1
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T12:03:34"
+      "lastChange": "2026-11-05T23:06:18"
     },
     {
       "name": "YFex.Authorization",
@@ -13689,10 +13903,10 @@
         "repo": "YFex.Authorization",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-10-17T20:38:25-03:00",
+        "lastCommit": "2026-11-05T22:42:17-03:00",
         "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 44,
-        "commits14d": 0
+        "dirty": 33,
+        "commits14d": 1
       },
       "residue": [
         "YFex.Authorization/src/YFex.Authorization/GenOut",
@@ -13701,7 +13915,7 @@
         "YFex.Authorization/src/YFex.Authorization.Public/GenOut"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T22:50:02"
     },
     {
       "name": "YFex.Automation",
@@ -13790,14 +14004,14 @@
         "repo": "YFex.Capabilities",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-10-17T20:38:26-03:00",
+        "lastCommit": "2026-11-05T22:42:18-03:00",
         "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 28,
-        "commits14d": 0
+        "dirty": 2,
+        "commits14d": 1
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T23:08:44"
     },
     {
       "name": "YFex.Cqrs",
@@ -13810,16 +14024,16 @@
         "repo": "YFex.Cqrs",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-11-05T11:24:09-03:00",
-        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-        "dirty": 7,
-        "commits14d": 1
+        "lastCommit": "2026-11-05T13:12:34-03:00",
+        "lastSubject": "Command .Retry takes YFex.Resilience.RetryPolicy (atlas F04)",
+        "dirty": 1,
+        "commits14d": 2
       },
       "residue": [
         "YFex.Cqrs/src/YFex.Cqrs.SourceGenerator/Generated"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:37:45"
+      "lastChange": "2026-11-05T23:19:41"
     },
     {
       "name": "YFex.Cryptography",
@@ -13834,12 +14048,12 @@
         "branch": "main",
         "lastCommit": "2026-10-17T20:44:53-03:00",
         "lastSubject": "Initial commit: import existing project sources",
-        "dirty": 68,
+        "dirty": 71,
         "commits14d": 0
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:10:11"
+      "lastChange": "2026-11-05T13:24:41"
     },
     {
       "name": "YFex.CustomLogic",
@@ -13910,10 +14124,10 @@
         "repo": "YFex.Domain",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-10-17T20:38:27-03:00",
-        "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 4,
-        "commits14d": 0
+        "lastCommit": "2026-11-05T13:03:47-03:00",
+        "lastSubject": "Cpf and Telefone implement IExtractable",
+        "dirty": 1,
+        "commits14d": 1
       },
       "residue": [
         "YFex.Domain/src/YFex.Entity.Public/DevYFexYFex.Fiscal_geninspect"
@@ -14057,10 +14271,10 @@
         "repo": "YFex.Jobs",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-11-03T21:57:47-03:00",
-        "lastSubject": "YFex.Jobs Plan D phase D0: user surface (YFex.Jobs.Templates)",
-        "dirty": 93,
-        "commits14d": 5
+        "lastCommit": "2026-11-05T22:42:19-03:00",
+        "lastSubject": "Commit pending work-in-progress changes",
+        "dirty": 2,
+        "commits14d": 7
       },
       "residue": [
         "YFex.Jobs/src/YFex.Jobs/Calendars",
@@ -14068,7 +14282,7 @@
         "YFex.Jobs/src/YFex.Jobs/Diagnostics"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T12:42:18"
+      "lastChange": "2026-11-05T23:10:36"
     },
     {
       "name": "YFex.Logging",
@@ -14079,11 +14293,11 @@
       "git": {
         "repo": "YFex.Logging",
         "isRepo": true,
-        "branch": "privacy/tier1-scrubber-and-leaks",
-        "lastCommit": "2026-11-05T12:24:20-03:00",
-        "lastSubject": "Scrub free text with YFex.Privacy and add Redaction settings",
-        "dirty": 2,
-        "commits14d": 1
+        "branch": "main",
+        "lastCommit": "2026-11-05T13:03:47-03:00",
+        "lastSubject": "Redaction: Detect<T>() for IExtractable value objects",
+        "dirty": 0,
+        "commits14d": 2
       },
       "residue": [],
       "worktrees": [],
@@ -14138,16 +14352,16 @@
         "repo": "YFex.Messaging",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-11-05T11:24:10-03:00",
-        "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-        "dirty": 1,
-        "commits14d": 1
+        "lastCommit": "2026-11-05T13:12:35-03:00",
+        "lastSubject": "Test: command .Retry folds into the ResilienceSpec (atlas F04)",
+        "dirty": 15,
+        "commits14d": 2
       },
       "residue": [
         "YFex.Messaging/src/YFex.Messaging.Generator/Generated"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:39:12"
+      "lastChange": "2026-11-05T23:20:38"
     },
     {
       "name": "YFex.Mvvm",
@@ -14180,14 +14394,14 @@
         "branch": "main",
         "lastCommit": "2026-11-05T11:24:11-03:00",
         "lastSubject": "Initial import: split from YFex core repo (atlas F01)",
-        "dirty": 0,
+        "dirty": 1,
         "commits14d": 1
       },
       "residue": [
         "YFex.NavigatR/src/YFex.NavigatR.SourceGenerator/Generated"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T23:08:44"
     },
     {
       "name": "YFex.Networking",
@@ -14218,14 +14432,14 @@
         "repo": "YFex.Offline",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-10-30T14:22:30-03:00",
-        "lastSubject": "Offline Phase 4c and 4d: custody and coordination on the site broker",
-        "dirty": 26,
-        "commits14d": 4
+        "lastCommit": "2026-11-05T22:42:18-03:00",
+        "lastSubject": "Commit pending work-in-progress changes",
+        "dirty": 21,
+        "commits14d": 5
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T12:03:34"
+      "lastChange": "2026-11-05T23:03:49"
     },
     {
       "name": "YFex.Orchestration",
@@ -14282,10 +14496,10 @@
         "repo": "YFex.Persistence",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-11-05T12:37:08-03:00",
-        "lastSubject": "Fix Persistence tests for the key-value store API",
-        "dirty": 6,
-        "commits14d": 2
+        "lastCommit": "2026-11-05T13:02:59-03:00",
+        "lastSubject": "Move Windows key store out of Persistence.Encryption (atlas AUTO-PLATFORM)",
+        "dirty": 0,
+        "commits14d": 3
       },
       "residue": [
         "YFex.Persistence/src/YFex.Persistence.Data"
@@ -14302,15 +14516,15 @@
       "git": {
         "repo": "YFex.Privacy",
         "isRepo": true,
-        "branch": "privacy/tier1-scrubber-and-leaks",
-        "lastCommit": "2026-11-05T12:24:19-03:00",
-        "lastSubject": "Add TextScrubber runtime (privacy 06)",
-        "dirty": 7,
-        "commits14d": 1
+        "branch": "main",
+        "lastCommit": "2026-11-05T13:19:10-03:00",
+        "lastSubject": "Add NameConventions and PropertyRedactor (privacy 02 §5.2, 06 §6)",
+        "dirty": 0,
+        "commits14d": 3
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T12:43:17"
+      "lastChange": "2026-11-05T13:15:10"
     },
     {
       "name": "YFex.Profiling",
@@ -14322,14 +14536,14 @@
         "repo": "YFex.Profiling",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-10-17T20:38:31-03:00",
-        "lastSubject": "Commit pending work-in-progress changes",
+        "lastCommit": "2026-11-05T13:19:09-03:00",
+        "lastSubject": "Redact telemetry with YFex.Privacy's PropertyRedactor",
         "dirty": 2,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T13:14:46"
     },
     {
       "name": "YFex.Resilience",
@@ -14341,10 +14555,10 @@
         "repo": "YFex.Resilience",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-10-17T20:38:31-03:00",
-        "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 13,
-        "commits14d": 0
+        "lastCommit": "2026-11-05T13:12:34-03:00",
+        "lastSubject": "RetryDelay + RetryBudget: Polly-free delays for stored retries (atlas F04)",
+        "dirty": 11,
+        "commits14d": 1
       },
       "residue": [],
       "worktrees": [],
@@ -14381,14 +14595,14 @@
         "repo": "YFex.Search",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-10-17T20:38:32-03:00",
+        "lastCommit": "2026-11-05T22:42:24-03:00",
         "lastSubject": "Commit pending work-in-progress changes",
-        "dirty": 4,
-        "commits14d": 0
+        "dirty": 1,
+        "commits14d": 1
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:02:40"
+      "lastChange": "2026-11-05T23:08:44"
     },
     {
       "name": "YFex.Security",
@@ -14462,14 +14676,14 @@
         "repo": "YFex.Tenancy",
         "isRepo": true,
         "branch": "main",
-        "lastCommit": "2026-10-17T20:38:33-03:00",
-        "lastSubject": "Commit pending work-in-progress changes",
+        "lastCommit": "2026-11-05T22:34:40-03:00",
+        "lastSubject": "Tenancy: parse with core's TenancyPath grammar; conversions",
         "dirty": 1,
-        "commits14d": 0
+        "commits14d": 1
       },
       "residue": [],
       "worktrees": [],
-      "lastChange": "2026-10-29T19:26:54"
+      "lastChange": "2026-11-05T17:03:35"
     },
     {
       "name": "YFex.Time",
@@ -14548,20 +14762,33 @@
       "git": {
         "repo": "YFex.Web",
         "isRepo": true,
-        "branch": "privacy/tier1-scrubber-and-leaks",
+        "branch": "main",
         "lastCommit": "2026-11-05T12:24:20-03:00",
         "lastSubject": "Stop credential records from printing their secrets",
-        "dirty": 25,
+        "dirty": 38,
         "commits14d": 1
       },
       "residue": [
         "YFex.Web/src/Web/YFex.Web.Generator/Generated"
       ],
       "worktrees": [],
-      "lastChange": "2026-11-05T11:38:27"
+      "lastChange": "2026-11-05T13:25:28"
     }
   ],
   "docs": [
+    {
+      "path": "YFex.Actors/README.md",
+      "file": "YFex.Actors/README.md",
+      "title": "YFex.Actors",
+      "status": null,
+      "files": 1,
+      "flags": 4,
+      "lastDate": "2026-11-05",
+      "lastWrite": "2026-11-05T23:19:17",
+      "components": [
+        "YFex.Actors"
+      ]
+    },
     {
       "path": "YFex.Audit/README.md",
       "file": "YFex.Audit/README.md",
@@ -14805,9 +15032,33 @@
       "files": 1,
       "flags": 0,
       "lastDate": null,
-      "lastWrite": "2026-11-04T16:10:41",
+      "lastWrite": "2026-11-05T15:39:17",
       "components": [
         "YFex.Web"
+      ]
+    },
+    {
+      "path": "YFex/docs/internal/actors",
+      "file": "YFex/docs/internal/actors/README.md",
+      "title": "YFex.Actors — who acts, in every library and every app — Plan",
+      "status": "Status: PROPOSED 2026-11-05; AC0 BUILT 2026-11-05 (the package only, no consumer moved — see 05 log), revised the same day for ⚑AC13–⚑AC17 (decided by the user); AC1a BUILT 2026-11-05 (consumers moved, old types deleted, F05 closed; AC1b — string scopes → TenancyPath, JobKey, origin writers — next). Open decisions: ⚑AC5–⚑AC12 (AC0 followed the recommendations of ⚑AC5, ⚑AC6, ⚑AC8, ⚑AC12); ⚑AC3 is superseded by ⚑AC13.",
+      "files": 6,
+      "flags": 23,
+      "lastDate": "2026-11-05",
+      "lastWrite": "2026-11-05T23:24:01",
+      "components": []
+    },
+    {
+      "path": "YFex/docs/internal/actors/README.md",
+      "file": "YFex/docs/internal/actors/README.md",
+      "title": "YFex.Actors — who acts, in every library and every app — Plan",
+      "status": "Status: PROPOSED 2026-11-05; AC0 BUILT 2026-11-05 (the package only, no consumer moved — see 05 log), revised the same day for ⚑AC13–⚑AC17 (decided by the user); AC1a BUILT 2026-11-05 (consumers moved, old types deleted, F05 closed; AC1b — string scopes → TenancyPath, JobKey, origin writers — next). Open decisions: ⚑AC5–⚑AC12 (AC0 followed the recommendations of ⚑AC5, ⚑AC6, ⚑AC8, ⚑AC12); ⚑AC3 is superseded by ⚑AC13.",
+      "files": 1,
+      "flags": 23,
+      "lastDate": "2026-11-05",
+      "lastWrite": "2026-11-05T23:18:57",
+      "components": [
+        "YFex.Actors"
       ]
     },
     {
@@ -14855,7 +15106,7 @@
       "files": 11,
       "flags": 8,
       "lastDate": "2026-10-02",
-      "lastWrite": "2026-11-05T11:09:28",
+      "lastWrite": "2026-11-05T16:17:12",
       "components": [
         "YFex.Authorization"
       ]
@@ -14918,7 +15169,7 @@
       "files": 15,
       "flags": 8,
       "lastDate": "2026-10-27",
-      "lastWrite": "2026-11-05T12:48:00",
+      "lastWrite": "2026-11-05T15:39:34",
       "components": [
         "YFex.Cryptography"
       ]
@@ -15189,7 +15440,7 @@
       "files": 15,
       "flags": 26,
       "lastDate": "2026-11-05",
-      "lastWrite": "2026-11-05T12:45:27",
+      "lastWrite": "2026-11-05T13:16:17",
       "components": [
         "YFex.Privacy"
       ]
@@ -15472,7 +15723,8 @@
       "id": "F05",
       "severity": "medium",
       "category": "duplication",
-      "status": "open",
+      "status": "done",
+      "resolution": "2026-11-05: plan written (docs/internal/actors, PROPOSED): new package YFex.Actors (user decision), Audit numbering, clean break. 2026-11-05: AC0 BUILT — repo YFex.Actors (ActorKind in Audit numbering, ActorIdentity + text form + canonical bytes, ActorScope, ActorContext with Capture/Restore + ActorSnapshot, ActorStamp, ActorClaims, directory contracts; 134 tests, AOT smoke clean, 0-allocation format/canonical paths). Consumers not moved yet: AC1 moves Authorization/Audit/Offline/Messaging onto it, deletes the old types and closes this finding (unblocks Jobs D2b). 2026-11-05: AC1a BUILT — Authorization.Public, Audit, Offline, Authentication, Messaging, Cqrs, NavigatR, Capabilities, Jobs and Search use YFex.Actors; Actor.cs and AuditActor/AuditActorKind/Audit ActorRelation deleted; one encoder (ActorIdentity canonical bytes) in Audit, Offline and approval tokens; SubjectOf only in ActorClaims; an ecosystem architecture test in YFex.Actors keeps it so. DONE (string-scope -> TenancyPath sweep continues as actors AC1b).",
       "title": "Actor identity is defined three times",
       "components": [
         "YFex.Authorization",
@@ -15531,7 +15783,8 @@
       "id": "F08",
       "severity": "medium",
       "category": "duplication",
-      "status": "open",
+      "status": "done",
+      "resolution": "2026-11-05: ISecretProtector, SecretLocation, UnprotectedSecret, SecretIntegrityException, SealedSecretProtector and AddYFexSecretProtection moved to YFex.Cryptography (ring family secrets, context yfex.secret.v1); Web.Data consumes it. Deleted AesSecretProtector, the obsolete location-less members, LegacyKey/LegacyFormats.OpenWebSecretVersion1 and ApiEndpointSecretMigration (clean break). Follow-up: YFex.Automation DpapiSecretStore calls ProtectedData directly (fails the Cryptography architecture test).",
       "title": "Secret protection at rest has two contracts, one of them in the HTTP library",
       "components": [
         "YFex.Web",
@@ -16097,19 +16350,6 @@
       ]
     },
     {
-      "id": "AUTO-DIRTY-YFex.Authorization",
-      "severity": "medium",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.Authorization: 44 uncommitted changes, last commit 18 days ago",
-      "detail": "Branch main. Last commit 2026-10-17: Commit pending work-in-progress changes",
-      "components": [
-        "YFex.Authorization"
-      ],
-      "recommendation": "Commit per finished phase so the history matches the phase logs."
-    },
-    {
       "id": "AUTO-RESIDUE-YFex.Avalonia",
       "severity": "low",
       "category": "hygiene",
@@ -16146,7 +16386,7 @@
       "category": "hygiene",
       "status": "open",
       "source": "auto",
-      "title": "YFex.Cryptography: 68 uncommitted changes, last commit 18 days ago",
+      "title": "YFex.Cryptography: 71 uncommitted changes, last commit 19 days ago",
       "detail": "Branch main. Last commit 2026-10-17: Initial commit: import existing project sources",
       "components": [
         "YFex.Cryptography"
@@ -16175,7 +16415,7 @@
       "category": "hygiene",
       "status": "open",
       "source": "auto",
-      "title": "YFex.Data: 123 uncommitted changes, last commit 18 days ago",
+      "title": "YFex.Data: 123 uncommitted changes, last commit 19 days ago",
       "detail": "Branch main. Last commit 2026-10-17: Commit pending work-in-progress changes",
       "components": [
         "YFex.Data"
@@ -16213,19 +16453,6 @@
         "YFex.Jobs/src/YFex.Jobs/Cli",
         "YFex.Jobs/src/YFex.Jobs/Diagnostics"
       ]
-    },
-    {
-      "id": "AUTO-DIRTY-YFex.Jobs",
-      "severity": "low",
-      "category": "hygiene",
-      "status": "open",
-      "source": "auto",
-      "title": "YFex.Jobs: 93 uncommitted changes, last commit 1 days ago",
-      "detail": "Branch main. Last commit 2026-11-03: YFex.Jobs Plan D phase D0: user surface (YFex.Jobs.Templates)",
-      "components": [
-        "YFex.Jobs"
-      ],
-      "recommendation": "Commit per finished phase so the history matches the phase logs."
     },
     {
       "id": "AUTO-RESIDUE-YFex.Messaging",
@@ -16346,7 +16573,7 @@
       "category": "hygiene",
       "status": "open",
       "source": "auto",
-      "title": "YFex.UI: 59 uncommitted changes, last commit 12 days ago",
+      "title": "YFex.UI: 59 uncommitted changes, last commit 13 days ago",
       "detail": "Branch interactive-geometry-editor. Last commit 2026-10-23: Pages, Inputs and gallery",
       "components": [
         "YFex.UI"
@@ -16441,7 +16668,7 @@
       "category": "docs",
       "status": "open",
       "source": "auto",
-      "title": "YFex.Tenancy: design status says not built, but the component has 38 C# files",
+      "title": "YFex.Tenancy: design status says not built, but the component has 40 C# files",
       "detail": "Status lines that disagree with the code:\nYFex/docs/internal/web-tenancy-consolidation-plan.md: “Status: Plan only — no code (2026-09-24). Supersedes §3 of”",
       "components": [
         "YFex.Tenancy"
@@ -16454,7 +16681,7 @@
       "category": "docs",
       "status": "open",
       "source": "auto",
-      "title": "YFex.Web: design status says not built, but the component has 86 C# files",
+      "title": "YFex.Web: design status says not built, but the component has 78 C# files",
       "detail": "Status lines that disagree with the code:\nYFex/docs/internal/web-tenancy-consolidation-plan.md: “Status: Plan only — no code (2026-09-24). Supersedes §3 of”",
       "components": [
         "YFex.Web"

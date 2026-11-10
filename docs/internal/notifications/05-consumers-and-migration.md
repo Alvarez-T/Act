@@ -17,7 +17,7 @@
 | **YFex.Messaging.Rpc** | built | `EnableServerPushedEvents()` exists but its flag is never read (`YFexMessagingRpcClientOptions.cs:76-83`): wiring `EventChannelHost` + the Wolverine bridge is a Messaging task, **prerequisite of N3** (also needed by the Jobs Hub, messaging-internals line 220) | no (additive) | before N3 |
 | **YFex.Cqrs** | built | none. `IQueueable` commands and queries as they are | no | — |
 | **YFex.Web** | built | none required. Providers use `IApiEndpointStore` / `ApiEndpoint` and `YFex.Web.Refit` endpoint clients (`UseResilience` with a rate-limited resource and no `Retry` — retries belong to the dispatcher, ⚑N5). Endpoint names get a `notifications.` prefix and name the provider (⚑N18); `authentication.*` names stay as aliases | no | N1 |
-| **YFex.Resilience** | built | none. Dispatcher pipeline (timeout, retry, breaker per provider/scope resource) through `IResiliencePipelineFactory` | no | N0 |
+| **YFex.Resilience** | built | Dispatcher pipeline (timeout, retry, breaker per provider/scope resource) through `IResiliencePipelineFactory` (N0); rate limits per (scope, channel) as `PerScope` rate-limited resources; **new generic quota** (counter per key, Tenancy scope and period on `ITrustedClock`, durable store adapter) for daily budgets (⚑N9) | yes (quota) | N0, N1 |
 | **YFex core — Localization** | built | none. Templates are message codes in `IMessageCatalog` layers (⚑N15); a generated module catalog per consumer | no | N0 |
 | **YFex core — Time / YFex.Time** | built | none for the clock (`ITrustedClock`). **Proposal:** a shared `IScopeTimeZones` contract in core or Tenancy, adapted by Jobs (`IJobScopeTimeZones`) and used by Notifications (⚑N16) | no | N3 (quiet hours) |
 | **YFex.Actors — actor types** | built (actors AC0–AC1b, 2026-11-05/09; ⚑RA8 became a separate package, ⚑AC1) | `ActorIdentity`, `ActorScope`, `ActorContext`, `ActorSnapshot` (sender capture for the outbox) come from YFex.Actors. N2 run-as sends still wait for the Authorization resolver | no for Notifications | before N2 |
@@ -58,6 +58,7 @@
 
 | Before | Needs | Owner |
 |---|---|---|
+| N1 budgets | generic quota (key × Tenancy scope × period, trusted clock, durable shared-store adapter); Authentication `DeliveryBudget` moves onto it | YFex.Resilience |
 | N2 run-as sends | actor types (YFex.Actors, built) → Authorization run-as resolver | YFex.Authorization |
 | N2 marketing sends | Privacy ⚑P9 consent ledger (else refused / app seam) | YFex.Privacy |
 | N3 in-app | `EventChannelHost` wiring behind `EnableServerPushedEvents()` | YFex Messaging |

@@ -22,10 +22,11 @@
 ## Phase N1 — Authentication on Notifications
 
 - `.Twilio`, `.Meta` as SMS/WhatsApp providers; `.Verification` (generic code send/check, `IVerificationProvider`, Twilio Verify; ⚑N2); `Authentication.Delivery` = challenge rules over channels and `.Verification`; provider per scope from the endpoint
-  (⚑N18); limits (⚑N9); scope template overrides (dynamic catalog layer); usage-meter seam (⚑N19, no-op default).
+  (⚑N18: the tenant's `ApiEndpoint` names the provider); limits (⚑N9: rate = Resilience `PerScope` resource, budget = the new
+  Resilience quota, built first in YFex.Resilience; Authentication's `DeliveryBudget` moves onto it); scope template overrides (dynamic catalog layer); usage-meter seam (⚑N19, no-op default).
 - **Acceptance:**
   - WhatsApp → SMS fallback still reports "not on WhatsApp" inline;
-  - the SMS budget refuses over-limit sends with `BudgetExhausted`;
+  - the SMS budget refuses over-limit sends with `BudgetExhausted`, and the count survives a restart (durable quota store);
   - two scopes send SMS through two different providers by endpoint data only;
   - a scope template overrides the default;
   - a code is sent and checked through `.Verification` for a destination with no account (attempt limit, expiry on the trusted clock);
@@ -106,6 +107,14 @@ seam still proposed for N3), ⚑N20 (`INotificationSender`; it only sends — in
 inbox is a separate query; YFex.UI `INotification` keeps its name). ⚑N2 = **option b**: the generic code send/check and Twilio
 Verify move to `YFex.Notifications.Verification` (phase N1) so codes work without an account (contact-book confirmation, POS
 customer phone, pickup codes, consent double opt-in); Authentication keeps only its challenge rules. Open: ⚑N6–⚑N13, ⚑N18, ⚑N19.
+
+### 2026-11-09 — Decisions ⚑N9, ⚑N18, ⚑N19 (docs only, no code)
+
+User agreed after clarifying ownership: **⚑N9** rate limits use YFex.Resilience's existing `PerScope` rate limiter; daily/monthly
+budgets become a **generic quota in YFex.Resilience** (reusable for AI spend, Authentication OTP, Installations), not a Notifications
+type — a prerequisite built at the start of N1. **⚑N18** scope = Tenancy scope; per-tenant `ApiEndpoint` records (already in YFex.Web)
+name the provider; CustomLogic only for tenant-specific code. **⚑N19** meters and gating are YFex.Licensing concepts (licensing 06/07);
+Notifications calls them through an optional seam until Licensing exists. N1 not started.
 
 ### 2026-11-09 — Phase N0 BUILT (repo `YFex.Notifications`, not committed)
 
