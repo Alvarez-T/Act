@@ -74,6 +74,8 @@ public enum VendorKeyRole : byte
   (`RotateVendorKey` requires an approval, 05 §5).
 - New app versions pin the current active + standby, so fresh installs do not depend on receiving the list first.
 - No certificate chain: two keys and a signed list give the same recovery property with less machinery.
+- **Built (LC-P1):** list versions are `epoch · counter`; only the standby opens a new epoch, so a stolen active key can never outrank
+  the recovery list under Installations' version floors (10 §5).
 
 ## 4. Requests to YFex.Cryptography
 

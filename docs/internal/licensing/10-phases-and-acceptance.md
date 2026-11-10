@@ -41,7 +41,7 @@
 
 | Library | Request | Status |
 |---|---|---|
-| YFex.Cryptography | `FileSigningKeyStore`/file root key on Linux/macOS (shared with Installations); confirm `RandomNumberGenerator`; optional KMS/HSM `ISigningKey` | open (09 §4) |
+| YFex.Cryptography | ✅ `FileSigningKeyStore` built;/file root key on Linux/macOS (shared with Installations); confirm `RandomNumberGenerator`; optional KMS/HSM `ISigningKey` | open (09 §4) |
 | YFex.Time | none: `GetTrustedNow()` + `IsUsableForSecurity` are enough | ✅ built |
 | YFex.Capabilities | optional "show unavailable as upsell" | open question |
 | YFex.Tenancy | optional scope kinds for `ScopeLimit` per kind | open question (03 §1.1) |
@@ -50,13 +50,13 @@
 
 | Needs | From | Status | Phase here |
 |---|---|---|---|
-| ⚑LC1–LC22 | user | **pending** | all |
-| ⚑I23 confirmed | user (installations README §6.2) | pending | all |
-| core `InstallationId`, `InstallationRole`, `BundleKind/Header/Audience`, `LocalInstallation` | Installations I0 | not built | P1 |
-| `SignedBundle`, `IBundleVerifier`, `IBundleStore`, floors, publishers (R1) | Installations I1 | not built | P1 |
+| ⚑LC1–LC22 | user | ✅ approved 2026-11-09 (README §6 notes) | all |
+| ⚑I23 confirmed | user (installations README §6.2) | ✅ | all |
+| core `InstallationId`, `InstallationRole`, `BundleKind/Header/Audience`, `LocalInstallation` | Installations I0 | ✅ built | P1 |
+| `SignedBundle`, `IBundleVerifier`, `IBundleStore`, floors, publishers (R1) | Installations I1 | ✅ built (shape of R1 to re-check at LC-P1 start) | P1 |
 | registry, enrollment, policy (R2–R6), `.Testing` harness | Installations I2 | ✅ built (reworked 2026-10-13; `ApplicationName` instead of `AppName`; harness `TestCentral`) | P3 |
 | `CallContext` installation (⚑I11) | Installations.Rpc | ✅ built: `InstallationCallContext.Current/CurrentTenant` next to CallContext (installations 08 §5) | P2 (server mask) |
-| bundle gossip (R7) | Installations I4 | not built | P3 (LAN freshness) |
+| bundle gossip (R7) | Installations I4 | ✅ built | P3 (LAN freshness) |
 | `IPermissionAvailability`, `DenialKind.Unavailable` (A1–A4) | Authorization | not requested yet | P2 |
 | `SignedPayload`, `SigningKeyRing`, `CanonicalWriter`, `Hashing`, `SealedValue` | YFex.Cryptography 0–3 | ✅ built | P1 |
 | `GetTrustedNow`, `IsUsableForSecurity`, `FakeDeviceClock`, `FakeTimeSource` | YFex.Time T0–T2 | ✅ built | P1 |
@@ -125,4 +125,52 @@ an in-memory bundle verifier earlier, but would be re-tested).
 
 ## 5. Implementation log
 
-*(empty — nothing implemented)*
+### LC-P1 — 2026-11-09 ✅
+
+Repo `C:\Dev\YFex\YFex.Licensing` (`licensing.slnx`): `YFex.Licensing`, `.Testing`, `tests/YFex.Licensing.Tests`,
+`tests/YFex.Licensing.AotSmoke`, `benchmarks/YFex.Licensing.Benchmarks`. References YFex core, YFex.Cryptography, YFex.Installations and
+YFex.Authorization.Public (no YFex.Time reference: the trusted-time contracts are in core).
+
+- **Catalog:** `ProductId`/`ModuleId`/`LimitId`/`MeterId` (grammar `a-z0-9.-`, ≤ 64), `LicensedProduct.Define` with `ProductBuilder` /
+  `ModuleBuilder`, `LicensingConfigurationException` (permission in two modules, keep-list outside its module, product keep-list inside
+  a module, undeclared permission, duplicate module, Central counted), `CatalogManifest` (sorted indented JSON with `\n`, `Hash`),
+  `LicensingCatalogSnapshot.Verify` in `.Testing`.
+- **Documents:** `License`, `ActivationList`, `VendorKeyList` with canonical codecs (format tag 1, lists written sorted, decode refuses
+  non-canonical bytes) and golden files. `LicensingBundles` (kinds, publisher `vendor`, `AddVendor` on Installations'
+  `BundlePublishers`).
+- **Vendor keys:** `VendorKeys.Pin`, `VendorKeyDirectory` (`IPublicKeyDirectory` for the vendor publisher, `CanSignDocuments`, `Apply`
+  with `VendorKeyListCheck`).
+- **Evaluation:** `LicenseState` / `SeatState` unions, `ModuleAvailability`, `ILicense`, `InstallationLicense` (accepts bundles the
+  store accepted, evaluates on trusted time, `WaitUntilAvailableAsync`, `Changed`), internal `LicenseEvaluator`, `LicensingOptions`,
+  `LicensedInstallation`, `LicensingLocalState` (canonical bytes for the host to seal).
+- **Testing:** `TestVendor`, `TestTrustedClock` (trusted time + running time under test control).
+- **Gates:** 50 tests pass on Windows and on Linux (WSL Ubuntu 26.04 via `linuxKit`); AOT smoke publish win-x64 0 IL warnings, exe
+  exits 0. Benchmarks project builds (not run yet).
+
+**Changes against the design (current source wins):**
+
+1. `License` carries **`IssuedAt`** (must equal the bundle header's issue instant; freshness counts from it) and `Tenant` is a core
+   **`TenancyPath`** (the tenant root scope `0=farmaviva`, depth 1), not a bare string. `ActivationList.Scope` is a `TenancyPath` too.
+2. **Key-list versions are `epoch · counter`** (high/low 32 bits, `VendorKeyList.ComposeVersion`). An active-signed list keeps the epoch;
+   only the standby may open a new one. This is how "the standby list wins" works with Installations' version floors: a thief holding
+   the active key can push the counter to its top but never into the next epoch. Further rules: an active key may only add active keys
+   and retire itself (never touch the standby, revoke or remove keys); a revoked key never comes back; every list keeps at least one
+   active and one standby key; a retired or revoked signer is refused first.
+3. **`SeatPending` has an optional `Refusal`** (the vendor's reason during the grace, 03 §3), and an activation whose evidence key or role
+   differs counts as `EvidenceKeyMismatch` (pending, then not activated).
+4. Before `Subscription.From` the state is `LicenseMissing`. A Trial has no subscription grace and no base continuation (also when it goes
+   stale offline). When several reasons expire the License, the earliest `Since` is shown and base continues only while every reason
+   allows it.
+5. Never anchored at all: the License ages with running time from its own `IssuedAt` (running time restarts when a License is applied
+   while no trusted evaluation exists), which makes the 04 §2 residual concrete.
+6. The library-wide notice periods are `LicensingOptions` (freshness warning 7 d, renewal 30 d, module ending 7 d, default activation
+   grace 7 d, `MaximumClockUncertainty` 10 min); per-license periods stay in `LicenseTimings` (`LicenseTimings.Defaults(hosting)` gives
+   30/45/180 days, all configurable per license, ⚑LC12).
+
+**Not in LC-P1 (later phases):** `AddYFexLicensing` DI wiring (bundle store subscription, the once-a-minute timer as a hosted service,
+persisting `LocalState` sealed in `IKeyValueStore`, reading `LicensedInstallation` from Installations) — needed before an app can use it;
+it fits LC-P2 together with the Authorization hook. Gating (LC-P2), central (P3), vendor service (P4), check-in (P5).
+
+**Found:** YFex.Installations and YFex.Networking fail to restore with SDK 11.0.100-rc.3 (NU1510 as error: they reference
+`Microsoft.Extensions.DependencyInjection.Abstractions` / `Hosting.Abstractions`, which the SDK now prunes). Licensing builds with
+`-p:WarningsNotAsErrors=NU1510` until their owners remove the references.
