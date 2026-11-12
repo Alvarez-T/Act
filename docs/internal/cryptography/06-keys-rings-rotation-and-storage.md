@@ -219,3 +219,32 @@ OpenResult result = lookup switch
 
 `DestroyAsync` on a ring disposes the `SecretKey` (zeroed once the last lease ends), marks the entry `Destroyed` and saves. The Privacy
 vault does the same for subject keys and adds the tombstone and cross-node signal (privacy 05 §8).
+
+## 8. Large streams and key-ring escrow (CR1 for databases-and-backups ⚑DB18, built 2026-11-11)
+
+**`SealedStream`** (format 0x82, `Sealing/SealedStream.cs`): any-length content sealed to 1–8 recipients. A random 32-byte data
+key per stream is recipient-sealed (0x81/0x11) to each recipient in the header; content is cut into chunks (default 64 KiB, 4 KiB–16
+MiB), each AES-256-GCM under HKDF(data key, SHA-256(header) ‖ context) with nonce = chunk index ‖ final flag (STREAM construction):
+reorder, drop, truncation and header edits fail. Opening writes plaintext as chunks authenticate, so on a failed result the caller
+discards the output. The input must end where the sealed stream ends (one stream per file/object). Golden tests pin both layouts
+(`SealedStreamTests`, `KeyRingEscrowTests`).
+
+**`KeyRingEscrow`** (`Keys/KeyRingEscrow.cs`): `Export(ring, escrowPublicKey)` → one recipient-sealed blob with every entry (status,
+validity) and the material of non-destroyed keys, context bound to the ring name; `Import(escrowKeys, blob, name, now)` → `KeyRing`.
+
+**Procedure** (backup rings; the same for any ring whose loss would make data unreadable):
+
+1. **Create the escrow (recovery) key away from the server**: on an offline machine or HSM, a `KeyAgreement` ring of its own. Only
+   its **public key** goes to the server (configuration or signed manifest). The private part is kept by the customer (on-prem) or
+   the vendor (opt-in recovery, ⚑DB18), in a safe / second site / HSM, never next to the backups.
+2. **Seal every backup set to two recipients**: the backup ring (daily use) and the escrow key. Losing the server then never loses
+   the sets, even without step 3.
+3. **Escrow the backup ring itself**: `KeyRingEscrow.Export` after creation, after every rotation and after every destruction;
+   store the blob with the backups (it is useless without the escrow private key). Destructions must be re-exported, or an import
+   would bring a shredded key back.
+4. **Recover**: on the new machine, open the escrow ring from its safe copy, `KeyRingEscrow.Import`, then
+   `KeyRingProvider.RestoreAsync(ring)` (stores it wrapped by the new machine's root key; refuses when a ring of that name already
+   exists, so it never overwrites a live ring), restore. Then rotate the backup ring if the old machine may be compromised.
+5. **Drill** with the restore drills (⚑DB19): at least yearly, import the escrow into a throwaway process and open a recent set.
+
+Tooling to create/hold the escrow key (an offline CLI command) belongs to YFex.Backup DB-P1.

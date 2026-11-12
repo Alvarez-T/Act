@@ -257,6 +257,11 @@ Entities without a usable trigger column are listed as "retention not enforceabl
   startup check refuses to serve if the database's "last erasure replayed" marker is older than the erasure log.
 - **Re-imports:** a migration from a legacy ERP (YFex.DataMining) or a CSV import must not resurrect erased people. Importers check
   identifier indexes against the erasure log and skip matches (reported).
+- **Built 2026-11-11 (request PR1, databases-and-backups ⚑DB21):** `YFex.Privacy.Erasure` — `ErasureRecord` (scope, subject kind,
+  pseudonym/blind index, request id, executed at, optional destroyed subject key id), `IErasureLog` with `InMemoryErasureLog` and
+  `FileErasureLog` (sites, on-prem, first backup phase), `IErasureReplayTarget` + `ErasureReplayer.ReplaySinceAsync`. Not built yet:
+  the SQL log (`YFex.Privacy.Data`), the "last erasure replayed" marker and startup check, the `replay-erasures` CLI, and the erasure
+  engine that appends to the log (nothing calls it until Privacy.Rights exists).
 - **Vault backups** have a short retention (05 §8) so crypto-shredding completes in bounded time.
 
 ## 9. The response to the subject
