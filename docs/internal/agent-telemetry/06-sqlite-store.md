@@ -51,9 +51,9 @@ Views with readable names (`reads`, `sessions_summary`, `docs_never_read`) keep 
 ## 4. Writing
 
 - Pragmas: `journal_mode=WAL` (reads during ingest), `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`, `temp_store=MEMORY`.
-- Several sessions can end a turn at once, so several hooks can ingest at once. Writers serialize on a named mutex per database file
-  (`Global\YFex.AgentTelemetry.<hash>`); a hook that cannot get it within a few seconds leaves the work to the next run (the byte
-  offset in `ingest_state` makes that safe).
+- Several sessions can end a turn at once, so several hooks can ingest at once. Writers serialize on an exclusive lock file next to the
+  database (`reads.db.lock`; a named mutex was the first plan, but async code resumes on other threads, which a mutex does not allow); a
+  writer that cannot get it within 30 s leaves the work to the next run (`ingest_state` records which transcripts changed).
 - One transaction per transcript chunk: dimension upserts through in-memory caches (`path → file_id`, `text hash → text_id`), access
   rows through YFex.Data's `IBulkWriter` (prepared statements on SQLite), roll-ups updated in the same transaction.
 - Reports open the file read-only.

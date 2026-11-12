@@ -2,7 +2,8 @@
 
 > **Status:** APPROVED 2026-11-12, docs only, no code. Decision prefix **⚑AT1–⚑AT31**, all answered by the user on 2026-11-12:
 > ⚑AT1 (developer tool), ⚑AT6 changed (a project, release path from an environment variable), ⚑AT18 changed (no UI for now), ⚑AT24
-> changed (plain Cqrs dispatch, no aggregate configuration), and every other decision approved as proposed. Next: AT-P1.
+> changed (plain Cqrs dispatch, no aggregate configuration), and every other decision approved as proposed. **AT-P1 BUILT 2026-11-12**
+> (repo `YFex.AgentTelemetry`, [AT-P1 log](#at-p1-log-2026-11-12)); next AT-P2 (hooks, tool log).
 > Project kind: **developer tool**: [all-projects](../../agent/rules/all-projects.md) rules apply; infrastructure rules apply only to
 > the YFex library code it calls.
 > **Audience:** the user, then the session that builds it. Read this file, then [05](05-tool-cli-and-libraries.md) for the tool and
@@ -84,6 +85,31 @@ puts the command on PATH ([05 §1](05-tool-cli-and-libraries.md)).
 
 Tests and AOT checks come at the end of each phase (all-projects: tests last unless asked).
 
+### AT-P1 log (2026-11-12)
+
+- Built: repo `C:\Dev\YFex\YFex.AgentTelemetry` (library, CLI `agentReads`, 32 tests on synthetic transcripts); schema module
+  `yfex.agent-telemetry` v1; reports `sessions`, A1 `coverage`/`never-read`, A2, A3 `funnel`, A4, A8, A9, A10 `initiators`/`user-actions`,
+  A11, A13 `question`; `sql`, `status`; `hook` command (registration in Claude Code settings is AT-P2). Published to
+  `YFEX_AGENT_TELEMETRY_HOME = C:\Dev\Scripts\Exegent-telemetry` (user variable set), launcher `C:\Dev\Scripts\ExegentReads.bat`.
+- Real run: 274 transcripts (207 main + subagents in every project folder whose session started under the workspace; 33 outside) in about
+  11 s → 52.7 k accesses, 1 551 prompts; inventory 875 docs, 7 914 headings, 1 241 links.
+- Acceptance: `report funnel --since 2026-11-06` gives the review's main design row exactly for the four design sessions (map 4,
+  infrastructure 3, start-here 2, all-projects 2, yfex-csharp 2, domain 0, build-and-test 0). Differences: "any rule" 3 vs 4 (the review
+  counted a session that opened only the map and the skill), atlas 1 vs 0 (a design session read the atlas after the review), and more
+  code/other sessions because the tool reads every project folder and the review only `C--Dev-YFex`.
+- Changes from the design, found while building:
+  - a changed transcript is parsed whole and replaces its rows (not a byte-offset tail): no parser state to keep between runs, and a full
+    ingest takes seconds; `ingest_state.bytes_read` only says whether a file changed;
+  - the writer lock is an exclusive lock file `reads.db.lock`, not a named mutex: async code resumes on other threads, which a mutex
+    does not allow (06 §4);
+  - schema v1 leaves out `doc_version`, `session_check` and `rollup_day` until the phases that fill them (A12, A5, long ranges);
+  - "design" kind = edited something under `docs/internal` and no non-doc file in the workspace (design sessions also update the map
+    and `index.md`); edits outside the workspace (memory, notes) do not count;
+  - coverage counts files the agent opened; files only matched by a grep over a glob show as `searched_only`;
+  - the release is a framework-dependent single file: YFex.Cqrs does not publish AOT-clean (requests below).
+- YFex.Cqrs: the handler interfaces and a default in-process dispatcher (`CqrsDispatcher`, `AddYFexCqrs`) moved from Messaging.Rpc into
+  Cqrs first (user decision 2026-11-12, commits Cqrs `b04641b`, Messaging `e5c9885`, EventSourcing `4b2ad0d`).
+
 ## Ecosystem fit
 
 Every library in the [infrastructure map](../../agent/infrastructure-map.md), outcome per [ecosystem-fit §1](../../agent/rules/ecosystem-fit.md).
@@ -133,6 +159,9 @@ Every library in the [infrastructure map](../../agent/infrastructure-map.md), ou
 | YFex.Expressions (or YFex.Data) | translate a compiled expression over a flat row schema into a SQL `WHERE` with parameters, for a dialect | no (additive) | AT31 ✔ | AT-P3 (stop-gap: in-memory evaluation after the SQL prefilter; fine below ≈ 1 M rows) |
 | YFex.Data | schema modules that can declare SQLite FTS5 virtual tables and views, or a documented plain-SQL step inside a module | no | AT28 ✔ | AT-P1 (stop-gap: plain SQL step) |
 | Atlas (`yfexAtlas.cs`) | read `reads.db` when present and add an "Agent reads" view | no | AT18 ✔ (deferred) | later |
+| YFex.Cqrs | publish AOT-clean: `CompiledMessagingRegistry` uses `MakeGenericMethod` (IL3050/IL2060, line 224) and `GetConstructors` on an unannotated type (IL2070, line 280) | no | pending | Native AOT release of `agentReads` (stop-gap: framework-dependent single file) |
+| YFex.Cqrs | `[NotNullWhen(true)]` on `CacheableQueryResult<T>.TryGetValue` / `QueueableResult<T>.TryGetValue` | no | pending | nothing blocked (callers add `is null` checks) |
+| YFex.Data | a public way to keep a `YFexConnection` open across units of work (`KeepOpen` is internal; each `StartScopedTransaction` closes the connection, so per-connection pragmas are lost) | no | pending | nothing blocked (pragmas moved to the connection string; WAL is stored in the file) |
 
 ## Decisions
 
