@@ -67,6 +67,7 @@ Other `YFex.*` folders may be infrastructure, product-specific libraries, experi
 - Generator architecture: [`docs/internal/source-generators.md`](../internal/source-generators.md). Check current generator APIs semantically before copying old examples.
 - Running code on Android (headless emulator, USB handhelds, `androidKit probe`): [`android-testing.md`](android-testing.md).
 - Running code on Linux (WSL2 `yfex-linux` + Docker distro matrix, swtpm, Secret Service, `linuxKit verify-crypto`): [`linux-testing.md`](linux-testing.md).
+- Telemetry of what agents read (developer tool `YFex.AgentTelemetry`, design only): [`agent-telemetry/README.md`](../internal/agent-telemetry/README.md).
 - Former full agent file: [`AGENTS archive`](AGENTS-archive-2026-10-09.md). It preserves detailed examples, but their build matrix, status notes, and API examples may be stale.
 
 ## Efficient task input
