@@ -42,7 +42,7 @@
 
 ## 4. Phases
 
-### DB-P0 — Decisions
+### DB-P0 — Decisions — **DONE 2026-11-12** (except owner acknowledgements)
 User confirms ⚑DB1–⚑DB30; repo `YFex.Backup` created from the YFex.Time template; owners acknowledge requests.
 
 ### DB-P1 — Smallest useful backup (on-prem / site, local folder)
@@ -91,7 +91,17 @@ User confirms ⚑DB1–⚑DB30; repo `YFex.Backup` created from the YFex.Time te
 
 ## 5. Implementation log
 
-- **2026-11-11 — prerequisites CR1 + PR1 (no DB phase started).** Uncommitted in their repos.
+- **2026-11-12 — DB-P0.** ⚑DB1–⚑DB30 decided (README §6.3). CR1, PR1 and this design committed (YFex.Cryptography `a8ee2ad`,
+  YFex.Privacy `4d41610`, YFex `11db902`). Repo `C:\Dev\YFex\YFex.Backup` created (git `main`, from the YFex.Time template):
+  `backup.slnx`; `src/YFex.Backup` (→ core, Cryptography), `src/YFex.Backup.Data` (→ YFex.Backup, YFex.Data),
+  `src/YFex.Backup.Testing` (→ YFex.Backup, YFex.Time.Testing), all empty and `IsAotCompatible`; `tests/YFex.Backup.Tests` with
+  `ArchitectureTests` (main package never references Data/Files/Jobs/Cluster, the Data bridge references only YFex.Backup + YFex.Data,
+  every source project is AOT-compatible; the repo path is stamped into the test assembly so it works with `--artifacts-path`);
+  `tests/YFex.Backup.AotSmoke`. `.Files` and `.Jobs` bridges wait for DB-P2. Windows 4/4, Linux (WSL) 4/4; AOT smoke win-x64 and
+  linux-x64 0 IL warnings, exit 0 (an empty package proves only that the projects link). **Open:** the owners in §2 have not
+  acknowledged their requests yet; each is picked up in that owner's own session.
+
+- **2026-11-11 — prerequisites CR1 + PR1 (no DB phase started).** Committed 2026-11-12 (see DB-P0 entry).
   - CR1, YFex.Cryptography: `Sealing/SealedStream.cs` (chunked STREAM sealing to 1–8 recipients, golden), `Keys/KeyRingEscrow.cs`
     (escrow export/import, golden plaintext), `KeyRingProvider.RestoreAsync` (store an imported ring, never overwrite); tests
     `SealedStreamTests` (14) + `KeyRingEscrowTests` (6, incl. hybrid ML-KEM); AOT smoke check. Windows 264/265, Linux (WSL, OpenSSL

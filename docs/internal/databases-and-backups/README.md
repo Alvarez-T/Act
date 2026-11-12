@@ -1,6 +1,6 @@
 # YFex databases and backups — tenant placement over several databases and regions, routing, moves, replicas, failover; backup and restore — Design
 
-> **Status:** DESIGN 2026-11-11. Docs only: no code, no repo. **User answered ⚑DB1–⚑DB30 on 2026-11-11 (§6.3); all follow-up proposals accepted the same day — every ⚑DB decided.**
+> **Status:** DESIGN 2026-11-11; **DB-P0 done 2026-11-12** (repo `C:\Dev\YFex\YFex.Backup` created, skeleton only; log in 09 §5). **User answered ⚑DB1–⚑DB30 on 2026-11-11 (§6.3); all follow-up proposals accepted the same day — every ⚑DB decided.**
 > **Revision 2026-11-11 (user feedback):** tenants are keyed by **`TenancyPath`**, never a string; **regions, residency and new-tenant
 > registration moved to [YFex.Tenancy.Registry](../tenancy/README.md)** (⚑TN), with the shared types in core (`RegionId`,
 > `ResidencyRule`, `ITenantLocations`); **Files** resolves one bucket per region; **backups cover database and files**; replica reads are

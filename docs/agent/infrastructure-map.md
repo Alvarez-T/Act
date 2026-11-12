@@ -9,6 +9,7 @@ Use this file only when a task crosses package or repository boundaries. This is
 | Reusable types named by several libraries | `YFex/src/YFex` | [`docs/public/core.md`](../public/core.md) |
 | Local app-state storage, durable queues, caches | `YFex.Persistence` | [`YFex.Persistence/README.md`](../../../YFex.Persistence/README.md) |
 | Database commands, SQL, mapping, bulk writes, data migration | `YFex.Data` | [`YFex.Data/README.md`](../../../YFex.Data/README.md) |
+| Backup and restore the database/platform does not do: encrypted backup sets, retention, restore drills, per-tenant export/restore, erasure replay after restore; not placement (tenant → database: `YFex.Data.Placement`, planned) | `YFex.Backup` (repo created 2026-11-12, DB-P0 skeleton; DB-P1 next) | [`databases-and-backups/README.md`](../internal/databases-and-backups/README.md) |
 | Scope identity and scoped overrides | `YFex.Tenancy` | [`YFex.Tenancy/AGENTS.md`](../../../YFex.Tenancy/AGENTS.md) |
 | Scope-specific implementation selection | `YFex.CustomLogic` | [`YFex.CustomLogic/AGENTS.md`](../../../YFex.CustomLogic/AGENTS.md) |
 | Shape validation, pure business-rule evaluation, expression language | `YFex.Validation`, `YFex.Rules`, `YFex.Expressions` | [`validation/README.md`](../internal/validation/README.md) |
