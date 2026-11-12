@@ -608,9 +608,28 @@ public class CartConfig : IAggregateConfiguration<Cart>
 
 ## 7. Testing & Mocking
 
+### Default dispatcher (YFex.Cqrs only)
+
+`CqrsDispatcher` is the default in-process `IDispatcher` in YFex.Cqrs, with the handler interfaces (`IQueryHandler<,>`,
+`ICommandHandler<>`, `ICommandHandler<,>`, `IValidatedCommandHandler<>`), `IHandlerInvoker` and `LocalHandlerInvoker`. It runs the
+pipeline (shape → authorize → rules → context rules → handler, through the resilience spec) and needs no aggregate configuration and no
+Messaging reference. It has no query cache, offline queue or event bus (`PublishAsync` throws); use Messaging's `LocalDispatcher` for those.
+
+```csharp
+using YFex.Cqrs;
+
+services.AddSingleton<IQueryHandler<CoverageReport, CoverageRows>, CoverageReportHandler>();
+services.AddYFexCqrs(new LocalHandlerInvokerRegistryBuilder()
+    .AddQuery<CoverageReport, CoverageRows>()
+    .Build());
+
+var rows = await provider.GetRequiredService<IDispatcher>()
+    .QueryAsync<CoverageReport, CoverageRows>(new CoverageReport(filter));
+```
+
 ### Test with LocalDispatcher
 
-`LocalDispatcher` resolves handlers from DI, executes the full validation/authorization/cache pipeline, and works without any network:
+`LocalDispatcher` (YFex.Messaging.Rpc) derives from `CqrsDispatcher` and adds the query cache, offline handling and the event bus; it works without any network:
 
 ```csharp
 using YFex.Cqrs;
@@ -756,7 +775,8 @@ public interface IDispatcher
 |---|---|---|
 | Client (Blazor/MAUI/WPF) | `FusionMessageBus` | Fusion proxy --> WebSocket --> Server |
 | Server (Wolverine) | `LocalDispatcher` | Direct to `IHandlerInvoker` |
-| Tests / Simple apps | `LocalDispatcher` | DI-resolved handlers |
+| Apps with cache / offline / events | `LocalDispatcher` (Messaging.Rpc, derives from `CqrsDispatcher`) | DI-resolved handlers |
+| Tools, console apps, tests | `CqrsDispatcher` (YFex.Cqrs, `AddYFexCqrs`) | DI-resolved handlers; no cache, offline or events |
 
 ### Analyzer Diagnostics
 

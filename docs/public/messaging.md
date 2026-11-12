@@ -69,7 +69,8 @@ The dispatcher routes static helper calls to the appropriate backend:
 |---|---|---|
 | Client (Blazor/MAUI/WPF) | `FusionMessageBus` | Fusion proxy --> WebSocket --> Server |
 | Server (Wolverine) | `LocalDispatcher` | Direct to `IHandlerInvoker` via `IMessageBus` |
-| Tests / Simple apps | `LocalDispatcher` | DI-resolved `IQueryHandler<>` / `ICommandHandler<>` |
+| Apps with cache / offline / events | `LocalDispatcher` (derives from YFex.Cqrs `CqrsDispatcher`) | DI-resolved `IQueryHandler<>` / `ICommandHandler<>` |
+| Tools, console apps, tests | YFex.Cqrs `CqrsDispatcher` (`AddYFexCqrs`) | same handlers; no cache, offline or events |
 
 ---
 
@@ -565,11 +566,10 @@ services.UseYFexMessagingRpcServerWithWolverine(opts =>
 | `ResultConversionMiddleware` | Converts exceptions to `Result.Fail()` across the wire |
 | `EventBridge<TEvent>` | Bridges Wolverine cascading messages to Fusion event channels |
 
-### Handler Interfaces (for LocalDispatcher)
+### Handler Interfaces (in YFex.Cqrs)
 
 ```csharp
 using YFex.Cqrs;
-using YFex.Messaging.Rpc;
 
 public class GetCustomerHandler : IQueryHandler<GetByIdQuery, Customer>
 {
@@ -959,7 +959,7 @@ Server and in-process hosts use `AlwaysConnectedServer.Instance`. A second serve
 
 | Interface | For |
 |---|---|
-| `IQueryHandler<TQuery, TResult>` | Query handlers (used by `LocalHandlerInvoker`) |
+| `IQueryHandler<TQuery, TResult>` | Query handlers (YFex.Cqrs; used by `LocalHandlerInvoker`) |
 | `ICommandHandler<TCommand>` | Void command handlers |
 | `ICommandHandler<TCommand, TResult>` | Result-bearing command handlers |
 | `IEventRecipient<T>` | Sync event subscriber |

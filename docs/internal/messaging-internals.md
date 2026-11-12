@@ -88,6 +88,11 @@ while running:
 
 ## LocalDispatcher Pipeline
 
+Since 2026-11-12 the online stages live in YFex.Cqrs `CqrsDispatcher` (the default in-process dispatcher, with the handler
+interfaces, `IHandlerInvoker` and `LocalHandlerInvoker`). `LocalDispatcher` derives from it: it checks the connection first and adds the
+query cache read-through (`ExecuteQueryAsync`), optimistic updates and invalidation after commands (`OnCommandSucceededAsync`),
+the caller from `CallContext` (`AuthorizeAsync`), the offline paths and the event bus.
+
 ### Query Dispatch
 
 ```
