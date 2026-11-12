@@ -38,7 +38,8 @@ physical schema is in [06](06-sqlite-store.md).
 - Claude Code deletes transcripts after `cleanupPeriodDays` (default 30). The store keeps its rows after that, so it becomes the only
   copy of the scrubbed prompts and titles. Proposed: keep 365 days, then drop `prompt.text` and `purpose_text` and keep the counts
   (⚑AT11).
-- `agentReads forget --session <id>` and `--before <date>` delete rows; `agentReads rebuild` drops the store and re-ingests the
+- `agentReads forget --session <id>` and `--before <date>` delete rows, record the session as forgotten (later ingests and rebuilds
+  skip it) and compact the file so the text is not left in free pages; `agentReads rebuild` drops the store and re-ingests the
   transcripts still on disk.
 - Raising `cleanupPeriodDays` to keep more raw transcripts is a separate settings decision (⚑AT3); it keeps unscrubbed text longer.
 

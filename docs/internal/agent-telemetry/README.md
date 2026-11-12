@@ -3,7 +3,8 @@
 > **Status:** APPROVED 2026-11-12, docs only, no code. Decision prefix **⚑AT1–⚑AT31**, all answered by the user on 2026-11-12:
 > ⚑AT1 (developer tool), ⚑AT6 changed (a project, release path from an environment variable), ⚑AT18 changed (no UI for now), ⚑AT24
 > changed (plain Cqrs dispatch, no aggregate configuration), and every other decision approved as proposed. **AT-P1 BUILT 2026-11-12**
-> (repo `YFex.AgentTelemetry`, [AT-P1 log](#at-p1-log-2026-11-12)); next AT-P2 (hooks, tool log).
+> (repo `YFex.AgentTelemetry`, [AT-P1 log](#at-p1-log-2026-11-12)); **AT-P2 BUILT 2026-11-12** (hooks live in the user settings, tool
+> log, `forget` / `rebuild`, [AT-P2 log](#at-p2-log-2026-11-12)); next AT-P3 (expectation checks, remaining reports, `--where`).
 > Project kind: **developer tool**: [all-projects](../../agent/rules/all-projects.md) rules apply; infrastructure rules apply only to
 > the YFex library code it calls.
 > **Audience:** the user, then the session that builds it. Read this file, then [05](05-tool-cli-and-libraries.md) for the tool and
@@ -49,16 +50,16 @@ Claude decides to call, which is the behaviour under study. Instead the Claude C
 Claude does not see it run.
 
 ```jsonc
-// ~/.claude/settings.json (sketch) — the harness pipes the hook input JSON to stdin
+// ~/.claude/settings.json (registered 2026-11-12) — the harness pipes the hook input JSON to stdin; on Windows Git Bash runs the command
 "hooks": {
-  "Stop":         [{ "hooks": [{ "type": "command", "command": "\"$YFEX_AGENT_TELEMETRY_HOME/agentReads.exe\" hook", "async": true }] }],
-  "SubagentStop": [{ "hooks": [{ "type": "command", "command": "\"$YFEX_AGENT_TELEMETRY_HOME/agentReads.exe\" hook", "async": true }] }],
-  "SessionEnd":   [{ "hooks": [{ "type": "command", "command": "\"$YFEX_AGENT_TELEMETRY_HOME/agentReads.exe\" hook", "async": true }] }]
+  "Stop":         [{ "hooks": [{ "type": "command", "command": "\"${YFEX_AGENT_TELEMETRY_HOME:-C:/Dev/Scripts/Exe/agent-telemetry}/agentReads.exe\" hook", "async": true }] }],
+  "SubagentStop": [ … same … ],
+  "SessionEnd":   [ … same … ]
 }
 ```
 
-`agentReads hook` reads `transcript_path` (or `agent_transcript_path`) from stdin, ingests the bytes added since its last run, writes
-nothing to stdout and exits 0. The user runs `agentReads ingest --all` once for the backlog and `agentReads report …` to analyse.
+`agentReads hook` reads `transcript_path` (or `agent_transcript_path`) from stdin, re-parses that transcript when it changed (AT-P1 log),
+writes nothing to stdout or stderr and exits 0; failures go to the tool log, which `agentReads status` shows. The user runs `agentReads ingest --all` once for the backlog and `agentReads report …` to analyse.
 `YFEX_AGENT_TELEMETRY_HOME` is the release folder (e.g. `C:\Dev\Scripts\Exe\agent-telemetry`); `C:\Dev\Scripts\Exe\agentReads.bat`
 puts the command on PATH ([05 §1](05-tool-cli-and-libraries.md)).
 
@@ -79,7 +80,7 @@ puts the command on PATH ([05 §1](05-tool-cli-and-libraries.md)).
 | Phase | Content | Done when |
 |---|---|---|
 | AT-P1 | repo `YFex.AgentTelemetry`; store (Data schema module), transcript and shell parsers, classifier, initiators, scrubbing, `ingest --all`, `docs refresh`, reports A1–A4, A8–A11, A13, `sql`, `status`; publish to `YFEX_AGENT_TELEMETRY_HOME` | the 94 transcripts load; the 2026-11-12 review's rule-read counts ([§1](../../agent/ecosystem-fit-review-2026-11-12.md)) are reproduced by a report |
-| AT-P2 | async `Stop` / `SubagentStop` / `SessionEnd` hooks; named-mutex writers; tool log + `status` errors | a new session appears in the store a turn later; the session's context shows no hook text; two sessions ending together both ingest |
+| AT-P2 ✅ | async `Stop` / `SubagentStop` / `SessionEnd` hooks; lock-file writers; tool log + `status` errors; `forget`, `rebuild` | a new session appears in the store a turn later; the session's context shows no hook text; two sessions ending together both ingest |
 | AT-P3 | expectation checks (Rules, Rules.Dynamic) and the remaining reports A5–A7, A12, A14–A17; `--where` (Expressions) | `check` reproduces by hand-checked verdicts on five sessions |
 | later | atlas view or another UI (⚑AT18); per-tool hooks if the transcript format breaks; capabilities (⚑AT30) | — |
 
@@ -110,6 +111,36 @@ Tests and AOT checks come at the end of each phase (all-projects: tests last unl
 - YFex.Cqrs: the handler interfaces and a default in-process dispatcher (`CqrsDispatcher`, `AddYFexCqrs`) moved from Messaging.Rpc into
   Cqrs first (user decision 2026-11-12, commits Cqrs `b04641b`, Messaging `e5c9885`, EventSourcing `4b2ad0d`).
 
+### AT-P2 log (2026-11-12)
+
+- Hooks: async `Stop`, `SubagentStop`, `SessionEnd` command hooks in `~/.claude/settings.json` (user's OK 2026-11-12). On Windows Claude
+  Code runs hook commands in Git Bash (PowerShell only without Git Bash), so `$VAR` expands. The command is
+  `"${YFEX_AGENT_TELEMETRY_HOME:-C:/Dev/Scripts/Exe/agent-telemetry}/agentReads.exe" hook`: the desktop app keeps the environment it started
+  with, so the user variable set during AT-P1 is only seen after a restart; until then the release folder is the fallback. The `.bat`
+  launcher is not needed for hooks.
+- Tool log (⚑AT29): YFex.Logging JSON Lines under `%LOCALAPPDATA%\YFex\agent-telemetry\logs\<date>.jsonl`, 30 days. Only the CLI
+  (composition root) references YFex.Logging; the library reads the files back for `status` (hook runs, median / max time, the last five
+  warnings and errors). Each hook run writes one record with `elapsedMs`; a failed ingest or an exception is an error record. The hook sets
+  `SelfLog.Output = null`, so the pipeline's own diagnostics cannot reach stderr.
+- Several processes append to the same log: YFex.Logging's `RollingFileSink` keeps its file open with `FileShare.Read` for the life of the
+  process, so a second hook would drop its records. The CLI wraps it (`SharedFileSink`: open per batch, retry for up to 1 s); request
+  below.
+- `forget --session <id or unique prefix>` / `--before yyyy-MM-dd` (last activity before local midnight): deletes the session's
+  accesses, prompts, titles, user actions and agents, then texts and paths nothing refers to, and compacts the file (FTS optimize,
+  `vacuum`, WAL checkpoint) so the text is gone from disk. Schema v2 adds `forgotten_session`: later ingests and `rebuild` skip those
+  sessions, so a forgotten session does not come back while its transcript exists.
+- `rebuild [--yes]`: lists stored sessions whose main transcript is gone (session id = transcript file name, checked on all 204 stored
+  sessions) and changes nothing unless `--yes`; with none lost it runs at once. It keeps a copy `reads.db.before-rebuild`
+  (`vacuum into`), deletes the derived rows, re-ingests, refreshes the inventory and compacts.
+- Cost (item 4): the first hook took 3.2–5.4 s for one changed 2 MB transcript because `UpdateKindsAsync` recomputed every agent's kind
+  with sub-queries on `agent_id`, which no index leads with. It now updates only the sessions written in the run and also matches
+  `session_id` (index `ix_access_session_seq`): 0.3–0.6 s inside the process, about 1 s wall clock with start-up; an unchanged transcript
+  0.2 s. Whole-transcript re-parse stays.
+- Tests: 42 (10 new: forget by id, prefix and date, forgotten sessions stay out, rebuild with and without lost sessions, two writers at
+  once, log round trip, log file held by another process).
+- Verified by hand on the real store: the hook prints nothing and exits 0 with and without `YFEX_AGENT_TELEMETRY_HOME`; this session
+  appeared with its title and accesses; a malformed input became an error row in `status`.
+
 ## Ecosystem fit
 
 Every library in the [infrastructure map](../../agent/infrastructure-map.md), outcome per [ecosystem-fit §1](../../agent/rules/ecosystem-fit.md).
@@ -123,7 +154,7 @@ Every library in the [infrastructure map](../../agent/infrastructure-map.md), ou
 | **YFex.Rules** (+ `.Dynamic`, `.Data`) | used | expectation checks per session as verdicts; expectations editable without rebuild, stored in `reads.db` | AT26 ✔ |
 | **YFex.Expressions** | used; lacks a feature | `--where` filters compiled against the row schema; no translation to SQL, so evaluation is in memory after the SQL prefilter | AT27 ✔, AT31 ✔ |
 | **YFex.Data** + `YFex.Data.Sqlite` | used; may lack a feature | versioned schema modules, row mapping, `IBulkWriter`; FTS5 virtual tables and views may need plain SQL steps | AT28 ✔ |
-| YFex.Logging | used (tool's own log); not the store | hooks are silent, so failures go to a rolling log shown by `status` | AT29 ✔, AT17 ✔ |
+| YFex.Logging | used (tool's own log); not the store; lacks a feature | hooks are silent, so failures go to a rolling log shown by `status`; its rolling file cannot be shared by several processes | AT29 ✔, AT17 ✔ |
 | YFex.Actors | used (names only) | `ActorKind.Agent` / `User` vocabulary | AT13 ✔ |
 | Atlas (`docs/atlas`, `yfexAtlas`) | better placement (later) | a "never read" view could live there; no UI for now | AT18 ✔ (deferred) |
 | YFex.LoggY | not a fit | tail viewer for operation logs | AT17 ✔ |
@@ -132,7 +163,7 @@ Every library in the [infrastructure map](../../agent/infrastructure-map.md), ou
 | YFex.Backup | not a fit | the data folder is covered by the profile backup | — |
 | YFex.Jobs | not a fit | no periodic pass: hooks trigger ingest; manual `--all` sweep | AT19 ✔ |
 | YFex.Hosting (design) | not a fit | no background service | AT19 ✔ |
-| YFex.Resilience | not a fit | local I/O; SQLite busy timeout + named mutex | — |
+| YFex.Resilience | not a fit | local I/O; SQLite busy timeout + writer lock file | — |
 | YFex.Orchestration | not a fit | single-step ingest | — |
 | YFex.System / YFex.Profiling | not a fit | consent-gated telemetry shipped to a server; here nothing leaves the PC | AT20 ✔ |
 | YFex.Time | not a fit | timestamps come from the transcripts | — |
@@ -161,6 +192,7 @@ Every library in the [infrastructure map](../../agent/infrastructure-map.md), ou
 | Atlas (`yfexAtlas.cs`) | read `reads.db` when present and add an "Agent reads" view | no | AT18 ✔ (deferred) | later |
 | YFex.Cqrs | publish AOT-clean: `CompiledMessagingRegistry` uses `MakeGenericMethod` (IL3050/IL2060, line 224) and `GetConstructors` on an unannotated type (IL2070, line 280) | no | pending | Native AOT release of `agentReads` (stop-gap: framework-dependent single file) |
 | YFex.Cqrs | `[NotNullWhen(true)]` on `CacheableQueryResult<T>.TryGetValue` / `QueueableResult<T>.TryGetValue` | no | pending | nothing blocked (callers add `is null` checks) |
+| YFex.Logging | `RollingFileSink` usable by several processes at once (open with `FileShare.ReadWrite` and append per batch, or a `{pid}` path token); today a second process cannot open the file and its records are dropped with only a `SelfLog` line. Also useful for CLIs, hooks and any multi-process host writing one log | no | pending | nothing blocked (stop-gap: `SharedFileSink` in the CLI opens the file per batch and retries) |
 | YFex.Data | a public way to keep a `YFexConnection` open across units of work (`KeepOpen` is internal; each `StartScopedTransaction` closes the connection, so per-connection pragmas are lost) | no | pending | nothing blocked (pragmas moved to the connection string; WAL is stored in the file) |
 
 ## Decisions

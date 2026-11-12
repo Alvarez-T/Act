@@ -20,8 +20,9 @@ C:\Dev\YFex\YFex.AgentTelemetry\            own Git root, like the other sibling
   variable is missing the publish fails with a message instead of guessing.
 - **Launcher on PATH:** `C:\Dev\Scripts\Exe\agentReads.bat` → `"%YFEX_AGENT_TELEMETRY_HOME%\agentReads.exe" %*`, so you type
   `agentReads …` anywhere.
-- **Hooks** call the exe through the variable: `"$YFEX_AGENT_TELEMETRY_HOME/agentReads.exe" hook` (async; which shell Claude Code uses
-  for hook commands on Windows is checked in AT-P2, and the `.bat` is the fallback).
+- **Hooks** call the exe through the variable: `"${YFEX_AGENT_TELEMETRY_HOME:-C:/Dev/Scripts/Exe/agent-telemetry}/agentReads.exe" hook` (async). On Windows Claude Code
+  runs hook commands in Git Bash (PowerShell only when Git Bash is missing), so `$VAR` works; the default path covers a desktop app
+  started before the variable was set (checked in AT-P2).
 - Native AOT if the referenced libraries publish clean; otherwise framework-dependent single file. Start-up time only matters for the
   hook, and the hook is async.
 - The data folder is separate from the release folder: `%LOCALAPPDATA%\YFex\agent-telemetry\` (`reads.db`, `logs\`). Overridable
@@ -37,9 +38,9 @@ C:\Dev\YFex\YFex.AgentTelemetry\            own Git root, like the other sibling
 | `agentReads report <name> [filters]` | the analyses of [07](07-analysis-catalogue.md) (`coverage`, `docs-vs-code`, `funnel`, `first-rule`, `sections`, `links`, `rereads`, `misses`, `initiators`, `subagents`, `change-impact`, `question`, `sequences`, `purposes`, `models`, `size`) |
 | `agentReads check [filters]` | expectation verdicts per session (A5) |
 | `agentReads sql "<SELECT …>"` | read-only SQL |
-| `agentReads forget --session <id>` · `--before <date>` | delete rows |
-| `agentReads rebuild` | drop and re-ingest the transcripts still on disk (warns what will be lost: sessions whose transcripts are gone) |
-| `agentReads status` | store size, last ingest, transcripts pending, the last hook errors from the log |
+| `agentReads forget --session <id>` · `--before <date>` | delete a session's rows (id or unique prefix) or those last active before the date; forgotten sessions are not ingested again; the file is compacted |
+| `agentReads rebuild [--yes]` | drop and re-ingest the transcripts still on disk; lists the sessions whose transcripts are gone and needs `--yes` then; keeps `reads.db.before-rebuild` |
+| `agentReads status` | store size, last ingest, transcripts pending, hook runs and their median / max time, the last warnings and errors from the log |
 
 Filters, measures and output formats are listed in [07 §1, §4](07-analysis-catalogue.md).
 

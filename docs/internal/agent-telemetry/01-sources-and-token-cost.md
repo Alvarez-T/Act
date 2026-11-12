@@ -117,7 +117,7 @@ proof: the agent can name a file it never opened.
 | Setup | settings change + an executable | none | rule change |
 
 **Recommendation (⚑AT2):** B as the engine. One async `Stop` hook (end of each turn, ≈ 5 per session) passes `transcript_path` to the
-ingester, which reads only the bytes added since its last run; `SubagentStop` does the same with `agent_transcript_path`. A desktop
+ingester, which re-parses the transcript when it changed (AT-P1 log: no byte-offset tail); `SubagentStop` does the same with `agent_transcript_path`. A desktop
 session can stay open for days, so `SessionEnd` alone would ingest too late; it is still worth adding for the last turn. `ingest --all`
 loads the backlog and catches anything a hook missed. The hooks print nothing and always exit 0: 0 tokens. Per-tool hooks (A) stay a
 later option if the transcript format breaks or live data is wanted; the event model ([02](02-events-classification-and-purpose.md)) is
