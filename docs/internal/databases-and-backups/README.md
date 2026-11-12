@@ -1,6 +1,6 @@
 # YFex databases and backups — tenant placement over several databases and regions, routing, moves, replicas, failover; backup and restore — Design
 
-> **Status:** DESIGN 2026-11-11; **DB-P0 done 2026-11-12** (repo `C:\Dev\YFex\YFex.Backup` created, skeleton only; log in 09 §5). **User answered ⚑DB1–⚑DB30 on 2026-11-11 (§6.3); all follow-up proposals accepted the same day — every ⚑DB decided.**
+> **Status:** DESIGN 2026-11-11; **DB-P0 done 2026-11-12** (repo `C:\Dev\YFex\YFex.Backup` created); **DB-P1 built 2026-11-12** (local encrypted SQLite and SQL Server backups; log in 09 §5). ⚑DB31–⚑DB33 (§6.4, ecosystem fit found while building DB-P1) are **pending**; ⚑EG4 and ⚑EG12 of the 2026-11-12 ecosystem-fit review also touch Backup. **User answered ⚑DB1–⚑DB30 on 2026-11-11 (§6.3); all follow-up proposals accepted the same day — ⚑DB1–⚑DB30 decided.**
 > **Revision 2026-11-11 (user feedback):** tenants are keyed by **`TenancyPath`**, never a string; **regions, residency and new-tenant
 > registration moved to [YFex.Tenancy.Registry](../tenancy/README.md)** (⚑TN), with the shared types in core (`RegionId`,
 > `ResidencyRule`, `ITenantLocations`); **Files** resolves one bucket per region; **backups cover database and files**; replica reads are
@@ -154,6 +154,28 @@ Confirmed as recommended: **DB1, DB5, DB7, DB8, DB9, DB11, DB12, DB14, DB18–DB
 | DB17 | Configurable; options for cloud providers | Built-in local folder / UNC share / USB; via `YFex.Backup.Files`: **S3 API with Object Lock** (best default: one driver covers AWS S3, MinIO, Wasabi, Backblaze B2, Cloudflare R2), **Azure Blob** with immutability policy, **Google Cloud Storage** with bucket lock, **SFTP**, SMB/NFS. Recommended pair: local + S3-compatible with Object Lock in another region/site |
 | DB24 | OK, respect the broker rules | Checked against Offline ⚑O20/⚑O2: the broker stays **generic** (no app code, no central secrets); what it backs up is **its own broker store** (roster, custody envelopes, budgets, site time), never a business database; sealed to **central's** ring, so the broker cannot read old sets; it is a module of the generic broker host (HO1), not app code; only the active broker (⚑O2) runs it; a replaced broker restores from central's copy then resyncs |
 | DB25 | User doubts it | **Keep** permissions (`backup.restore`, `placement.move`, …) and Audit events: a restore changes or brings back personal data (LGPD evidence) and is cheap with Authorization already built. **Drop the mandatory two-person approval**: make it an optional policy (`RequireApproval`), off by default, suggested for cloud whole-database restore and failover |
+
+### 6.4 Ecosystem fit found while building DB-P1 (pending, 2026-11-12)
+
+Written under the ecosystem-fit rule (`docs/agent/rules/ecosystem-fit.md`, added 2026-11-12), which postdates this design. The full
+per-library fit table this README still lacks is ⚑EG2 of the [ecosystem-fit review](../../agent/ecosystem-fit-review-2026-11-12.md);
+two integrations DB-P1 touched are already decisions there, pending:
+
+- **⚑EG4 (Orchestration for restore and tenant moves).** Interim in DB-P1: restore is **one call**. `NewDatabase`/`ScratchDatabase`
+  serve nobody until the operator switches to them and `InPlaceDatabase` is an on-prem disaster step, so a failure (also during
+  erasure replay) is re-run from the start. The in-place tenant restore of DB-P4 is the step that needs EG4's answer.
+- **⚑EG12 (policies as `[Validatable]` specs).** Interim in DB-P1: constructor checks in `BackupPolicy` and `RetentionRule`; nothing
+  is read from configuration yet.
+
+New rows (DB-P1 is built on the recommended option of each):
+
+| ⚑ | Topic | Proposal (recommended) | Alternatives | Where |
+|---|---|---|---|---|
+| **DB31** | Time of a set (YFex.Time) | Runner, sources and verification take `TimeProvider`; hosts pass YFex.Time's trusted clock where they have one. The manifest signature is checked **as of the set's own `TakenAt`**, so a revoked host key still verifies sets it signed before revocation; a forged early `TakenAt` needs the private key anyway | require a trusted-time token in every manifest (Time anchors; heavier, needs the network at backup time on sites) | 06 §6, 08 §2 |
+| **DB32** | Retries and timeouts on remote destinations (YFex.Resilience) | None for the local folder; the Files bridge (DB-P2) wraps each part upload in a Resilience policy (per-attempt timeout, retry honouring the store's Retry-After) | retries inside Backup | 06 §5 |
+| **DB33** | Diagnostics and audit (core Diagnostics probe; YFex.Audit request AU1) | DB-P1 emits nothing; DB-P2 adds logs and `yfex.backup.*` metrics through the core `YFex.Diagnostics` probe (gauge `last_verified.age`); `backup.created/restored/expired` Audit events come with AU1 (DB-P4) | a Backup-private log/metric API | 06 §5, 09 §2 |
+
+Scheduling of runs and retention passes is already decided (⚑DB22: `YFex.Backup.Jobs`, DB-P2).
 
 ## 7. Files
 

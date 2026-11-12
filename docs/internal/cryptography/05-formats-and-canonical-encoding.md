@@ -216,6 +216,7 @@ and has a uniqueness test. This table is the cross-library view:
 | `yfex.envelope.v1`, `yfex.receipt.v1`, `yfex.session.v1`, `yfex.bundle.v1`, `yfex.installation-assertion.v1`, `yfex.slice.v1` | Offline | offline 03–08 |
 | `yfex.audit.node.v1`, `yfex.audit.chain.v1`, `yfex.audit.anchor.v1`, `yfex.audit.tombstone.v1` | Audit | audit 06 (was `"YFEX-AUDIT-NODE-v1"` etc.; nothing written yet, so the spelling aligns now) |
 | `yfex.pseudonym.v1`, `yfex.consent-ledger.v1`, `yfex.subject-data.v1` | Privacy | privacy 03–05 |
+| `yfex.backup.manifest.v1`, `yfex.backup.part.v1` | YFex.Backup | manifest signature; seal context of each part of a backup set (parts: set id, part name) — databases-and-backups 06 §6 (DB-P1, 2026-11-12) |
 
 ## 10. Canonical encoding (what is signed or hashed)
 
