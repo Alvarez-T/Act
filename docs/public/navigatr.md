@@ -16,10 +16,10 @@ Each `Navigator` instance represents one navigation surface -- a single tab, win
 
 ### IRoute
 
-A route is an immutable record that identifies a destination. Parameters live on the record itself -- no separate parameter bags:
+A route is an immutable record that identifies a destination. Parameters live on the record itself -- no separate parameter bags. `IRoute` lives in the contracts package `YFex.NavigatR.Public` (namespace `YFex.NavigatR.Public`), so UI libraries can name routes without referencing the engine; `IRouteProduces<T>` and `IKeepAlive` stay in `YFex.NavigatR`:
 
 ```csharp
-using YFex.NavigatR;
+using YFex.NavigatR.Public;
 
 // Parameterless route
 public record HomeRoute : IRoute
@@ -116,6 +116,18 @@ registry.Register<ProductRoute, ProductViewModel>()
 
 `AddNavigatR` registers three singletons: `RouteRegistry` (filled by the callback), `NavigatorHost` (with the default `NavigatorOptions`) and `INavigationHost` (the same host, for UI page hosts). Registering `RouteRegistry` and `NavigatorHost` by hand still works.
 
+Options per UI host: name them with an app enum and pick them on the host (`YPageHost.Options="{x:Static app:PaneKind.Compact}"`):
+
+```csharp
+public enum PaneKind { Compact, Editor }
+
+services.AddNavigatR(routes => routes.RegisterGeneratedRoutes(), o => o
+    .Defaults(new NavigatorOptions { HistoryPolicy = NavigationHistoryPolicy.PreserveForwardOnBranch })
+    .For(PaneKind.Compact, new NavigatorOptions { PoolCapacity = 2 }));
+```
+
+`NavigatorHost.OptionsFor(key)` returns them; an unknown key throws when the host creates the session (a configuration mistake).
+
 The generator runs only on projects that reference it as an analyzer (references are not transitive):
 
 ```xml
@@ -145,14 +157,14 @@ await host.SwitchContextAsync(tab2.Id);
 host.CloseContext(tab1.Id);
 ```
 
-When switching contexts, the host suspends the current Navigator's top entry and resumes the target's.
+For contexts the app manages this way, the active context is the visible one: `SwitchContextAsync` suspends the current context's top entry and resumes the target's, and contexts created inactive start hidden (a page they show is suspended until the switch). Histories of UI page hosts work differently: they report visibility themselves and "active" only means focused (next sections).
 
 ### INavigation (Platform Hook)
 
-`INavigation` lives in `YFex.UI.Public` (repo YFex.UI). UI hosts implement it — YFex.Avalonia's `YPageHost` does — and never reference NavigatR. Pass it to `NavigatorHost.CreateContext(navPane, options)`, or let the UI host create its own history through `INavigationHost` (next section).
+`INavigation` lives in `YFex.NavigatR.Public` (repo YFex.NavigatR, contracts and passive data only). UI hosts implement it — YFex.Avalonia's `YPageHost` does — and reference only that package, never the engine. Pass it to `NavigatorHost.CreateContext(navPane, options)`, or let the UI host create its own history through `INavigationHost` (next section).
 
 ```csharp
-using YFex.UI.Public;
+using YFex.NavigatR.Public;
 
 public interface INavigation
 {
@@ -160,7 +172,7 @@ public interface INavigation
     void OnNavigationDenied();
     void OnNavigationDenied(string? reason) => OnNavigationDenied();
     void OnNavigationCleared() { }                               // the history became empty
-    bool OnOpenRequested(object route) => false;                 // a page asked for the route in a new history (docking)
+    bool OnOpenRequested(IRoute route) => false;                 // a page asked for the route in a new history (docking)
     event Action? UserBecameInactive;
     event Action? UserBecameActive;
 }
@@ -168,24 +180,34 @@ public interface INavigation
 
 ### UI page hosts: INavigationHost and sessions
 
-A UI page host gets its own history without referencing NavigatR. `NavigatorHost` implements the `YFex.UI.Public` bridge; `provider.UseNavigatR()` publishes it through an internal locator that the UI libraries read. One page host = one session = one history (one `Navigator`, own DI scope, the host's `DefaultOptions`). Routes cross the boundary as `object` (route records, compared with `Equals`); a string is a deep link.
+A UI page host gets its own history without referencing NavigatR. `NavigatorHost` implements the `YFex.NavigatR.Public` bridge; `provider.UseNavigatR()` publishes it through an internal locator that the UI libraries read. One page host = one session = one history (one `Navigator`, own DI scope, the options of the host's key or `DefaultOptions`). Routes are typed `IRoute` records (compared with `Equals`); a string is a deep link.
 
 ```csharp
-public interface INavigationHost { INavigationSession CreateSession(INavigation pane); }
+public interface INavigationHost
+{
+    INavigationSession CreateSession(INavigation pane, Enum? options = null);   // options: an app key registered with o.For(...)
+    Task<bool> ConfirmLeaveAsync(IReadOnlyList<LeaveConcern> concerns, CancellationToken ct = default);  // the one combined question
+}
 
 public interface INavigationSession : IDisposable          // Dispose = close without asking the page
 {
-    object? Route { get; }  bool CanGoBack { get; }  bool CanGoForward { get; }
-    Task<bool> NavigateAsync(object route, CancellationToken ct = default);   // false: denied, cancelled, page stayed
+    IRoute? Route { get; }  bool CanGoBack { get; }  bool CanGoForward { get; }
+    Task<bool> NavigateAsync(IRoute route, CancellationToken ct = default);   // false: denied, cancelled, page stayed
+    Task<bool> NavigateAsync(string link, CancellationToken ct = default);    // deep link
     Task<bool> GoBackAsync(CancellationToken ct = default);
     Task<bool> GoForwardAsync(CancellationToken ct = default);
-    Task ActivateAsync(CancellationToken ct = default);      // this history becomes the active one
+    Task ActivateAsync(CancellationToken ct = default);      // focused only: suspends nothing
+    Task SetVisibleAsync(bool visible, CancellationToken ct = default);   // hidden: page suspended; shown: resumed
+    Task<IReadOnlyList<LeaveConcern>> CheckLeaveAsync(CancellationToken ct = default);   // concerns, nothing asked or closed
     Task<bool> CloseAsync(CancellationToken ct = default);   // leave guard (LeaveReason.Close) first; false: page stayed
     event Action<NavigationState>? Navigated;                // (Route, DisplayName, Direction, CanGoBack, CanGoForward)
 }
 ```
 
-The history ends only when its host is closed for good (window closed, dock item closed, app code), never on unload/reload; the UI library decides when that is. `NavigationDirection` is a `YFex.UI.Public` type (NavigatR keeps a `global using` alias), so the session and `NavigationContext.Direction` report the same enum.
+- **Visibility decides suspend/resume.** A history created by a session starts visible; the host reports `SetVisibleAsync(false)` when it goes off screen (tab not selected, window minimized) and the page is suspended until it is shown again. A navigation inside a hidden history shows its page and suspends it right away. `ActivateAsync` only marks the focused history (`NavigatorHost.ActiveContext`), so two histories on screen side by side (split dock) both keep running.
+- **The history ends only when its host is closed for good** (window closed, dock item closed, app code), never on unload/reload; the UI library decides when that is.
+- **A close that spans several histories** (a dock tab with nested hosts, a window) calls `CheckLeaveAsync` on each, stops on any Error, asks once with `ConfirmLeaveAsync` for the Warnings, then disposes every session (see "Leaving Guard").
+- `NavigationDirection` is a `YFex.NavigatR.Public` type, so the session and `NavigationContext.Direction` report the same enum.
 
 ### Open a route in a new history (docking)
 
@@ -537,7 +559,25 @@ public override async Task OnLeaving(LeavingContext context, CancellationToken c
 }
 ```
 
-`context.Stay(reason)` keeps the user without asking; `ConfirmAsync` uses the history's `INavigationConfirmation` (message box, inline bar, flyout: the app decides). Asked before a new navigation, back, forward and `NavigatorHost.CloseContextAsync`; not while the page is pinned, nor when an authorization re-check closes it.
+Or report what the user would lose and let the navigator ask: concerns with a `LeaveSeverity` (`YFex.NavigatR.Public`, plain strings):
+
+```csharp
+public override Task OnLeaving(LeavingContext context, CancellationToken ct = default)
+{
+    if (HasInvalidLines) context.Stay("Fix the invalid lines first");                        // = LeaveSeverity.Error
+    else if (IsDirty) context.Concern(LeaveSeverity.Warning, $"Order {Id} has unsaved changes");
+    else if (HasDraft) context.Concern(LeaveSeverity.Info, "Draft kept");
+    return Task.CompletedTask;
+}
+```
+
+| Severity | One page (navigate, back, forward, `CloseAsync`) | A combined close (dock tab with nested hosts, window) |
+|---|---|---|
+| `Info` | leaves silently | closes silently |
+| `Warning` | asked through `INavigationConfirmation.ConfirmLeaveAsync` (none configured: leaves) | listed with every other warning in one question: "Discard all" / "Cancel" |
+| `Error` (`Stay`) | stays; the navigation returns `NavigationDenied` with the message | the close stops; the UI brings that page to the front and shows the message |
+
+`ConfirmAsync` uses the history's `INavigationConfirmation` (message box, inline bar, flyout: the app decides); inside a combined close it asks nothing, records a Warning with its message and returns true, so the user is asked once. `INavigationConfirmation.ConfirmLeaveAsync(concerns, ct)` is the combined question; its default joins the messages into `ConfirmAsync`, override it to show a list. Asked before a new navigation, back, forward and `NavigatorHost.CloseContextAsync`; not while the page is pinned, nor when an authorization re-check closes it.
 
 ---
 
@@ -638,7 +678,7 @@ Always `return` immediately after calling `context.Deny()`. Any state mutations 
 
 ### NavigationDirection
 
-`YFex.UI.Public.NavigationDirection` (moved from NavigatR in step 2 of the NavigatR-on-Avalonia plan; add `using YFex.UI.Public;` where you name it).
+`YFex.NavigatR.Public.NavigationDirection` (contracts package; add `using YFex.NavigatR.Public;` where you name it).
 
 | Value | Description |
 |---|---|
