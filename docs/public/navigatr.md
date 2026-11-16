@@ -102,15 +102,19 @@ The `RouteRegistry` is a singleton that maps route types to ViewModel types, and
 using Microsoft.Extensions.DependencyInjection;
 using YFex.NavigatR;
 
-services.AddSingleton(_ => new RouteRegistry()
-    .RegisterGeneratedRoutes());          // emitted by the generator into the assembly that declares [Route] pages
-services.AddSingleton<NavigatorHost>();
+services.AddNavigatR(routes => routes.RegisterGeneratedRoutes(),   // emitted by the generator into the assembly that declares [Route] pages
+    new NavigatorOptions { HistoryPolicy = NavigationHistoryPolicy.PruneForwardOnBranch });  // optional: defaults of every history
 
-// Without the generator, one line per route:
+var provider = services.BuildServiceProvider();
+provider.UseNavigatR();                   // publishes the host to UI page hosts (YPageHost); see "UI page hosts" below
+
+// Without the generator, one line per route (inside AddNavigatR's callback):
 registry.Register<ProductRoute, ProductViewModel>()
         .WithData((sp, route, ct) => sp.GetRequiredService<IProductApi>().GetAsync(route.ProductId, ct))
         .Load(NavigationLoad.LoadFirst);
 ```
+
+`AddNavigatR` registers three singletons: `RouteRegistry` (filled by the callback), `NavigatorHost` (with the default `NavigatorOptions`) and `INavigationHost` (the same host, for UI page hosts). Registering `RouteRegistry` and `NavigatorHost` by hand still works.
 
 The generator runs only on projects that reference it as an analyzer (references are not transitive):
 
@@ -145,7 +149,7 @@ When switching contexts, the host suspends the current Navigator's top entry and
 
 ### INavigation (Platform Hook)
 
-`INavigation` lives in `YFex.UI.Public` (repo YFex.UI). UI hosts implement it — YFex.Avalonia's `YPageHost` does — and never reference NavigatR. Pass it to `NavigatorHost.CreateContext(navPane, options)`.
+`INavigation` lives in `YFex.UI.Public` (repo YFex.UI). UI hosts implement it — YFex.Avalonia's `YPageHost` does — and never reference NavigatR. Pass it to `NavigatorHost.CreateContext(navPane, options)`, or let the UI host create its own history through `INavigationHost` (next section).
 
 ```csharp
 using YFex.UI.Public;
@@ -156,10 +160,42 @@ public interface INavigation
     void OnNavigationDenied();
     void OnNavigationDenied(string? reason) => OnNavigationDenied();
     void OnNavigationCleared() { }                               // the history became empty
+    bool OnOpenRequested(object route) => false;                 // a page asked for the route in a new history (docking)
     event Action? UserBecameInactive;
     event Action? UserBecameActive;
 }
 ```
+
+### UI page hosts: INavigationHost and sessions
+
+A UI page host gets its own history without referencing NavigatR. `NavigatorHost` implements the `YFex.UI.Public` bridge; `provider.UseNavigatR()` publishes it through an internal locator that the UI libraries read. One page host = one session = one history (one `Navigator`, own DI scope, the host's `DefaultOptions`). Routes cross the boundary as `object` (route records, compared with `Equals`); a string is a deep link.
+
+```csharp
+public interface INavigationHost { INavigationSession CreateSession(INavigation pane); }
+
+public interface INavigationSession : IDisposable          // Dispose = close without asking the page
+{
+    object? Route { get; }  bool CanGoBack { get; }  bool CanGoForward { get; }
+    Task<bool> NavigateAsync(object route, CancellationToken ct = default);   // false: denied, cancelled, page stayed
+    Task<bool> GoBackAsync(CancellationToken ct = default);
+    Task<bool> GoForwardAsync(CancellationToken ct = default);
+    Task ActivateAsync(CancellationToken ct = default);      // this history becomes the active one
+    Task<bool> CloseAsync(CancellationToken ct = default);   // leave guard (LeaveReason.Close) first; false: page stayed
+    event Action<NavigationState>? Navigated;                // (Route, DisplayName, Direction, CanGoBack, CanGoForward)
+}
+```
+
+The history ends only when its host is closed for good (window closed, dock item closed, app code), never on unload/reload; the UI library decides when that is. `NavigationDirection` is a `YFex.UI.Public` type (NavigatR keeps a `global using` alias), so the session and `NavigationContext.Direction` report the same enum.
+
+### Open a route in a new history (docking)
+
+```csharp
+// in a page: "open order 42 in a new tab"
+if (!Navigator.OpenInNewContext(new OrderRoute(42)))
+    await Navigator.NavigateTo(new OrderRoute(42));      // no host can open tabs here: navigate in place
+```
+
+`OpenInNewContext` asks the history's pane (`INavigation.OnOpenRequested`); this history does not change. A docking host answers by creating a new pane whose own session starts at the route (YFex.Avalonia: `YPageHost.OpenRequested` bubbles to it). False when no pane took it.
 
 ### Full Lifecycle Table
 
@@ -293,6 +329,9 @@ Task<bool> NavigateForwardTo<TRoute>(CancellationToken ct = default) where TRout
 Task<bool> NavigateToIndex(int index);
 void ClearHistory();
 
+// New history (docking): asks the pane; false when nobody took it
+bool OpenInNewContext(IRoute route);
+
 // Prefetching (data only)
 PrefetchToken Prefetch(IRoute route, TimeSpan? timeout = null, bool? cancelPrevious = null);
 
@@ -313,7 +352,7 @@ void NotifyActive(CancellationToken ct = default);
 Task<NavigationDenied?> RecheckAuthorizationAsync(CancellationToken ct = default);
 ```
 
-`NavigatorOptions` (per history, passed to `NavigatorHost.CreateContext(navPane, options)`): `HistoryPolicy`, `PoolCapacity`, `SuspendedTimeout`, `PrefetchPolicy`, `PrefetchTimeout` (how long prefetched data is kept), `Confirmation` (the `INavigationConfirmation` used by `LeavingContext.ConfirmAsync`; otherwise one from DI).
+`NavigatorOptions` (per history, passed to `NavigatorHost.CreateContext(navPane, options)`; `NavigatorHost.DefaultOptions`, set by `AddNavigatR`, for histories created without options and by UI page hosts): `HistoryPolicy`, `PoolCapacity`, `SuspendedTimeout`, `PrefetchPolicy`, `PrefetchTimeout` (how long prefetched data is kept), `Confirmation` (the `INavigationConfirmation` used by `LeavingContext.ConfirmAsync`; otherwise one from DI).
 
 ### [Route] Attribute Options
 
@@ -598,6 +637,8 @@ Always `return` immediately after calling `context.Deny()`. Any state mutations 
 | `PreserveForwardOnBranch` | Forward entries preserved; new entry inserted after cursor | Document editors, research tools |
 
 ### NavigationDirection
+
+`YFex.UI.Public.NavigationDirection` (moved from NavigatR in step 2 of the NavigatR-on-Avalonia plan; add `using YFex.UI.Public;` where you name it).
 
 | Value | Description |
 |---|---|
