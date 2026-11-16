@@ -259,12 +259,12 @@ namespace YFex.UI.Abstractions;
 public interface IDialog
 {
     // Fire-and-forget, returns handle
-    IDialogHandle Show<TView>(IDialogOptions? options = null);
-    IDialogHandle<TResult> Show<TView, TResult>(IDialogOptions? options = null);
+    IDialogHandle Show<TView>(DialogOptions? options = null);
+    IDialogHandle<TResult> Show<TView, TResult>(DialogOptions? options = null);
 
     // Blocking await
-    Task ShowAsync<TView>(IDialogOptions? options = null);
-    Task<TResult> ShowAsync<TView, TResult>(IDialogOptions? options = null);
+    Task ShowAsync<TView>(DialogOptions? options = null);
+    Task<TResult> ShowAsync<TView, TResult>(DialogOptions? options = null);
 }
 
 public interface IDialogHandle
@@ -279,13 +279,15 @@ public interface IDialogHandle<TResult> : IDialogHandle
 }
 ```
 
-`IDialogOptions` is a marker interface. Define custom options records for your platform:
+`DialogOptions` (YFex.UI.Public) says where and how the dialog opens; `null` means the defaults:
 
 ```csharp
-public record MyDialogOptions(double Width, double Height, bool Modal = true) : IDialogOptions;
-
-await Dialog.ShowAsync<SettingsView>(new MyDialogOptions(800, 600));
+await Dialog.ShowAsync<SettingsView>(DialogOptions.InWindow);       // over the whole window
+await Dialog.ShowAsync<PickColorView, YColor>(DialogOptions.InPage); // over the caller's page only
+await Dialog.ShowAsync<EditView, bool>(new DialogOptions { DismissOn = OverlayDismiss.None, Backdrop = OverlayBackdrop.Blur });
 ```
+
+By default a view model's dialog opens in the overlay host nearest to its view (its page, else its window). A dialog view model implementing `IDialogClosing` can cancel a dismissal by backdrop click or Escape.
 
 ### IMessageBox
 
@@ -609,8 +611,8 @@ if (result == OkCancel.Ok) { ... }
 **Timeout changes the return type**
 Adding `.WithTimeout()` shifts the result type (e.g., `OkCancel` becomes `OkCancelIgnored`). This is by design -- the compiler forces you to handle the `Ignored` case. If you remove a timeout, update the variable type.
 
-**IDialogOptions is a marker interface**
-Pass `null` (the default) or create a custom record implementing `IDialogOptions`. There are no built-in options -- the options structure is platform-specific.
+**Dialogs open over the caller's page by default**
+A page view model's dialog covers only that page; pass `DialogOptions.InWindow` when it must block the whole window.
 
 **Toast.Show is fire-and-forget**
 There is no handle or callback from a toast. If you need to know when it was dismissed or tapped, use `INotification` instead.
