@@ -38,20 +38,25 @@ Because routes are records, structural equality works out of the box. Two `Produ
 
 ### INavigable
 
-Every navigable ViewModel implements `INavigable`. This interface defines the full lifecycle contract:
+Every navigable ViewModel implements `INavigable`. Only the first three members are required; the rest are default no-ops:
 
 ```csharp
 public interface INavigable : IDisposable
 {
-    Task OnNavigation(NavigationContext context, CancellationToken ct = default);
-    Task OnResume(CancellationToken ct = default);
-    Task OnSuspend(CancellationToken ct = default);
-    Task OnPrefetch(NavigationContext context, CancellationToken ct) => Task.CompletedTask;
-    Task OnActive(CancellationToken ct = default) => Task.CompletedTask;
+    Task OnNavigation(NavigationContext context, CancellationToken ct = default);   // first show; may Deny
+    Task OnResume(CancellationToken ct = default);                                  // shown again after a suspend
+    Task OnSuspend(CancellationToken ct = default);                                 // left but kept (or user AFK)
+
+    Task OnNavigating(NavigationContext context, CancellationToken ct);             // right before OnNavigation
+    Task OnLoaded(NavigationContext context, CancellationToken ct);                 // the route's data arrived; may Deny (LoadFirst)
+    Task OnLoadFailed(NavigationContext context, Exception error, CancellationToken ct);
+    Task OnShown(CancellationToken ct);                                             // became the visible page (every time)
+    Task OnLeaving(LeavingContext context, CancellationToken ct);                   // leave guard: context.Stay(...)
+    Task OnActive(CancellationToken ct = default);                                  // back from AFK
 }
 ```
 
-In practice, you never implement `INavigable` directly. You inherit from `PageViewModel` (from `YFex.Mvvm`) and apply `[Route]` -- the source generator wires everything.
+In practice you inherit `PageViewModel` (from `YFex.Mvvm`), which turns `OnShown` into State activation (`[Live]`, `[Subscribe]`), exposes `IsLoading`/`LoadError`, and lets you override `OnLoaded`, `OnLoadFailed` and `OnLeaving`. Add `[Route]` and the generator writes the typed bridges.
 
 ### NavigationResult
 
@@ -91,19 +96,27 @@ The pool limits how many suspended ViewModels stay alive in memory. When pool ca
 
 ### RouteRegistry Setup
 
-The `RouteRegistry` is a singleton that maps route types to ViewModel types. The source generator produces a `RegisterAll` method that populates it automatically:
+The `RouteRegistry` is a singleton that maps route types to ViewModel types, and knows each route's data loader and load mode. **Page ViewModels are not registered in DI**: the navigator builds them (constructor dependencies come from the history's DI scope) and the history entry owns and disposes them.
 
 ```csharp
 using Microsoft.Extensions.DependencyInjection;
 using YFex.NavigatR;
 
-// In your DI setup
-services.AddSingleton<RouteRegistry>();
+services.AddSingleton(_ => new RouteRegistry()
+    .RegisterGeneratedRoutes());          // emitted by the generator into the assembly that declares [Route] pages
 services.AddSingleton<NavigatorHost>();
 
-// After building the service provider
-var registry = sp.GetRequiredService<RouteRegistry>();
-NavigatRRegistration.RegisterAll(registry); // Source-generated
+// Without the generator, one line per route:
+registry.Register<ProductRoute, ProductViewModel>()
+        .WithData((sp, route, ct) => sp.GetRequiredService<IProductApi>().GetAsync(route.ProductId, ct))
+        .Load(NavigationLoad.LoadFirst);
+```
+
+The generator runs only on projects that reference it as an analyzer (references are not transitive):
+
+```xml
+<ProjectReference Include="..\YFex.NavigatR\src\YFex.NavigatR.SourceGenerator\YFex.NavigatR.SourceGenerator.csproj"
+                  OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
 ```
 
 ### NavigatorHost for Multi-Context
@@ -132,49 +145,40 @@ When switching contexts, the host suspends the current Navigator's top entry and
 
 ### INavigation (Platform Hook)
 
-To connect NavigatR to your UI framework, implement `INavigation`:
+`INavigation` lives in `YFex.UI.Public` (repo YFex.UI). UI hosts implement it — YFex.Avalonia's `YPageHost` does — and never reference NavigatR. Pass it to `NavigatorHost.CreateContext(navPane, options)`.
 
 ```csharp
-using YFex.NavigatR;
+using YFex.UI.Public;
 
-public class AvaloniaNavigation : INavigation
+public interface INavigation
 {
-    private readonly ContentControl _host;
-
-    public AvaloniaNavigation(ContentControl host) => _host = host;
-
-    public void PerformNavigation(object view)
-    {
-        // 'view' is the resolved ViewModel instance
-        // Map it to a View and display it
-        _host.Content = ViewLocator.Resolve(view);
-    }
-
-    public void OnNavigationDenied()
-    {
-        // Optional: show a toast, log, etc.
-    }
-
-    public event Action? UserBecameInactive;
-    public event Action? UserBecameActive;
+    void PerformNavigation(object view);                         // the page instance the history entry owns
+    void OnNavigationDenied();
+    void OnNavigationDenied(string? reason) => OnNavigationDenied();
+    void OnNavigationCleared() { }                               // the history became empty
+    event Action? UserBecameInactive;
+    event Action? UserBecameActive;
 }
 ```
 
 ### Full Lifecycle Table
 
-| Event | When | Entry State After | Notes |
-|---|---|---|---|
-| `OnNavigation` | First navigation to this screen | `Active` | Call `context.Deny()` to block |
-| `Activate()` | Called by Navigator after `OnNavigation` confirms | `Active` | Wires `[Subscribe]`, creates `[Live]` states |
-| `OnSuspend` | Screen pushed to back-stack | `Suspended` | Never called on `Pinned` entries |
-| `Deactivate()` | Called by Navigator after `OnSuspend` | `Suspended` | Pauses `[Live]` fetching |
-| `OnResume` | Screen returns to focus | `Active` | Never called when returning from `UntilReturns` |
-| `Activate()` | Called by Navigator after `OnResume` | `Active` | Re-subscribes, re-fetches stale data |
-| `OnActive` | User returns from AFK | `Active` (unchanged) | No state transition |
-| `OnPrefetch` | Off-thread data preloading | `Prefetching` | Generator-driven, never implemented directly |
-| `Dispose` | Screen destroyed (pool eviction or back nav) | `Released` | Calls `Deactivate()` if still active |
+Everything runs on the navigator's thread (the synchronization context the history was created on); data loaders run in the background.
 
-> **Warning:** `OnSuspend` and `OnResume` are **never** called on `Pinned` entries. When you call `.UntilReturns()`, the calling ViewModel stays pinned -- it is not suspended and cannot be evicted. This is intentional: the caller's state must remain intact for the result to make sense.
+| Event | When | Entry state after | Notes |
+|---|---|---|---|
+| loader (`WithData` / static `[Prefetch]`) | on `Prefetch` (hover) or when navigating | — | background, own DI scope; no view model built |
+| `OnNavigating` | the page was built | — | `context.IsLoadPending` tells whether the data is still loading |
+| `OnNavigation` | first show (and rebuild after eviction) | — | `context.Deny()` blocks |
+| `OnLoaded` / `OnLoadFailed` | the data is ready | — | before showing when ready or `LoadFirst`; after showing for `ShowFirst`; may `Deny` |
+| `OnLeaving` | before the current page is left | — | `context.Stay(reason)` keeps the user; `ConfirmAsync` asks through the configured confirmation |
+| `OnShown` | the page became visible (fresh, resume, child returned, history switched back) | `Active` | `PageViewModel` → `Activate()` (wires `[Subscribe]`, starts `[Live]`) |
+| `OnSuspend` | pushed to the back stack | `Suspended` | `PageViewModel` → `OnSuspendCascading` (`[Live]` `SuspendBehavior`); never on `Pinned` |
+| `OnResume` | shown again | `Active` | never when returning from `UntilReturns` |
+| `OnActive` | user back from AFK | `Active` (unchanged) | |
+| `Dispose` | evicted, pruned, closed, result returned | `Released` | `PageViewModel` → `Deactivate()` |
+
+> **Warning:** `OnSuspend` and `OnResume` are **never** called on `Pinned` entries. When you call `.UntilReturns()`, the calling ViewModel stays pinned -- it is not suspended and cannot be evicted.
 
 ---
 
@@ -193,38 +197,36 @@ public record ProductRoute(int ProductId) : IRoute;
 ```csharp
 using YFex.Mvvm;
 using YFex.NavigatR;
+using YFex.State;
 
-[Route(typeof(ProductRoute), Parameter = typeof(int))]
+[Route(typeof(ProductRoute), Load = NavigationLoad.LoadFirst)]
 public partial class ProductViewModel : PageViewModel
 {
-    private readonly IProductApi _api;
+    [Observable] private string _title = "";
+    [Observable] private Product? _product;
 
-    public ProductViewModel(
-        IProductApi api,
-        Navigator navigator,
-        INotification notification,
-        IDialog dialog,
-        IToast toast)
-        : base(navigator, notification, dialog, toast)
-    {
-        _api = api;
-    }
+    // Static data loader: background, own DI scope, no access to the page's state (NAV008/NAV009).
+    [Prefetch]
+    private static Task<Product> LoadProduct(int productId, IProductApi api, CancellationToken ct)
+        => api.GetAsync(productId, ct);
 
-    // The generator wires this partial from OnNavigation(NavigationContext, ct).
-    // 'parameter' is extracted from ProductRoute.ProductId automatically.
+    // Generated bridge: the route parameter, on the UI thread.
     public partial Task OnNavigation(int parameter, CancellationToken ct)
     {
-        return LoadProductAsync(parameter, ct);
+        Title = $"Product {parameter}";
+        return Task.CompletedTask;
     }
 
-    private async Task LoadProductAsync(int productId, CancellationToken ct)
+    // Generated bridge: the loaded data, on the UI thread. Deny here when the data says no.
+    public partial Task OnLoaded(int parameter, Product loadProduct, CancellationToken ct)
     {
-        // Load product data...
+        Product = loadProduct;
+        return Task.CompletedTask;
     }
 }
 ```
 
-> **Note:** The class **must** be `partial`. The source generator adds the `INavigable.OnNavigation` explicit implementation, route registration, and parameter extraction.
+> **Note:** The class **must** be `partial`. Constructor dependencies come from DI (the history's scope); the UI services (`Toast`, `Dialog`, …) and `Navigator` come from the base classes.
 
 ### 3. Navigate
 
@@ -277,34 +279,41 @@ result.Switch(
 ### Navigator Methods
 
 ```csharp
-using YFex.NavigatR;
-
 // Forward navigation
 NavigationTask NavigateTo(IRoute route, CancellationToken ct = default);
+NavigationTask NavigateTo(IRoute route, NavigationLoad load, CancellationToken ct = default);   // override ShowFirst/LoadFirst
 NavigationTask NavigateTo(PrefetchToken token, CancellationToken ct = default);
 NavigationTask NavigateTo(string route, CancellationToken ct = default);
 
-// History navigation
-Task NavigateBackward(int? index = null, CancellationToken ct = default);
-Task NavigateForward(int? index = null, CancellationToken ct = default);
-Task NavigateBackwardTo<TRoute>(CancellationToken ct = default) where TRoute : IRoute;
-Task NavigateForwardTo<TRoute>(CancellationToken ct = default) where TRoute : IRoute;
-Task NavigateToIndex(int index);
+// History navigation (false when the page asked to stay, or nothing moved)
+Task<bool> NavigateBackward(int? index = null, CancellationToken ct = default);
+Task<bool> NavigateForward(int? index = null, CancellationToken ct = default);
+Task<bool> NavigateBackwardTo<TRoute>(CancellationToken ct = default) where TRoute : class, IRoute;
+Task<bool> NavigateForwardTo<TRoute>(CancellationToken ct = default) where TRoute : class, IRoute;
+Task<bool> NavigateToIndex(int index);
 void ClearHistory();
 
-// Prefetching
+// Prefetching (data only)
 PrefetchToken Prefetch(IRoute route, TimeSpan? timeout = null, bool? cancelPrevious = null);
 
-// AFK hooks
+// State
+NavigationEntry? Current { get; }                     // entry.Page is the page instance
+bool CanGoBack { get; }
+bool CanGoForward { get; }
+IReadOnlyList<NavigationEntry> Breadcrumb { get; }
+IReadOnlyList<NavigationEntry> History { get; }
+NavigationHistoryPolicy HistoryPolicy { get; set; }
+NavigatorOptions Options { get; }
+event Action<NavigatedEventArgs>? Navigated;
+event Action<NavigationDenied>? ActivePageDenied;
+
+// AFK hooks, authorization
 void NotifyInactive(CancellationToken ct = default);
 void NotifyActive(CancellationToken ct = default);
-
-// State
-Guid Id { get; }
-NavigationHistoryPolicy HistoryPolicy { get; set; }
-INavigation? NavPane { get; set; }
-IReadOnlyList<NavigationEntry> Breadcrumb { get; }
+Task<NavigationDenied?> RecheckAuthorizationAsync(CancellationToken ct = default);
 ```
+
+`NavigatorOptions` (per history, passed to `NavigatorHost.CreateContext(navPane, options)`): `HistoryPolicy`, `PoolCapacity`, `SuspendedTimeout`, `PrefetchPolicy`, `PrefetchTimeout` (how long prefetched data is kept), `Confirmation` (the `INavigationConfirmation` used by `LeavingContext.ConfirmAsync`; otherwise one from DI).
 
 ### [Route] Attribute Options
 
@@ -329,37 +338,22 @@ public partial class ProductViewModel : PageViewModel { }
 public partial class ProductViewModel : PageViewModel { }
 ```
 
-### [Prefetch] Attribute
+### [Prefetch] Attribute and NavigationLoad
 
-Mark methods to run off-thread before navigation completes. The generator intercepts the method call: if a prefetch result is available it returns immediately, if a prefetch is in-flight it awaits the running task, otherwise it calls the method fresh.
+`[Prefetch]` marks **static** data loaders. The navigator runs them in the background, in parallel, each load in its own DI scope (the scope ends with the load: return plain data, not tracked entities), on `Prefetch` (hover) or when the user navigates. No view model exists yet. Parameters: the route parameter (by type), a `CancellationToken`, services. Each `Task<T>`/`ValueTask<T>` adds one parameter to the generated `OnLoaded`.
 
-```csharp
-using YFex.NavigatR;
+`NavigationLoad` decides when the page appears:
 
-[Route("product", Parameter = typeof(int))]
-public partial class ProductViewModel : PageViewModel
-{
-    [Prefetch]
-    public async Task<ProductData> FetchProduct(int productId, CancellationToken ct)
-    {
-        return await _api.GetProductAsync(productId, ct);
-    }
+| Mode | Page appears | Use for |
+|---|---|---|
+| `ShowFirst` (default) | at once; `IsLoadPending`/`PageViewModel.IsLoading` true until `OnLoaded` (show a skeleton). When the prefetch already finished, `OnLoaded` runs before showing: no skeleton | lists, pages useful without their data |
+| `LoadFirst` | when the data arrived; the current page stays meanwhile. `OnLoaded` may `Deny` ("order not found") and the user never leaves. A newer navigation cancels the pending one | one specific record |
 
-    // Generator injects FetchProduct's return value as a parameter:
-    public partial Task OnNavigation(int parameter, ProductData fetchProduct, CancellationToken ct)
-    {
-        // fetchProduct is already loaded -- no await needed
-        Product = fetchProduct;
-        return Task.CompletedTask;
-    }
-}
-```
+Set the route default with `[Route(…, Load = …)]` or `.Load(…)`; override one navigation with `NavigateTo(route, NavigationLoad.ShowFirst)`.
 
-Multiple `[Prefetch]` methods on the same ViewModel run in parallel. Each `Task<T>` return adds one parameter to the generated `OnNavigation`.
+Prefetched data is kept for `PrefetchTimeout` (default 30 s); a navigation to an equal route (record equality) takes it, with or without the token; otherwise it is dropped (disposed when `IDisposable`) and a running loader cancelled. Routes the caller may not open are not prefetched.
 
 ### NavigationContext
-
-Passed to `OnNavigation` on every fresh navigation:
 
 ```csharp
 public sealed class NavigationContext
@@ -368,12 +362,15 @@ public sealed class NavigationContext
     public IRoute? PreviousRoute { get; }
     public NavigationDirection Direction { get; }  // Initial, Forward, Backward
     public int StackDepth { get; }                 // 0 = root
-
+    public NavigationLoad Load { get; }
+    public bool IsLoadPending { get; }             // data still loading while the page shows
+    public bool HasData { get; }
+    public Exception? LoadError { get; }
+    public T Data<T>();                            // the loader's value (in OnLoaded)
+    public bool TryGetData<T>(out T value);
     public void Deny(string? reason = null);
 }
 ```
-
-> **Tip:** When `[Route(Parameter = typeof(T))]` is declared, you never interact with `NavigationContext` directly. The generator extracts the parameter from the route and passes it to your typed `OnNavigation(T, CancellationToken)`.
 
 ### IKeepAlive
 
@@ -450,15 +447,11 @@ result.Switch(
 ### Prefetching
 
 ```csharp
-using YFex.NavigatR;
-
-// Start loading data while the user is still on the current screen
+// Hover over a row: start loading the data (no page is built)
 var token = navigator.Prefetch(new ProductRoute(42));
 
-// ... user clicks confirm ...
-
-// Navigate using the token -- data already loaded, instant transition
-await navigator.NavigateTo(token);
+// Click: the page receives the data already loaded (equal route finds the prefetch even without the token)
+await navigator.NavigateTo(new ProductRoute(42));
 ```
 
 ### Multi-Tab Navigation
@@ -482,21 +475,30 @@ await host.SwitchContextAsync(drafts.Id);
 ### Denying Navigation (Guards)
 
 ```csharp
-[Route(typeof(AdminRoute))]
-public partial class AdminViewModel : PageViewModel
+public override Task OnNavigation(NavigationContext context, CancellationToken ct = default)
 {
-    public override async Task OnNavigation(NavigationContext context, CancellationToken ct)
+    if (!_session.CanOpenAdmin)
     {
-        if (!await _authService.IsAdminAsync(ct))
-        {
-            context.Deny("Insufficient permissions");
-            return; // Always return immediately after Deny
-        }
-
-        await LoadAdminDataAsync(ct);
+        context.Deny("Insufficient permissions");
+        return Task.CompletedTask; // Always return immediately after Deny
     }
+    return Task.CompletedTask;
 }
 ```
+
+Permission checks normally belong to the authorization gate (a view-model policy), which denies before the page is built and re-checks when permissions change.
+
+### Leaving Guard (unsaved changes)
+
+```csharp
+public override async Task OnLeaving(LeavingContext context, CancellationToken ct = default)
+{
+    if (!IsDirty) return;
+    if (!await context.ConfirmAsync("Discard your changes?", ct)) return;   // stays when the user says no
+}
+```
+
+`context.Stay(reason)` keeps the user without asking; `ConfirmAsync` uses the history's `INavigationConfirmation` (message box, inline bar, flyout: the app decides). Asked before a new navigation, back, forward and `NavigatorHost.CloseContextAsync`; not while the page is pinned, nor when an authorization re-check closes it.
 
 ---
 
@@ -586,7 +588,7 @@ Always `return` immediately after calling `context.Deny()`. Any state mutations 
 | `Suspended` | In back-stack, alive in memory | Yes (unless `IKeepAlive`) | Yes |
 | `Pinned` | Mid-await on `UntilReturns()` | Never | Never called |
 | `Released` | Disposed. History entry exists, instance is null | N/A | N/A |
-| `Prefetching` | `OnPrefetch` running, not yet navigated | No (does not count toward pool) | N/A |
+| `Prefetching` | Obsolete: prefetch no longer builds a view model | — | — |
 
 ### NavigationHistoryPolicy
 
@@ -612,6 +614,7 @@ Always `return` immediately after calling `context.Deny()`. Any state mutations 
 | `Parameter` | `Type?` | No | Route parameter type |
 | `ParameterRequired` | `bool` | No (default `true`) | Whether the parameter is nullable |
 | `DisplayName` | `string?` | No | Sets `IRoute.DisplayName` |
+| `Load` | `NavigationLoad` | No (default `ShowFirst`) | When the page shows relative to its data |
 
 ### NavigationResult Union Cases
 
