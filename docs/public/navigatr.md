@@ -88,7 +88,11 @@ There is no `null` result, no exception-based control flow, no boolean flags. Ev
 
 ### NavigablePool
 
-The pool limits how many suspended ViewModels stay alive in memory. When pool capacity is exceeded, the oldest suspended (non-keep-alive) entry is disposed. Entries marked `IKeepAlive` and entries in `Pinned` state are never evicted.
+The pool limits how many suspended ViewModels stay alive in memory (`PoolCapacity`, per history). When pool capacity is exceeded, the least recently used suspended (non-keep-alive) entry is disposed. Entries marked `IKeepAlive` and entries in `Pinned` state are never evicted. Only suspended entries count: the visible page is not in the pool.
+
+Moving through history (back, forward, `NavigateToIndex`, `NavigateBackwardTo`/`NavigateForwardTo`) takes the target out of the pool before the page being left is suspended, so a move never evicts its own target: with `PoolCapacity = 2`, a breadcrumb jump from `Customers → Customer → Order` back to `Customers` resumes the same `Customers` instance (`OnResume`, no rebuild). A navigation to a new page suspends the current one and then trims the pool, so the least recently used page goes.
+
+`SuspendedTimeout` (optional) also disposes a page that stays suspended longer than the timeout. The release runs on the history's synchronization context (the thread the navigator was created on), like the rest of the lifecycle, and only when the page is still suspended.
 
 ---
 

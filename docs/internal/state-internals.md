@@ -92,7 +92,9 @@ The `GetPropertyChangedArgs(uint id)` override chains to `base` when the ID belo
 - **On the captured context:** fire `PropertyChanged` events inline (no marshaling overhead).
 - **Off-thread:** collect all `PropertyChangedEventArgs` into a buffer, then `Post` a single callback that fires them all on the UI thread.
 
-> **Tip:** This means you can freely mutate `[Observable]` properties from background threads — the `PropertyChanged` events will always arrive on the UI thread. But `INotifyChanged` handlers (the framework's internal notification) fire on the calling thread.
+> **Rule: one owner thread.** A state object is written and activated only on the thread that created it — the UI thread for view models. `[Observable]` setters, `Activate` and `Deactivate` check this in DEBUG (`StateObject.AssertOwnerThread` throws `InvalidOperationException`, "Cross-thread mutation is a programming error"; `OwnerThreadTests` pin it). In Release the check is compiled out, so a background write is not reported: it races with UI reads of the field and with `INotifyChanged` handlers, which run on the writing thread.
+>
+> The marshaling above protects **event delivery**, not the write: it routes notifications to the captured context and is not permission to mutate off-thread. Background work returns values and the owner thread applies them — post to the captured `SynchronizationContext` or the UI dispatcher. NavigatR's `OnLoaded` (load off-thread, apply on the owner thread) and `[Live]` state fed by Fusion already work this way.
 
 ---
 

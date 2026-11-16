@@ -93,6 +93,8 @@ Key rules:
 
 **XAML apps (WPF / Avalonia / MAUI):** Inherit `MvvmStateObject`. It captures the `SynchronizationContext` on construction and marshals all `PropertyChanged` events to the UI thread. Register ViewModels in DI and bind normally.
 
+**One owner thread.** A state object is written and activated only on the thread that created it (the UI thread for view models). The marshaling protects event delivery, not the write: background work returns values and the owner thread applies them (post to the `SynchronizationContext` or dispatcher). DEBUG builds throw `InvalidOperationException` on a cross-thread setter, `Activate` or `Deactivate`; Release builds do not check, and the write races with UI reads.
+
 **Blazor apps:** Inherit `StateComponent<TViewModel>`. Register the ViewModel with DI. The component auto-subscribes to changes and coalesces `StateHasChanged()` with an 8ms debounce window.
 
 ---
@@ -678,7 +680,7 @@ vm.Unsubscribe(myHandler);
 Extends `StateObject` with `INotifyPropertyChanged`, `INotifyPropertyChanging`, and `INotifyDataErrorInfo` for XAML/MVVM binding.
 
 **Key behaviors:**
-- Captures `SynchronizationContext` on construction; marshals all notifications to the UI thread.
+- Captures `SynchronizationContext` on construction; marshals all notifications to the UI thread. This makes delivery safe, not writing: setters still run on the owner thread only (see "One owner thread" above).
 - Coalesces batch notifications into a single `Post` to the UI thread (one marshalling call per batch, not per property).
 - `INotifyDataErrorInfo` delegates to `ValidationBag` -- XAML validation error templates work automatically.
 
