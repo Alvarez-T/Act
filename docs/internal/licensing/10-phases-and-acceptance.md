@@ -92,6 +92,13 @@ an in-memory bundle verifier earlier, but would be re-tested).
 
 ### LC-P3 — Central: seats and activation
 
+> **Decisions 2026-11-10 (user):** (1) **P3 and P4 are built together** (activation lists are vendor-signed: without the vendor service the
+> activation outbox has no consumer); (2) central keeps **one License per tenant** (`ICentralLicenses.For(tenant)`), the availability
+> masks per the tenant of the scope; (3) **A3 yes**: a call from an installation is also masked by that installation's seat at central
+> (`InstallationCallContext.Current`); (4) central licensing state behind a small store interface, first adapter over `IKeyValueStore`,
+> plus a SQL (YFex.Data) adapter for multi-node centrals **built in this phase** (user, 2026-11-10). Blocker outside licensing: Installations has no durable registry yet
+> (installations 08 §5 "2026-11-10").
+
 - `YFex.Licensing.Central`: seat counter, `LicensingEnrollmentPolicy`, `ISeatAvailability`, activation-delta outbox, pending/refused
   handling, replace, downgrade view, forwarding of vendor bundles, `LicensingPermissions`, license admin queries.
 - **Acceptance:** two concurrent enrollments for the last seat → exactly one succeeds; replace uses no extra seat; a 5th terminal is

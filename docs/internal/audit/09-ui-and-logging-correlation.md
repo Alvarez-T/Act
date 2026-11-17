@@ -62,7 +62,7 @@ public sealed partial class AuditExplorerViewModel : ViewModel { /* Search with 
 ```
 
 ```xml
-<!-- YFex.UI (Avalonia first; Blazor by the convert-to-blazor skill) -->
+<!-- YFex.UI (Avalonia first; Blazor by the yfex-ui-port skill) -->
 <y:YEntityHistory Target="{Binding Produto.Id, Converter={x:Static audit:AuditTargets.FromKey}}" />
 ```
 

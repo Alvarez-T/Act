@@ -27,7 +27,8 @@ These rules add to [all-projects](all-projects.md).
 
 ## Dependencies and naming
 
-- Avoid third-party packages. Accept one only when it is free, narrowly scoped and clearly cheaper than building it, and keep it behind an optional package. Reference other YFex libraries only when needed, but reuse what core already provides instead of duplicating it.
+- Avoid third-party packages. Accept one only when it is free, narrowly scoped and clearly cheaper than building it, and keep it behind an optional package.
+- Reuse YFex libraries and core instead of rebuilding what they do. Each possible integration is a pending decision for the user ([ecosystem-fit](ecosystem-fit.md)); keep the reference optional when only some users need it.
 - Libraries do not reference the logging engine; they probe `YFex.Diagnostics` in core. Libraries ship hosted services through `Add…` extensions, never their own executable: one service host runs per machine.
 - `YFex.<Engine>` names are reserved for YFex.Data database providers. A bridge between libraries is named for the bridge (`YFex.Persistence.Data`), not the engine.
 - New repositories use `src/`, `tests/`, `app/`, `benchmark/`, `docs/`, a `<short>.slnx` and an `AGENTS.md`.

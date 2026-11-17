@@ -44,5 +44,5 @@ public partial record Customer(CustomerId Id, PartyName Name, CpfCnpj CpfCnpj, E
 ## Structure and style
 
 - Group code by module, then by feature or use case (vertical slices). Business values are welcome here.
-- Use the framework instead of rebuilding it: YFex.Validation and YFex.Rules for validation and rules, YFex.Data for SQL. Domain code depends on infrastructure, never the reverse. If logic you are writing has no business meaning, ask the user whether it belongs in an infrastructure library.
+- Use the framework instead of rebuilding it: YFex.Validation and YFex.Rules for validation and rules, YFex.Data for SQL, and the rest of the owners in [ecosystem-fit](ecosystem-fit.md). Domain code depends on infrastructure, never the reverse. Logic you are writing that has no business meaning is a placement decision for the user: name the infrastructure library it would fit.
 - Readability first: LINQ, records and the `union` declaration are fine. Apply the infrastructure performance rules only to a measured hot path.

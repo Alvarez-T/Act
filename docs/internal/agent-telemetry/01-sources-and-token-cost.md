@@ -31,6 +31,31 @@ Files also reach the agent **without any tool call**. The transcript records the
 | `invoked_skills` | `SKILL.md` content injected by the `Skill` tool | 2 |
 | `skill_listing`, `dynamic_skill` | the skill names and descriptions offered to the agent (not the skill body) | 120, 1 |
 
+### What else the transcripts already carry (AT-P5, ✔AT37–✔AT42)
+
+The figures above were produced by reading the same records the metering phase stores, so the source is proven, not assumed. Per
+`assistant` record:
+
+```jsonc
+"message": {
+  "model": "claude-opus-5",
+  "usage": {
+    "input_tokens": 2, "output_tokens": 200,
+    "cache_creation_input_tokens": 30383, "cache_read_input_tokens": 45840,
+    "output_tokens_details": { "thinking_tokens": 47 },
+    "server_tool_use": { "web_search_requests": 0, "web_fetch_requests": 0 },
+    "service_tier": "standard"
+  },
+  "content": [ { "type": "tool_use", "id": "toolu_…", "name": "mcp__RoslynMcp__get_names", "input": { … } } ]
+}
+```
+
+and beside it an `api-request` record with `params.model`, `params.output_config.effort` and `params.max_tokens`, plus `tool_result`
+blocks carrying `is_error` and the result text. So tool use, MCP calls, parameters and real token usage need **no new hook, no new
+permission and no question to the agent**: they are a parser change plus two tables (✔AT42). The three transcript-side limits stay:
+a deleted transcript cannot be read, a tool result has no token count of its own (attribution is proportional, ✔AT44), and prices are
+not in the file (✔AT45).
+
 ## 2. Options
 
 ### A. Claude Code hooks → local store

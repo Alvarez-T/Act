@@ -10,6 +10,8 @@ These rules apply to every repository under `C:\Dev\YFex`. Repository `AGENTS.md
 
 **If the kind is unclear, a project mixes kinds, or a change would move code between kinds, ask the user before writing code.**
 
+Designing a library, a phase or a feature, or changing what a library does, in any kind of project: also read [ecosystem-fit](ecosystem-fit.md). Every integration with another library and every better placement becomes a pending ⚑ decision for the user.
+
 Writing C#: load the `yfex-csharp` skill (`YFex/docs/agent/skills/yfex-csharp/SKILL.md`). Building or testing: [build-and-test](build-and-test.md).
 
 ## 2. Dependency direction

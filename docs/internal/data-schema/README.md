@@ -20,6 +20,10 @@
 > connection-per-call helpers on `YFexConnectionFactory`, `RowSecurityKey.SqlType` derived from modules; Offline.Data and Authentication.Data
 > drop every catch-all `DbException` (upserts in one statement, Oracle `''` review); record in
 > [07 §DS-P6 record](07-phases-and-acceptance.md#ds-p6-implementation-record-2026-10-27). Next: DS-P7 (optional: live verification, a fifth engine).
+> **DS-P8 implemented 2026-11-13** (⚑DS14–⚑DS21 approved): bulk-write ergonomics — `IBulkRow<TSelf>` emitted into every
+> `[DataTable]` row plus `WriteAsync` overloads on `IBulkWriter`, so a bulk write is `BulkWriter.WriteAsync(rows, ct)`
+> instead of three derivable arguments; concrete `List<T>` and `IAsyncEnumerable<T>` sources ([10](10-bulk-write-ergonomics.md);
+> record in [07 §DS-P8 record](07-phases-and-acceptance.md#ds-p8-implementation-record-2026-11-13)).
 > **EF vs own model vs generator:** evaluated in [08](08-evaluation-ef-vs-own-model-vs-generator.md). Verdict: own C# model as
 > the core, an optional source-generated front-end over row classes, EF only as a bridge.
 > **Why:** the user asked (2026-10-22) to review the Entity Framework integration and the schema (table/column) creation
@@ -67,6 +71,7 @@ one schema generator in that engine's package. No consumer changes.
 | 07 | [Phases and acceptance](07-phases-and-acceptance.md) | DS-P0…DS-P7, acceptance criteria, test and AOT gates |
 | 08 | [Evaluation: EF Core vs FluentMigrator vs own model vs generator](08-evaluation-ef-vs-own-model-vs-generator.md) | Why the core is our own C# model, what a generator adds (and cannot do: migration history), where EF still fits |
 | 09 | [Library conventions](09-library-conventions.md) | Own types used and added, LINQ ban and enforcement, the hot paths and their memory techniques, `unsafe` policy, AOT rules and gates |
+| 10 | [Bulk-write ergonomics](10-bulk-write-ergonomics.md) | Why the bulk call needed three arguments, `IBulkRow<TSelf>` emitted by the generator, the `WriteAsync` overload set and its two resolution traps (arrays, collection expressions), ⚑DS14–⚑DS21 (approved, built) |
 
 ## 3. Principles
 
@@ -120,3 +125,8 @@ one schema generator in that engine's package. No consumer changes.
 | ⚑DS11 | Should Offline/Authentication stores move from ordinal readers + hand-built parameters to generated row classes (DS-P4), or keep fluent tables only? | **Fluent only in DS-P3.** Decide row classes per library later, when its DML is touched anyway; pilot the generator on Rules.Data and new tables |
 | ⚑DS12 | The EF bridge cannot be AOT-safe (EF itself is not). Keep it isolated and annotated (`[RequiresUnreferencedCode]`/`[RequiresDynamicCode]`), or drop it? | **Keep, isolated + annotated** (09 §4.1) |
 | ⚑DS13 | Enforce "no LINQ" with `BannedApiAnalyzers` in YFex.Data, marking the existing uses (42 found) with a `#pragma` + reason, or ban only in new projects? | **Ban in YFex.Data too**, so every existing use is visible and new ones fail the build; rewriting the hot ones is a separate measured task |
+
+**Approved 2026-11-13:** ⚑DS14–⚑DS21, bulk-write ergonomics — the `IBulkRow<TSelf>` interface and generator change, the
+`WriteAsync` overload set, a `List<T>` source, a streaming overload and the call-site migration; connection-level sugar
+(⚑DS17) deferred. Decisions and what shipped differently in
+[10 §6](10-bulk-write-ergonomics.md#6-decisions-approved-by-the-user-2026-11-13); phase DS-P8, built.

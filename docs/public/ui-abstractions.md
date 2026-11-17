@@ -287,7 +287,17 @@ await Dialog.ShowAsync<PickColorView, YColor>(DialogOptions.InPage); // over the
 await Dialog.ShowAsync<EditView, bool>(new DialogOptions { DismissOn = OverlayDismiss.None, Backdrop = OverlayBackdrop.Blur });
 ```
 
-By default a view model's dialog opens in the overlay host nearest to its view (its page, else its window). A dialog view model implementing `IDialogClosing` can cancel a dismissal by backdrop click or Escape.
+By default a view model's dialog opens in the overlay host nearest to its view (its page, else its window). A dialog view model implementing `IDialogClosing` can cancel a dismissal by backdrop click, Escape or the close button.
+
+The same options shape the dialog: `Title` (header, with a close button when it may be dismissed), `Size` (`Auto`, `Small`, `Medium`, `Large`), `Placement` (`Center`, `Top`) and `Presentation` (`Auto` is a card, or a sheet on narrow hosts; `Sheet`; `FullScreen`; `Window` opens a native window modal to the caller's window on desktop and falls back to an overlay elsewhere). Presets: `DialogOptions.Native`, `.Sheet`, `.FullScreen`.
+
+```csharp
+await Dialog.ShowAsync<RenameView, string, string?>("report.pdf", new DialogOptions { Title = "Rename file", Size = DialogSize.Small });
+await MessageBox.Ask("Quit", "Quit the app?").WithOptions(DialogOptions.Native).OkCancel();
+await MessageBox.ShowMessage("Sync failed", "No answer.", MessageIcon.Error, DialogOptions.Default, details: exception.ToString());
+```
+
+Message box labels come from a `MessageBoxTexts` registered in the container (`services.AddSingleton(new MessageBoxTexts { Yes = "Sim", No = "Não" })`); English otherwise.
 
 ### IMessageBox
 

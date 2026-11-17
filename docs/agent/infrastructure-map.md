@@ -1,6 +1,6 @@
 # YFex infrastructure map for agents
 
-Use this file only when a task crosses package or repository boundaries. This is a navigation index, not an API reference or a claim that every design phase is implemented. Verify current source with the RoslynMcp tools and current phase logs before editing.
+Read this file in full before designing a library, a phase or a feature, and check every row for fit ([ecosystem-fit](rules/ecosystem-fit.md)). For other tasks, read it when the task crosses package or repository boundaries. This is a navigation index, not an API reference or a claim that every design phase is implemented. Verify current source with the RoslynMcp tools and current phase logs before editing.
 
 ## Choose the owner
 
@@ -12,7 +12,9 @@ Use this file only when a task crosses package or repository boundaries. This is
 | Backup and restore the database/platform does not do: encrypted backup sets, retention, restore drills, per-tenant export/restore, erasure replay after restore; not placement (tenant → database: `YFex.Data.Placement`, planned) | `YFex.Backup` (DB-P1 built 2026-11-12: sealed SQLite / SQL Server sets in a local folder, GFS retention, restore with erasure replay; off-site, drills and Jobs in DB-P2) | [`databases-and-backups/README.md`](../internal/databases-and-backups/README.md) |
 | Scope identity and scoped overrides | `YFex.Tenancy` | [`YFex.Tenancy/AGENTS.md`](../../../YFex.Tenancy/AGENTS.md) |
 | Scope-specific implementation selection | `YFex.CustomLogic` | [`YFex.CustomLogic/AGENTS.md`](../../../YFex.CustomLogic/AGENTS.md) |
-| Shape validation, pure business-rule evaluation, expression language | `YFex.Validation`, `YFex.Rules`, `YFex.Expressions` | [`validation/README.md`](../internal/validation/README.md) |
+| Shape validation; rule evaluation and decisions (allowed, warned, needs approval, denied) for business and operational policies, including rules changed at run time (`YFex.Rules.Dynamic`); expression language | `YFex.Validation`, `YFex.Rules`, `YFex.Expressions` | [`validation/README.md`](../internal/validation/README.md) |
+| Screens and logic composed by end users | `YFex.Composer` (**proposal only**, 2026-09-30; working name; no repo) | [`composer-design.md`](../internal/composer-design.md) |
+| XML documents from typed models (XSD facets, serialization generator) | `YFex/src/XML` (`YFex.Xml`) | [`YFex.Xml` source](../../src/XML/YFex.Xml) |
 | CQRS contracts and dispatch | `YFex.Cqrs` | [`docs/public/cqrs.md`](../public/cqrs.md) |
 | Event bus, offline outbox, RPC, CQRS approvals, rules admin | `YFex.Messaging` | [`docs/public/messaging.md`](../public/messaging.md) |
 | Reactive state, navigation, MVVM base ViewModels, framework-neutral UI contracts | `YFex.State`, `YFex.NavigatR`, `YFex.Mvvm`, `src/UI` | [`docs/index.md`](../index.md) |
@@ -36,8 +38,11 @@ Use this file only when a task crosses package or repository boundaries. This is
 | Sagas, process managers, durable waits | `YFex.Orchestration` | [`YFex.Orchestration/README.md`](../../../YFex.Orchestration/README.md) |
 | Event-sourced aggregate write model | `YFex.EventSourcing` | [`YFex.EventSourcing/README.md`](../../../YFex.EventSourcing/README.md) |
 | Embedded scheduled jobs | `YFex.Jobs` | [`YFex.Jobs/README.md`](../../../YFex.Jobs/README.md) |
+| Cluster coordination: several server processes behind a balancer (leases with fencing, single worker per key or tenant, cross-node notices, node list, health/readiness and drain); not routing, autoscaling, dead letters or retry policy | `YFex.Cluster` (**design only**, 2026-11-10; ⚑CL1–⚑CL33, some approved 2026-11-11; work classes, priority and runtime policy in 11; no repo); site engine later by `YFex.Offline` + `YFex.Installations` | [`cluster/README.md`](../internal/cluster/README.md) |
+| Creating, scaling and removing server pools, node pools, databases and regions from the vendor's control plane (plans, approvals, limits, dry run, audit; Kubernetes first); never on data-plane nodes; vendor cloud only (on premises deferred) | `YFex.Provisioning` (**design only**, 2026-11-11; ⚑PV1–⚑PV27 pending; no repo) | [`provisioning/README.md`](../internal/provisioning/README.md) |
 | Running background services: one service host per machine role (`yfex-host`), module profiles from central, tray/CLI control | composition roots; `YFex.Hosting` (planned, plan proposed 2026-11-03) | [`hosting/README.md`](../internal/hosting/README.md) |
 | Sending messages to people (e-mail, SMS, WhatsApp, chat, webhooks, in-app), templates, outbox | `YFex.Notifications` (N0 built 2026-11-09: contracts, outbox, dispatcher, e-mail); OTP challenge rules stay in `YFex.Authentication.Delivery` | [`notifications/README.md`](../internal/notifications/README.md) |
+| Vendor-signed licenses on installations: editions and modules, seats, activation lists, trusted-time expiry, vendor check-in; the Authorization availability hook | `YFex.Licensing` (LC-P1 and LC-P2 built) | [`YFex.Licensing/README.md`](../../../YFex.Licensing/README.md), [`licensing/README.md`](../internal/licensing/README.md) |
 | Installing products, firewall rules, enrollment UI, self-update | `YFex.Installer` (future, orientation only) | [`installer/README.md`](../internal/installer/README.md) |
 | Desktop + AI automation: task graphs, orchestrator, input/observation, AI agents, secret and session stores | `YFex.Automation` | [`YFex.Automation/README.md`](../../../YFex.Automation/README.md) |
 | Consent-gated machine telemetry | `YFex.System` | [`YFex.System/README.md`](../../../YFex.System/README.md) |

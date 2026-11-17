@@ -16,6 +16,7 @@ hot path touched (DS-P4, DS-P6).
 | **DS-P4** | YFex.Data | Generator front-end (08 §6): `[DataTable]`/`[DataIndex]`/`[Ascii]`/`[Precision]` + standard and EF attributes by name (⚑DS10); emitted `Schema`, `Columns`, `BulkTable`, `IBulkRowMapper<T>`; compile-time YFSCH diagnostics; `SchemaAssert.InSync` printing missing steps. Pilot: Rules.Data's table | P1, P2 |
 | **DS-P5** | YFex.Data | EF bridge: `ApplyYFexModule`, `CreateYFexSchemaHistory`, `EfSchemaRenderer`, model export, `InstallYFexRowSecurity`, catalog-vs-model check, provider→dialect registry (05) | P2 (P0 for the registry's module initializers) |
 | **DS-P6** | YFex.Data + consumers | `BuildInsertIfAbsent`, `ClassifyError`; consumers drop catch-all `DbException`; shared connection-per-call helpers (03 §7); `RowSecurityKey.SqlType` derived from modules (03 §6) | P0 (drivers), P3 |
+| **DS-P8** | YFex.Data (+ call sites) | Bulk-write ergonomics (10): `IBulkRow<TSelf>` in the base list of every `[DataTable]` row, `WriteAsync` overloads on `IBulkWriter` (span/array/memory/read-only list + `IAsyncEnumerable` + explicit-table escape hatch), concrete `List<T>` source; call sites and the two user guides updated. **Done 2026-11-13** | P4 |
 | **DS-P7** | YFex.Data | Optional: live verification (`VerifySchemaAsync`: `module.Current` vs introspection; needs the `RelationalProviderBase` TODOs done), a fifth engine (MySQL) as proof of 03 §5 | P2; introspection |
 
 ## Acceptance
@@ -72,6 +73,52 @@ hot path touched (DS-P4, DS-P6).
 - A forced non-duplicate failure (table dropped) surfaces as an error, not "duplicate".
 - Upsert paths use `BuildUpsert` or `BuildInsertIfAbsent`; round trips measured before/after on SQLite (BenchmarkDotNet
   in `YFex.Offline.Benchmarks`), no regression.
+
+### DS-P8
+- `data.slnx` Release: 0 errors, no new warnings; AOT smoke publishes with no YFex trim/AOT warning and exits 0.
+- Every `[DataTable]` row compiles with `IBulkRow<TSelf>` in its base list, and a row type that declares the interface
+  by hand works with the same call.
+- The old explicit form (`WriteAsync(Row.BulkTable, BulkRows.From<Row, Row.BulkMapper>(rows), …)`) still compiles: one
+  test keeps it, since `BulkMapper` stays public (⚑DS14).
+- A `TRow[]` argument binds to the array overload, not the `IReadOnlyList` one (10 §4 trap): asserted by a test that
+  reports the source type actually used, not by reading the code.
+- Every call site that writes a `[DataTable]` row to its own table uses the one-argument form (⚑DS21);
+  `DATA-ACCESS-AND-BULK-WRITE.md` and `SCHEMA.md` updated (10 §7).
+
+## DS-P8 implementation record (2026-11-13)
+
+**Built** in `C:\Dev\YFex\YFex.Data` (uncommitted), design [10](10-bulk-write-ergonomics.md):
+
+- `IBulkRow<TSelf> : IBulkRowMapper<TSelf>` with `static abstract BulkTable BulkTable { get; }`
+  (`src/YFex.Data/Bulk/BulkContracts.cs`).
+- `DataTableEmitter` puts it in the partial's base list and emits the explicit static
+  `IBulkRowMapper<TSelf>.Write` forwarding to `BulkMapper`; the `BulkTable` property already satisfied the interface.
+- `BulkWriterExtensions`: a C# 14 `extension(IBulkWriter writer)` block with `ReadOnlySpan<TRow>`, `TRow[]`,
+  `ReadOnlyMemory<TRow>`, `IReadOnlyList<TRow>` (each `(rows, ct)` + `(rows, options, ct)`), `IAsyncEnumerable<TRow>`
+  and the `(BulkTable, rows)` escape hatch.
+- `BulkRows`: the former `ListBulkRowSource` is now `ReadOnlyListBulkRowSource`; `ListBulkRowSource` holds a concrete
+  `List<TRow>` (`BulkRows.FromList`); new `AsyncBulkRowSource<TRow, TMapper>` (a class, `IAsyncDisposable`) and
+  `BulkRows.From(IAsyncEnumerable<TRow>)`.
+- Call sites migrated: `ReadsStore` (YFex.AgentTelemetry), `DataTableRowTests` (3), `AotSmoke`. The rest pass a
+  hand-built `BulkTable` or a custom source and stay explicit (⚑DS21).
+
+**Decisions:** ⚑DS14–⚑DS21 approved; ⚑DS16 shipped without the planned `List<TRow>` overload and ⚑DS17 was deferred
+(10 §6).
+
+**Findings:**
+
+- A `From(List<TRow>)` overload beside `From(TRow[])` makes every `From<…>([row, row])` collection expression
+  ambiguous: it broke six existing call sites immediately (CS0121). A `ReadOnlySpan<TRow>` overload wins over the array
+  overload for a collection expression but **ties with `List<TRow>`**, so the extensions carry the span pair and
+  recognize a `List` at runtime inside the `IReadOnlyList` overload; `BulkRows` exposes the list source as `FromList`.
+- Nested and generic row types never reach the emitter (YFSCH102 rejects them), so the base list needs no special case.
+
+**Acceptance results:** `data.slnx` Release 0 errors (warnings NU1507/NU1603/NU1801 only). Tests: YFex.Data.Tests
+**340 passed + 3 skipped** (9 new in `Bulk/BulkRowWriteTests.cs`), EntityFramework 29, Tenancy 13, DataMining 2.
+Consumers: YFex.AgentTelemetry builds and its 81 tests pass; YFex.Rules.Data builds. Native AOT:
+`dotnet publish tests/YFex.Data.AotSmoke -c Release -r win-x64` → 18/18 checks, exit 0, trim/AOT warnings from
+MemoryPack only. Not run: a bulk benchmark comparison (the sources' instruction counts are unchanged by construction,
+and the `List` path can only lose a dispatch), and anything on real PostgreSQL / SQL Server / Oracle (the standing gap).
 
 ## DS-P6 implementation record (2026-10-27)
 

@@ -5,11 +5,16 @@
 One row per **access**: a file or folder the agent read, searched, listed, loaded or wrote. Everything else is a dimension of it.
 
 ```
-session ─┬─ prompt ─┬─ access (tool call, shell call or auto-load)
-         │          └─ access …
-         └─ agent (main | subagent: type, description, parent tool call) ─ access …
+workspace ─ session ─┬─ prompt ─┬─ turn (one model response: real token usage)      AT-P5
+                      │          ├─ tool_call (any tool: builtin, MCP, Skill, Agent)  AT-P5
+                      │          │     └─ access (the files that call read), tool_param
+                      │          └─ access (auto-load, attachment)
+                      └─ agent (main | subagent: type, description, parent tool call) ─ …
 doc (inventory snapshot of every file that could be read; finds the never-read ones)
 ```
+
+Three layers, coarse to fine: a **turn** is what the model was billed for, a **tool_call** is one thing it did, an **access** is one
+file that reached its context. AT-P1/AT-P2 built the access layer only; the other two are AT-P5 (✔AT37, ✔AT42).
 
 | Table | Columns | Source (transcript / hook) |
 |---|---|---|
@@ -21,23 +26,52 @@ doc (inventory snapshot of every file that could be read; finds the never-read o
 | `access` | `access_id`, `session_id`, `agent_id`, `prompt_id`, `tool_use_id`, `at`, `channel`, `initiator`, `verb`, `path`, `repo`, `category`, `ext`, `partial`, `range`, `pattern`, `confidence`, `purpose_call`, `purpose_step`, `purpose_text` | §2–§5 |
 | `doc` | `path`, `repo`, `category`, `bytes`, `lines`, `modified_at`, `snapshot_at` | file system scan at ingest |
 | `ingest_state` | `transcript`, `bytes_read`, `format_version`, `at` | the ingester itself (incremental reads) |
+| `workspace` | `workspace_id`, `name`, `root`, `enabled` (AT-P4, ✔AT32) | `workspaces.json`; a session under no configured root is not stored at all (✔AT33), and a *file* under no root has no workspace (null) but keeps its pseudo-repo |
+| `tool` | `tool_id`, `name`, `surface` (`builtin` / `mcp` / `skill` / `agent` / `hook`), `server`, `tool`, `kind` (AT-P5, ✔AT38) | the `tool_use` name; `mcp__<server>__<tool>` is split |
+| `tool_call` | `tool_call_id`, `session_id`, `agent_id`, `prompt_id`, `turn_id`, `tool_id`, `at`, `seq`, `ok`, `denied`, `duration_ms`, `input_chars`, `result_chars`, `result_lines`, `est_share_tokens`, `error_id`, `command_id`, `params_id` (AT-P5, ✔AT37) | a `tool_use` block and the `tool_result` that answers it |
+| `tool_param` | `tool_call_id`, `name`, `value_id`, `chars`, `type`, `kept` (AT-P5, ✔AT39) | the call's input object, filtered by `tools.json` |
+| `turn` | `turn_id`, `session_id`, `agent_id`, `prompt_id`, `at`, `model`, `effort`, `service_tier`, `input_tokens`, `cache_creation_tokens`, `cache_read_tokens`, `output_tokens`, `thinking_tokens`, `iterations`, `web_search_requests`, `web_fetch_requests`, `token_source`, `request_id`, `stop_reason`, `duration_ms` (AT-P5, ✔AT42) | `assistant` records' `message.usage`, deduplicated by message id; `model` / `effort` / `max_tokens` from the `api-request` record with the same timestamp |
 
 - `channel`: `tool` (Read, Grep, Glob, Edit, Write, Skill, MCP), `shell` (Bash, PowerShell), `auto` (attachments: instructions,
   nested memory, attached file, invoked skill, outside edit).
+- `workspace`: on the session (where it started) and on every file (where the path lives), so a read across roots is visible as one
+  (✔AT35). Reports print the column only when the filter spans more than one workspace.
 - `initiator`: who caused the access — `agent`, `user-directed`, `user`, `harness`, `session` (§6).
 - `verb`: `read`, `search`, `list`, `load` (auto), `write`, `edit`. Builds and test runs are not accesses.
 - `partial`: the call read part of the file (`offset`/`limit`, `sed -n 1,80p`, `head`, `Select-Object -First`); `range` keeps it.
 - `confidence`: `exact` (tool input, attachment) or `parsed` (shell command line, §4).
-- One shell call that reads five files gives five rows with the same `tool_use_id`.
+- One shell call that reads five files gives five rows with the same `tool_use_id`, and from AT-P5 the same `tool_call_id` (✔AT41):
+  one `tool_call` row, five `access` rows.
+- A tool call that reads nothing — an MCP call, a build, a `git commit`, `AskUserQuestion` — has no access rows at all today, which is
+  why "which tools do agents use" cannot be answered before AT-P5.
 
 The actor vocabulary matches YFex.Actors (`ActorKind.Agent`, "an AI agent"; the user is `ActorKind.User`), as names only: the tool does
 not reference the library (⚑AT13).
 
-## 2. Repository
+## 2. Workspace and repository
 
-`repo` = the first folder under `C:\Dev\YFex\` (`YFex`, `YFex.Jobs`, …). Outside it: `~claude` (`C:\Users\thiag\.claude\…`, skills,
-memory, settings), `scripts` (`C:\Dev\Scripts`), `other`. Relative paths resolve against the record's `cwd` plus any `cd` earlier in the
-same command line.
+**Until AT-P4** there is one root, `C:\Dev\YFex` (or `YFEX_AGENT_TELEMETRY_WORKSPACE`), and a session whose first `cwd` is outside it is
+**dropped**: the ingest summary counts it as "outside the workspace" and nothing else records that it existed. The user hit this on
+2026-11-13 looking for a session that had worked in another root.
+
+**From AT-P4** the roots are a list (✔AT32), each with a name, and the name is stored:
+
+| Concept | Rule |
+|---|---|
+| `workspace` | one of the configured roots, by name. Longest matching root wins, so a nested root is its own workspace (✔AT34) |
+| outside every root | a **session** there is not stored (✔AT33, the behaviour AT-P1 already has); a **file** there is stored with no workspace, because an agent working inside a workspace legitimately reads `~/.claude`, `C:\Dev\Scripts` and other paths |
+| `repo` | unchanged in meaning: the first folder under **its own** workspace root (`YFex`, `YFex.Jobs`, …) |
+| `~claude`, `scripts`, `other` | unchanged: pseudo-repos for `C:\Users\thiag\.claude\…` (skills, memory, settings), `C:\Dev\Scripts` and anything else under no root |
+
+Relative paths resolve against the record's `cwd` plus any `cd` earlier in the same command line, as before; the workspace is then
+decided from the absolute path, not from the session.
+
+Two filters follow from the two columns (✔AT35): `--workspace` selects by the **file's** workspace, `--session-workspace` by where
+the session started. A coverage denominator is per workspace, so `docs refresh` scans every enabled root.
+
+Because an unlisted root is dropped rather than stored (✔AT33), the list of workspaces decides what exists at all. So the drop is
+reported, not silent: `ingest` counts it (it already does) and `status` names the top-level folders whose sessions were dropped and how
+many, which is the question the user asked on 2026-11-13 ("why is my last session not in the report?").
 
 ## 3. Category
 

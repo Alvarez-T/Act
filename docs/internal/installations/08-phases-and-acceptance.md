@@ -57,7 +57,8 @@
 ### Phase I2 — Central and enrollment — DONE 2026-10-08, reworked 2026-10-13 (see §5)
 
 - `YFex.Installations.Central`: enrollment codes, issuing CA operation (root + installation issuing CA), registry (in-memory + SQL
-  later), enrollment/renewal endpoints, revocation, roster publication, `InstallationPermissions`, hint key derivation, `IEnrollmentPolicy` seam (⚑I23:
+  later — **⚠ OPEN 2026-11-10: only `InMemoryInstallationRegistry` exists; a durable `IInstallationRegistry` over YFex.Data is still to
+  build**, see §5 "2026-11-10"), enrollment/renewal endpoints, revocation, roster publication, `InstallationPermissions`, hint key derivation, `IEnrollmentPolicy` seam (⚑I23:
   seat limits for a future YFex.Licensing, hardware-key policy for brokers).
 - **Licensing requests (licensing 10 §2.1)** to build in I2: R2 `IEnrollmentPolicy` inside the registry's enrollment transaction under a
   per-tenant lock and at code creation; R3 `EnrollmentCandidate { Tenant, Scope, Role, AppName, Replaces, Hint }`; R4
@@ -142,6 +143,16 @@ evidence key, relay), privacy 04 §5/§7 and 05 §5.1 (installation id + evidenc
 Devices plan §12 + `YFex.Devices/docs/04-serial.md:102`.
 
 ## 5. Implementation log
+
+### 2026-11-10 — Open: durable installation registry (noted by the Licensing session)
+
+`IInstallationRegistry` has one implementation, `InMemoryInstallationRegistry`. Tests and the harness are fine with it, but a real
+central loses enrollments, codes, revocations and the event cursor on restart. Needed before any production central and by
+YFex.Licensing LC-P3/P4 (seat counts and the activation outbox read the registry and its events). What the durable registry must keep
+from the in-memory one: `IEnrollmentPolicy` called inside the enrollment transaction under a per-tenant lock (in SQL: a transaction with
+a per-tenant advisory lock or a row lock on a tenant row, so two central nodes cannot both take the last seat); atomic revocation of
+`Replaces`; contiguous event sequence numbers (a cursor never skips one); `CountAsync` by tenant, role and scope prefix. Not started;
+owner: the Installations session.
 
 ### 2026-10-07 — I0 core contracts complete
 

@@ -24,7 +24,7 @@ Core-specific: put a cross-cutting **type or contract** in `src/YFex` only when 
 | Trusted time, network mechanics, installation identity | siblings `YFex.Time`, `YFex.Networking`, `YFex.Installations` |
 | Policies, sagas, event streams, jobs | siblings `YFex.Resilience`, `YFex.Orchestration`, `YFex.EventSourcing`, `YFex.Jobs` |
 
-For other infrastructure siblings and exact documentation routes, read [the infrastructure map](docs/agent/infrastructure-map.md) only when the task crosses a boundary.
+For other infrastructure siblings and exact documentation routes, read [the infrastructure map](docs/agent/infrastructure-map.md): in full before any design or new capability ([ecosystem-fit](docs/agent/rules/ecosystem-fit.md)), otherwise when the task crosses a boundary.
 
 ## Documentation
 

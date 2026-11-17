@@ -59,6 +59,10 @@ PBKDF2, not ten. A used code is cut out with `ReplaceAsync` (compare-and-set). T
   ⚑AN11). Sign counter checked when non-zero (cloned authenticator finding).
 - Usable as sign-in (discoverable credential, "entrar com passkey") and as second factor. Desktop apps use the platform passkey UI
   through the system browser flow (06 §2.2); native platform APIs are an open item.
+- *As built (AN-P6, 2026-11-12; 14 §5):* in the engine (`Passkeys/`), not a separate package. The challenge is a sealed ceremony token
+  (purpose, account, stamp, realm, expiry) consumed once, not a `Challenge` row; all passkeys of an account sit in one
+  `CredentialKind.Passkey` record (format v1) whose counter moves by compare-and-set. Relying party per deployment or per realm:
+  `auth.Passkeys(p => p.RelyingParty("farmaviva.com.br", "https://app.farmaviva.com.br"))`.
 
 ### 2.4 Codes as second factor
 

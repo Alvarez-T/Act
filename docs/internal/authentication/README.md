@@ -2,9 +2,10 @@
 
 > **Status:** AN-P0 (core `EmailAddress`/`PhoneNumber`) + **AN-P1 + AN-P2 implemented 2026-10-18**, AN-P3a/P3b (external providers)
 > 2026-10-18, **AN-P4 (desktop client, shared terminals, offline bridge) 2026-10-19**, **AN-P5 (second factors, step-up, inline
-> re-authentication, sign-in on another device) 2026-10-19** in `C:\Dev\YFex\YFex.Authentication` (210 tests, AOT smoke 0 warnings) —
-> log and pending items in [14 §5](14-phases-and-acceptance.md). The user's go-ahead ("start implementing Phases 1 and 2") applied every
-> ⚑AN recommendation of §7 as written. Next: AN-P6 (passkeys). Hosting of background services: [hosting](../hosting/README.md).
+> re-authentication, sign-in on another device) 2026-10-19**, **AN-P6 (passkeys) 2026-11-12** in `C:\Dev\YFex\YFex.Authentication`
+> (245 tests on Windows and Linux, AOT smoke 0 warnings) — log and pending items in [14 §5](14-phases-and-acceptance.md). The user's
+> go-ahead ("start implementing Phases 1 and 2") applied every ⚑AN recommendation of §7 as written. Next: AN-P7 (device session profiles,
+> with installations I6). Hosting of background services: [hosting](../hosting/README.md).
 > **Why:** the user asked (2026-10-17) for one reusable library that handles every form of authentication across YFex apps:
 > passwords, external providers (Google, Microsoft and any OpenID Connect provider), confirmation by e-mail, SMS and WhatsApp,
 > password reset, second factors, and the desktop/offline cases. Today **nothing in the ecosystem authenticates a person**
@@ -76,7 +77,7 @@ Pharmacy and marketplace words appear **only in examples** (`yfex-libs-domain-ag
 | `YFex.Authentication.Delivery` | channel senders: **SMTP** (BCL), **e-mail HTTP APIs**, **Twilio** (SMS, WhatsApp, Verify), **Meta WhatsApp Cloud API**; later Zenvia, Amazon SNS/SES, GSM modem via YFex.Devices | `.Public`, YFex.Web |
 | `YFex.Authentication.Offline` | bridge to YFex.Offline ⚑O12: credential verifier source, verifier capture at online sign-in, operator credential publication | the engine/client + YFex.Offline |
 | `YFex.Authentication.Data` | SQL stores on YFex.Data (accounts, credentials, external logins, sessions, challenges, throttle counters, audit-friendly history) | the engine + YFex.Data |
-| `YFex.Authentication.Passkeys` *(phase AN-P6)* | WebAuthn/FIDO2 registration and assertion (span CBOR/COSE reader, attestation `none`) | the engine |
+| ~~`YFex.Authentication.Passkeys`~~ *(AN-P6: built inside the engine, `Passkeys/`)* | WebAuthn/FIDO2 registration and assertion (span CBOR/COSE reader, attestation `none`) | — |
 | `YFex.Authentication.Testing` | in-memory everything, `TestIdentityProvider` (an in-process OIDC issuer), `CapturingSender` (reads the codes), fake clock, `AuthenticationHarness` | the above + YFex.Authorization.Testing, YFex.Time.Testing |
 | tests, AotSmoke, Benchmarks | `.Tests` (Windows + Linux), `.AspNetCore.Tests`, `.OpenIdConnect.Tests` (recorded real token vectors), `.AotSmoke` (0 warnings), BenchmarkDotNet (`InProcessEmitToolchain`) | |
 

@@ -119,7 +119,7 @@
 - **Acceptance:** RFC 6238 test vectors; TOTP step replay refused; `ChangePriceTable` denied with `ReauthenticationRequired` then
   allowed after step-up; inline approval at a till verifies the supervisor's PIN without creating a session.
 
-### AN-P6 — Passkeys
+### AN-P6 — Passkeys — **✅ 2026-11-12** (§5; in the engine, not a `.Passkeys` package; sample-app browser test pending)
 
 - `.Passkeys`: WebAuthn registration/assertion, span CBOR/COSE reader, ES256/RS256, sign-counter checks.
 - **Acceptance:** WebAuthn conformance-style vectors (packed/none attestation samples), a browser test in the sample app.
@@ -134,6 +134,64 @@
   presence is ignored; revoking an installation refuses its next call at once; AOT 0 warnings.
 
 ## 5. Implementation log
+
+### 2026-11-12 — AN-P6 (passkeys)
+
+**Built** in `YFex.Authentication` (`src/YFex.Authentication/Passkeys/`, `SignInService.Passkeys.cs`) + `.Public` + `.AspNetCore`:
+- `CborReader` (ref struct, WebAuthn subset: ints, byte/text strings, definite arrays/maps; simple values and floats only skipped;
+  indefinite lengths, tags and nesting > 8 refused; a failed read consumes nothing); `CoseKey` (EC2/P-256/ES256 `-7`, RSA/RS256 `-257`)
+  into a `PublicKeyRecord` through Cryptography's `ExternalPublicKeys` (point-on-curve, RSA size/exponent checked there);
+  `AuthenticatorData` (RP id hash, flags, counter, attested credential data, extensions skipped, no trailing byte); `ClientData`
+  (`Utf8JsonReader`); `PasskeyResponse` (the browser's `PublicKeyCredential.toJSON()`, ≤ 64 KiB); DER → P1363 for ES256 signatures
+  (`System.Formats.Asn1`, encoding only). No new NuGet package, no crypto primitive outside YFex.Cryptography (architecture test green).
+- `PasskeyService` (public): `StartRegistrationAsync` / `CompleteRegistrationAsync(caller, credentialJson, label)` / `ListAsync` /
+  `RemoveAsync`. Registration: discoverable credential required, user verification required, attestation `none`, `excludeCredentials`,
+  `credProps`; needs the sensitive-operation window (09 §5); first factor issues recovery codes; contacts notified; events
+  `second-factor-enrolled/removed` with method `passkey`.
+- `SignInService`: `StartPasskeyAsync(realm)` + `WithPasskeyAsync(realm, credentialJson, context)` (discoverable sign-in, user handle =
+  account id; `{passkey}` alone is `PhishingResistant`, so no second factor); `StartSecondFactorPasskeyAsync(flow, context)` (completes
+  through `CompleteSecondFactorAsync` with `SecondFactorProof(Passkey, credentialJson)`); `StartStepUpPasskeyAsync(caller)` (completes
+  through `StepUpAsync`). Throttled per credential id + IP; every failure is `InvalidCredentials`.
+- `SecondFactorService`: a passkey is an enrolled factor in the policy (`Allowed`, possession factors that lift a password, recovery codes
+  usable/regenerable, `SecondFactorStatus.Passkeys`); removing the authenticator keeps recovery codes while passkeys remain and is not
+  refused by a role requirement then.
+- Options `auth.Passkeys(p => p.RelyingParty(id, origins…))`, per realm `RelyingParty(realm, id, origins…)`, `Name`, `CeremonyLifetime`
+  (5 min), `MaxPerAccount` (10, cap 32). Origins validated at configuration (https, or http on loopback; host = RP id or a subdomain;
+  `android:apk-key-hash:` / `ios:` kept verbatim).
+- HTTP: `POST sign-in/passkey/start`, `sign-in/passkey`, `sign-in/second-factor/passkey`, `step-up/passkey`, `GET factors/passkeys`,
+  `POST factors/passkeys/start|confirm|remove`; `sign-in/second-factor` and `step-up` accept `"credential": {…}` with method `passkey`;
+  `GET factors` returns `passkeys`. Options are WebAuthn L3 JSON for `PublicKeyCredential.parse…OptionsFromJSON`.
+- `SecondFactorRefusal.InvalidResponse` (7), `LimitReached` (8).
+
+**Acceptance met (tests):** 33 new (245 total, Windows Release and Linux `yfex-linux` Debug): ES256 and RS256 registration + discoverable
+sign-in; packed self-attestation and extension data accepted; passkey as second factor after a password (`Password + Passkey` =
+`PhishingResistant`) and a sign-in ceremony refused there (purpose sealed); step-up of the same session; one refusing case per check
+(other origin, unlisted subdomain, wrong type, other RP id, UV/UP missing, BS without BE, corrupted signature, cross-origin, top origin,
+no user handle, foreign challenge, expired ceremony, unknown credential, another account's handle, replayed assertion); cloned
+authenticator (counter not growing) refused, zero counters keep working; duplicates, foreign ceremonies, stale sessions, the per-account
+limit; removal; off until configured; configuration refusals; stored format v1 golden; CBOR malformed inputs; DER edge cases; **pinned
+vectors** (ES256 packed + RS256 none, generated once with discarded BCL keys); HTTP end to end over TestServer. AOT smoke registers and
+signs in with a passkey: **0 IL warnings, exit 0**.
+
+**Deviations / decisions taken while building:**
+- **No `.Passkeys` package:** the checks plug into engine internals (second-factor policy, `ProveAsync`, sign-in throttling, flows); a
+  separate package would have needed a new seam interface for one implementation. Lives in the engine under `Passkeys/` (rule: one
+  package per library).
+- **Challenge = sealed ceremony token** (ring `authentication/factors`, domain `yfex.authentication.passkey.ceremony.v1`: purpose, flow
+  id, expiry, security stamp, account, realm), consumed once with `IChallengeStore.TryConsumeFlowAsync` — not a `Challenge` row (those
+  are delivered codes). No ceremony state is stored; any node opens it.
+- **Storage:** all passkeys of an account in **one** `CredentialKind.Passkey` record (format v1, `StoredPasskeys`), like recovery codes,
+  so the one-record-per-kind store and its compare-and-set serve counter updates — no store contract or SQL change. The key is kept as
+  the platform-encoded SubjectPublicKeyInfo, not the COSE bytes.
+- Attestation statements and the AAGUID are never verified or stored (attestation `none` policy; any `fmt` is accepted and skipped).
+- `user.name` and `user.displayName` are the account's display name (no contact goes into the authenticator).
+- Credential ids are unique per account, not indexed across accounts: sign-in finds the account by the user handle first, so the same id
+  on two accounts cannot cross over.
+
+**Not done / pending:** browser test in a sample app (no Authentication sample app exists, and a real authenticator needs a person; the
+software authenticator in the tests drives the same JSON); passkey enrolment inside a `MustEnrol` sign-in (offers the authenticator only);
+passkeys in `IReauthentication` inline approvals (tills use PINs); `.Client` methods for passkeys (desktop goes through the system
+browser, 06 §2.2; native platform APIs open); EdDSA (`-8`) keys; WebAuthn signal API / related origins.
 
 ### 2026-10-19 — AN-P5 (second factors, step-up, inline re-authentication, sign-in on another device)
 

@@ -160,7 +160,7 @@ raised on `ValidationChanged`.
 
 ## 10. Other frameworks
 
-Author in Avalonia first; convert with the existing `convert-to-uno` / `convert-to-blazor` skills:
+Author in Avalonia first; bring it to the other platforms with the YFex.UI `yfex-ui-port` skill:
 - Uno: same attached-property design.
 - Blazor (`YFex.State.Blazor`): components take a `Field` parameter and a cascading `IValidationSource`.
 
