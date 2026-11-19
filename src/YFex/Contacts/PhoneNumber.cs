@@ -22,6 +22,10 @@ namespace YFex;
 /// PhoneNumber.TryParse("(11) 98765-4321", defaultCountryCallingCode: 55, out var same);   // same == phone
 /// Classified.Mask(phone);                     // "**********4321"
 /// </code>
+/// <para>Country rules come from <see cref="PhoneRegion"/>: <see cref="TryParse(ReadOnlySpan{char}, PhoneRegion, out PhoneNumber)"/>
+/// validates against a numbering plan; <see cref="Region"/>, <see cref="AreaCode"/>, <see cref="IsMobile"/> and the <c>"N"</c> format
+/// read it; <see cref="IExtractable{TSelf}"/> finds numbers of <see cref="PhoneRegion.Default"/> in free text.
+/// The parsers that take a calling code check only the E.164 shape.</para>
 /// <para>Personal data (contact): logs write the mask. <see cref="IClassifiedData{TSelf}"/> is hand-written (core, ⚑N16).</para>
 /// </summary>
 [Sensitive(DataSensitivity.Personal, Category = "contact", Mask = "{last:4}", Identifier = true)]
@@ -34,7 +38,8 @@ public readonly struct PhoneNumber :
     ISpanParsable<PhoneNumber>,
     ICanonicalValue<PhoneNumber>,
     ILogValue<PhoneNumber>,
-    IClassifiedData<PhoneNumber>
+    IClassifiedData<PhoneNumber>,
+    IExtractable<PhoneNumber>
 {
     /// <summary>Most digits of an E.164 number (country code included).</summary>
     public const int MaxDigits = 15;
@@ -67,6 +72,85 @@ public readonly struct PhoneNumber :
 
     /// <summary>True for <see langword="default"/> (no number).</summary>
     public bool IsEmpty => _e164 is null;
+
+    /// <summary>The built-in numbering plan of <see cref="CountryCallingCode"/> (<see cref="PhoneRegion.Known"/>), or null.</summary>
+    public PhoneRegion? Region => _e164 is null ? null : PhoneRegion.FromCallingCode(_countryCallingCode);
+
+    /// <summary>The area code (Brazil's DDD <c>"11"</c>, NANP <c>"212"</c>); empty when <see cref="Region"/> has none.</summary>
+    public ReadOnlySpan<char> AreaCode
+    {
+        get
+        {
+            int digits = Region?.AreaCodeLength ?? 0;
+            ReadOnlySpan<char> national = NationalNumber;
+            return digits > 0 && national.Length > digits ? national[..digits] : default;
+        }
+    }
+
+    /// <summary>Whether the line is a mobile, as <see cref="Region"/> encodes it; null when it does not (NANP) or is unknown.</summary>
+    public bool? IsMobile => Region?.IsMobile(NationalNumber);
+
+    /// <summary>
+    /// Parses with a numbering plan: a national number (<c>"(11) 98765-4321"</c>, trunk and carrier prefixes as the plan allows)
+    /// must be valid in <paramref name="region"/>; an international one (<c>"+1 212 555 0100"</c>) must be valid in its own
+    /// country's built-in plan, or have the E.164 shape when there is none.
+    /// </summary>
+    public static bool TryParse(ReadOnlySpan<char> text, PhoneRegion region, out PhoneNumber number)
+    {
+        ArgumentNullException.ThrowIfNull(region);
+        number = default;
+        text = text.Trim();
+        if (text.IsEmpty || text.Length > 64) return false;
+        Span<char> digits = stackalloc char[32];
+        if (!TryCollectDigits(text, digits, out int count, out bool international, out _)) return false;
+        return TryFromDigits(digits[..count], international, formatted: true, [region], out number);
+    }
+
+    /// <summary>Parses with a numbering plan (see <see cref="TryParse(ReadOnlySpan{char}, PhoneRegion, out PhoneNumber)"/>).</summary>
+    public static PhoneNumber Parse(ReadOnlySpan<char> text, PhoneRegion region)
+        => TryParse(text, region, out PhoneNumber number) ? number : throw new FormatException($"Not a valid {region.Country} phone number.");
+
+    /// <summary>The first phone of <see cref="PhoneRegion.Default"/> in <paramref name="text"/> (see the overload with regions).</summary>
+    public static bool TryExtract(ReadOnlySpan<char> text, out PhoneNumber value, out int start, out int length)
+        => TryExtract(text, PhoneRegion.DefaultRegions, out value, out start, out length);
+
+    /// <summary>
+    /// The first phone in <paramref name="text"/> that one of <paramref name="regions"/> accepts (in order), or that has a
+    /// <c>+</c>/<c>00</c> country code: <c>(11) 98765-4321</c>, <c>11 3456-7890</c>, <c>+55 11 987654321</c>,
+    /// <c>(212) 555-0100</c>. Bare digit runs count only when the plan is confident (a Brazilian mobile with its DDD); a match is
+    /// never glued to letters or other digits. Allocates only on a match.
+    /// </summary>
+    public static bool TryExtract(ReadOnlySpan<char> text, ReadOnlySpan<PhoneRegion> regions, out PhoneNumber value, out int start, out int length)
+    {
+        value = default;
+        start = 0;
+        length = 0;
+        if (text.IndexOfAnyInRange('0', '9') < 0) return false;
+        Span<int> ends = stackalloc int[8];
+        Span<char> digits = stackalloc char[32];
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            bool opener = char.IsAsciiDigit(c) || (c is '+' or '(' && i + 1 < text.Length && char.IsAsciiDigit(text[i + 1]));
+            if (!opener) continue;
+            if (i > 0 && (char.IsLetterOrDigit(text[i - 1]) || text[i - 1] == '+')) continue;
+            int endCount = GroupEnds(text, i, ends);
+            for (int k = endCount - 1; k >= 0; k--)
+            {
+                int end = ends[k];
+                if (!IsEndBoundary(text, end)) continue;
+                if (!TryCollectDigits(text[i..end], digits, out int count, out bool international, out bool formatted)) continue;
+                if (TryFromDigits(digits[..count], international, formatted, regions, out value))
+                {
+                    start = i;
+                    length = end - i;
+                    return true;
+                }
+            }
+        }
+        value = default;
+        return false;
+    }
 
     /// <summary>
     /// Parses <c>"+55 (11) 98765-4321"</c>, <c>"0055 11 98765 4321"</c> or, with <paramref name="defaultCountryCallingCode"/>, a
@@ -165,12 +249,17 @@ public readonly struct PhoneNumber :
 
     /// <summary>The E.164 text. Personal data: never log it (logs use the mask).</summary>
     public override string ToString() => E164;
-    public string ToString(string? format, IFormatProvider? formatProvider) => E164;
+
+    /// <summary><c>"N"</c>: the national layout of <see cref="Region"/> (<c>"(11) 98765-4321"</c>; E.164 when there is no
+    /// region); anything else: <see cref="E164"/>.</summary>
+    public string ToString(string? format, IFormatProvider? formatProvider)
+        => format is "N" or "n" && Region is { } region ? region.FormatNational(NationalNumber) : E164;
 
     public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format = default, IFormatProvider? provider = null)
     {
-        bool copied = E164.AsSpan().TryCopyTo(destination);
-        charsWritten = copied ? E164.Length : 0;
+        string text = format is "N" or "n" ? ToString("N", provider) : E164;
+        bool copied = text.AsSpan().TryCopyTo(destination);
+        charsWritten = copied ? text.Length : 0;
         return copied;
     }
 
@@ -200,6 +289,122 @@ public readonly struct PhoneNumber :
     /// <summary>Only the last four digits stay visible.</summary>
     public static bool TryWriteMasked(in PhoneNumber value, Span<char> destination, out int written)
         => Masks.TryWriteLast(value.E164, 4, destination, out written);
+
+    // ── region parsing and extraction ────────────────────────────────────────────────────────────────────────────────────
+
+    /// <summary>Digits of <paramref name="text"/>. A leading <c>+</c> marks it international; separators (space, no-break space,
+    /// <c>- . ( ) /</c>) are skipped and make it <paramref name="formatted"/>; any other character, or too many digits, fails.</summary>
+    private static bool TryCollectDigits(ReadOnlySpan<char> text, Span<char> digits, out int count, out bool international, out bool formatted)
+    {
+        count = 0;
+        international = false;
+        formatted = false;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char c = text[i];
+            if (char.IsAsciiDigit(c))
+            {
+                if (count == digits.Length) return false;
+                digits[count++] = c;
+                continue;
+            }
+            if (c == '+' && i == 0) international = true;
+            else if (c is not (' ' or '-' or '.' or '(' or ')' or '/' or '\u00A0')) return false;
+            formatted = true;
+        }
+        return count > 0;
+    }
+
+    /// <summary>A number from collected digits: international ones by their own country's plan, national ones by the first of
+    /// <paramref name="regions"/> that accepts them (bare digit runs only where the plan says so).</summary>
+    private static bool TryFromDigits(ReadOnlySpan<char> digits, bool international, bool formatted, ReadOnlySpan<PhoneRegion> regions, out PhoneNumber number)
+    {
+        number = default;
+        if (!international && digits.StartsWith("00"))
+        {
+            international = true;
+            digits = digits[2..];
+        }
+        if (international)
+        {
+            int countryDigits = CountryCodeLength(digits);
+            if (countryDigits == 0 || digits.Length > MaxDigits) return false;
+            ushort code = ushort.Parse(digits[..countryDigits], CultureInfo.InvariantCulture);
+            ReadOnlySpan<char> national = digits[countryDigits..];
+            PhoneRegion? plan = null;
+            foreach (PhoneRegion region in regions)
+            {
+                if (region.CallingCode != code) continue;
+                plan = region;
+                break;
+            }
+            plan ??= PhoneRegion.FromCallingCode(code);
+            if (plan is not null ? !plan.IsValidNational(national) : national.Length < MinNationalDigits) return false;
+            return TryCreate(code, countryDigits, national, out number);
+        }
+        foreach (PhoneRegion region in regions)
+        {
+            ReadOnlySpan<char> national = region.ToNational(digits);
+            if (!region.IsValidNational(national)) continue;
+            if (!formatted && !region.AcceptsUnformatted(national)) continue;
+            int countryDigits = region.CallingCode >= 100 ? 3 : region.CallingCode >= 10 ? 2 : 1;
+            if (TryCreate(region.CallingCode, countryDigits, national, out number)) return true;
+        }
+        return false;
+    }
+
+    private static bool TryCreate(ushort code, int countryDigits, ReadOnlySpan<char> national, out PhoneNumber number)
+    {
+        number = default;
+        int length = 1 + countryDigits + national.Length;
+        if (length - 1 > MaxDigits) return false;
+        Span<char> e164 = stackalloc char[MaxLength + 8];
+        e164[0] = '+';
+        code.TryFormat(e164[1..], out _, default, CultureInfo.InvariantCulture);
+        national.CopyTo(e164[(1 + countryDigits)..]);
+        number = new PhoneNumber(new string(e164[..length]), code, countryDigits);
+        return true;
+    }
+
+    /// <summary>Where each digit group of a phone-shaped run starting at <paramref name="start"/> ends: an optional <c>+</c>,
+    /// groups of digits (one may be in parentheses), single separators <c>space - .</c> between them. Stops past 17 digits.</summary>
+    private static int GroupEnds(ReadOnlySpan<char> text, int start, Span<int> ends)
+    {
+        int p = start;
+        int count = 0;
+        int digits = 0;
+        if (text[p] == '+') p++;
+        while (p < text.Length && count < ends.Length)
+        {
+            bool paren = text[p] == '(';
+            if (paren) p++;
+            int group = p;
+            while (p < text.Length && char.IsAsciiDigit(text[p])) p++;
+            if (p == group) break;
+            digits += p - group;
+            if (digits > 17) break;
+            if (paren)
+            {
+                if (p >= text.Length || text[p] != ')') break;
+                p++;
+            }
+            ends[count++] = p;
+            if (p + 1 < text.Length && text[p] is ' ' or '-' or '.' && (char.IsAsciiDigit(text[p + 1]) || text[p + 1] == '('))
+                p++;
+            else if (!(paren && p < text.Length && char.IsAsciiDigit(text[p])))
+                break;
+        }
+        return count;
+    }
+
+    /// <summary>A match may not run into letters or digits, nor into <c>. - /</c> followed by a digit.</summary>
+    private static bool IsEndBoundary(ReadOnlySpan<char> text, int end)
+    {
+        if (end >= text.Length) return true;
+        char next = text[end];
+        if (char.IsLetterOrDigit(next)) return false;
+        return !(next is '.' or '-' or '/' && end + 1 < text.Length && char.IsAsciiDigit(text[end + 1]));
+    }
 
     // ── country calling codes (ITU-T E.164 assignment shape: 1-, 2- or 3-digit, prefix-free) ─────────────────────────────
 
