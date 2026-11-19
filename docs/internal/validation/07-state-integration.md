@@ -382,6 +382,13 @@ Timeline (Commit + AfterTouched): type "joh" → nothing · Tab → format ❌ s
 async check starts after 400 ms (status Validating → spinner) · edit again → previous check cancelled
 (ticket superseded) · answer → "already registered" ❌.
 
+
+> **Changed 2026-11-19 (forms 07 ⚑FM59):** `[Debounce]` on a property now delays the property's **whole** check (sync
+> and async rules, invariants, When-dependents), not only its async rules; the value and its own `PropertyChanged`
+> change at once; Touch and `ValidateAll` run a pending check at once. `[Debounce]` takes no argument (500 ms) and may
+> sit on the class (default for every `[Observable]`; `[Debounce(0)]` opts out). New `ShowErrors.AfterPause` with
+> `[ValidationOptions(PauseMs)]` (700 ms): rules stay live, a field's new errors show after a pause in typing.
+
 ### 6.4 Batching
 `using (BeginUpdate()) { A = …; B = …; }` (existing `BatchScope`): field rules run per setter, but
 invariants and decision recomputation are coalesced into **one** run at scope end
