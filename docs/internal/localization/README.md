@@ -289,7 +289,7 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | **LZ-P2** Repo + generator ✅ 2026-11-20 | `YFex.Localization` (renderer moved), generator: C# declarations + culture JSON, index lookup, diagnostics; JSON-only path kept | the sale sample's `SaleMessages` switch is gone; benchmark not slower than today |
 | **LZ-P3** Declaration texts ✅ (Rules 2026-11-20, Authorization 2026-11-21) | Rules / Authorization `Title`, `Description`; field titles + inheritance | `Explain` shows the same pt-BR texts with no hand-written key |
 | **LZ-P4** Typed call sites ✅ 2026-11-21 | Validation, Rules, State, Messaging APIs of §3.6 | the sample compiles with zero identity literals outside declarations |
-| **LZ-P5** Plurals + translators | ICU subset, plural tables, export/import CLI, pseudo-locale | "1 parcela / 3 parcelas"; round-trip XLIFF |
+| **LZ-P5** Plurals + translators ✅ 2026-11-21 | ICU subset, plural tables, export/import CLI, pseudo-locale | "1 parcela / 3 parcelas"; round-trip XLIFF |
 | **LZ-P6** Consolidation | Capabilities, Delivery, UI texts, `IStringLocalizer` bridge (F12) | one catalog system in the ecosystem; F12 closed |
 | **LZ-P7** Enforcement | YFX0100 at ⚑LZ17 severities; shipped-identities file if ⚑LZ27 | Release build of every repo clean |
 
@@ -464,3 +464,23 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
     Approvals 12 + Rules.Admin 29, Rules 71. Authentication, Installations.Central and Offline.Central compile only with
     `-p:WarningsNotAsErrors=NU1510` (an existing restore error in their csproj files, not touched here). Sale sample
     output unchanged (row id aside).
+- **2026-11-21, LZ-P5 built** (⚑LZ8, LZ23) — done when "1 parcela / 3 parcelas" and a round-trip XLIFF: both met.
+  - **Templates (engine):** `{N, plural, =0 {…} one {# x} other {# xs}}` and `{N, select, a {…} other {…}}` in the span
+    renderer (nested branches, `#` = the number for the culture; exact `=N` first, then the category, then `other`;
+    malformed choices are written as is). `PluralRules.Select(culture, number)` / `PluralCategory`: CLDR cardinal rules with
+    the `i` / `v` operands for pt (Brazil: 0 and 1 are `one`), pt-PT, en/de/it/nl/sv/da/nb (default), es, tr, fr, ru, uk,
+    pl, cs, sk and other-only ja/zh/ko/vi/th/id. **Deviation:** the plan said "generated CLDR plural tables for used
+    cultures"; the rules are a hand-written table of those languages (no CLDR data in the build), unknown languages use the
+    English rule. Generating them from CLDR data stays possible behind the same API.
+  - **Generator:** `TextFiles.Analyze` reads choices: their argument and nested placeholders count for YFL0008 / YFL0009;
+    new **YFL0014** (error) for a choice without `other`, an unknown plural keyword, a kind other than plural/select,
+    unbalanced braces.
+  - **Translators (⚑LZ23):** new `YFex.Localization.Tools` (`TextFile` flatten/rebuild of sectioned files with comments,
+    `Exchange` XLIFF 2.0 — unit `name` = path, `id` = `uN` — and flat JSON, `PseudoLocale` `qps-ploc`) and
+    `tools/YFex.Localization.Cli` (`yfex-texts export | import | pseudo`, .NET tool). Run against the sale sample: 26 texts
+    exported, two translated in the XLIFF and imported into `texts.en.json`, pseudo file written.
+  - **Sample / smoke:** the sale sample's `stock.out` is plural ("Quantidade: só há 1 unidade em estoque"); the AOT smoke
+    checks "1 parcela", "3 parcelas", "1 installment" (publish win-x64, zero IL warnings, exit 0).
+  - **Tests:** Localization 33 (+11: plural theory 5, CLDR rules, select/nesting/fallback, tools 4) + generator 27 (+1).
+    Release build of `localization.slnx` with zero warnings. The lookup benchmark was not re-run: lookup is unchanged
+    (only rendering of `{…}` bodies changed: matching brace instead of the first `}`).
