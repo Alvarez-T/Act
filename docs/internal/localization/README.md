@@ -234,6 +234,10 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | LZ32 ✅ | Typed field handles in Rules (S4) | `RuleParameter(…, editableAt: [SaleSituation.Fields.Tenant])`; attribute arguments keep `nameof` (constants required) | `nameof` string arrays (today) | 3.6 |
 | LZ33 ✅ | Rule method shapes (S5) | leave as is: marker `IRule<TS>` + generator check YFR0010 | `static abstract` / `static virtual` members (two interfaces for the with/without `RuleContext` shapes) | 3.6 |
 | LZ34 ✅ | Rules API documentation (user requirement 2026-11-21) | every public attribute, property, method and type of YFex.Rules gets a short `<summary>` and, where usage isn't obvious, an `<example><code>` (all-projects.md); the Rules generator writes `///` docs on every member it emits — `Fields.X`, `Outputs.X`, `Tables.X`, stage and group handles — saying what it is, where it comes from (`[Output]` method, `Stage.First("items")`, table code) and its title from the pt-BR file when there is one; partial members keep the doc on the user's declaring part | docs only on hand-written types | 3.6 |
+| LZ35 ⚑ | How devices get the text feed | YFex.Offline's site feed carries `MessageTextChange` (signed like rule data, one feed per site) | each app calls the server's `GetChangesAsync` over its own transport (today) | 7 |
+| LZ36 ⚑ | Who records text edits | `SqlMessageTextStore` edits also go to YFex.Audit (who changed a tenant's wording, before/after) | the edit log's `edited_by`/`edited_at` columns are enough (today) | 7 |
+| LZ37 ⚑ | Duplicate in-memory text stores | YFex.Tenancy's `InMemoryMessageTextStore` stays for tests only; the two adapters keep their own dictionary (about 20 lines each) | one shared in-memory store type, but core holds no behaviour and Data/Persistence must not reference Tenancy | 7 |
+| LZ38 ⚑ | Edit log growth | no compaction: edits are rare | `CompactAsync` keeping the latest row per text (devices below the cut then reload in full) | 7 |
 
 ## 5. Ecosystem fit
 
@@ -290,7 +294,7 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | **LZ-P3** Declaration texts ✅ (Rules 2026-11-20, Authorization 2026-11-21) | Rules / Authorization `Title`, `Description`; field titles + inheritance | `Explain` shows the same pt-BR texts with no hand-written key |
 | **LZ-P4** Typed call sites ✅ 2026-11-21 | Validation, Rules, State, Messaging APIs of §3.6 | the sample compiles with zero identity literals outside declarations |
 | **LZ-P5** Plurals + translators ✅ 2026-11-21 | ICU subset, plural tables, export/import CLI, pseudo-locale | "1 parcela / 3 parcelas"; round-trip XLIFF |
-| **LZ-P6** Consolidation | Capabilities, Delivery, UI texts, `IStringLocalizer` bridge (F12) | one catalog system in the ecosystem; F12 closed |
+| **LZ-P6** Consolidation ✅ 2026-11-21 | Capabilities, Delivery, UI texts, `IStringLocalizer` bridge (F12) | one catalog system in the ecosystem; F12 closed |
 | **LZ-P7** Enforcement | YFX0100 at ⚑LZ17 severities; shipped-identities file if ⚑LZ27 | Release build of every repo clean |
 
 Tests close each phase (00-start-here §3); AOT smoke for the new repo.
@@ -545,3 +549,34 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
     Hide tabs, Move to new split…, Dock back, Float), `YDockHost` "Show {tab}", `YTabStrip.axaml.cs` "More tabs ({0})" and
     "Close {0}", `YIconPicker.axaml` (untracked) "Search icons" / "No icon matches.". Not in the list but found: none in
     YForm (labels already come from the catalog). Texts already shown do not change when the culture changes at run time.
+- **2026-11-21, ⚑LZ21 finished** (YFex.UI, uncommitted): the texts left above are now keys. 29 new `UiText` keys (`ui.tabs.*`,
+  `ui.dock.*`, `ui.page.*`, `ui.icons.*`; en + pt) replace the literals in the `YDockPane` tab and page menus, the
+  `YDockSplit` divider menu (merge, show / hide single tabs, "(documents)" / "(tools)" via `ui.dock.of-kind`, reset size),
+  `YDockHost` "Show {0}", the `YPageDock` nav-item menu (found during this pass, not listed before), `YTabStrip` "More tabs ({0})"
+  and "Close {0}", and `YIconPicker` (`UiStrings.SearchIcons`, `NoIconMatches`). No literal UI texts are left in
+  YFex.Avalonia outside design previews. Test: `UiTextsTests.Dock_menus_and_tab_names_are_portuguese_in_pt_BR`. Avalonia tests
+  436/437, with the same unrelated `GeometryEditorTests` failure as before. Not committed: the docking, tab strip and icon picker files still
+  hold the 2026-11-18 DA/NB5 work (uncommitted, other sessions), so these edits go in with that work.
+  - **LZ-P6 left:** only ⚑LZ22's stores: the YFex.Data server store (table + admin edits) and the YFex.Persistence device
+    cache behind `IMessageTextStore`; the user scoped LZ22 to "contracts + one adapter", so they wait for the user.
+- **2026-11-21, ⚑LZ22 stores built — LZ-P6 complete** (uncommitted):
+  - **Core:** `MessageTextChange` (revision, kind, scope, key, culture, text or null = removed, edited by/at) and
+    `MessageTextKind` in `src/YFex/Localization/MessageTextChange.cs`: the server writes it and devices replay it, from two
+    repos that share only core.
+  - **Placement:** the adapters sit in the repos that own the storage, as the ⚑LZ22 row says, and reference only core plus
+    their own library: new projects `YFex.Data.Localization` and `YFex.Persistence.Localization`. Putting them in YFex.Localization
+    would make a cycle between repos (Localization sits below Persistence in the layer order).
+  - **Server (`YFex.Data.Localization`):** `MessageTextSchema.Module` (`yfex.localization`, table `yfex_message_texts`) is an
+    append-only edit log with primary key `revision`. A text's identity (scope up to 512 bytes + key + culture) is too wide for a
+    portable key, and readers need "every change after N". The unscoped scope and the invariant culture are stored as NULL
+    (Oracle reads `''` as NULL). `SqlMessageTextStore`: lookups from memory, `RefreshAsync` (rows after `Revision`),
+    `SetTemplateAsync`/`SetFieldNameAsync` (null removes; MAX+1 with retry, as `SqlRuleStore` does), `GetChangesAsync(after)`
+    as the device feed. Valid on SQLite, PostgreSQL, SQL Server and Oracle (`SchemaAssert.Valid`), v1 checksum pinned. Tests 7
+    (SQLite: edits, a second server after refresh, concurrent edits, `ScopedMessageSource` end to end, length limits).
+  - **Device (`YFex.Persistence.Localization`):** `KeyValueMessageTextCache` over `IKeyValueStore`: `LoadAsync` at startup,
+    `ApplyAsync(changes)` (skips replays, refuses gaps, saves a binary copy of the current texts), `ClearAsync`. Tests 5.
+  - Both solutions build in Release; the new projects add no warnings. Not committed: `data.slnx` and the other YFex.Data /
+    YFex.Persistence files carry other sessions' uncommitted work.
+  - New pending decisions from the ecosystem check: ⚑LZ35 (Offline site feed carries the text feed), ⚑LZ36 (text edits to
+    YFex.Audit), ⚑LZ37 (in-memory store duplication), ⚑LZ38 (edit log compaction).
+  - **Next:** LZ-P0 (inventory) and LZ-P7 (enforcement); ⚑LZ27 still to review.
