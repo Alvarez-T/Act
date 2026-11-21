@@ -2,7 +2,7 @@
 
 > Status: **APPROVED IN PART 2026-11-20.** ⚑LZ1–LZ7 approved (LZ2 and LZ10 as revised in §3.2–§3.3: every language lives in
 > files), plus sectioned language files and cultures pt-BR + en. 2026-11-21: ⚑LZ12, LZ13, LZ14, LZ26 approved; LZ11 withdrawn;
-> LZ15 folded into ⚑LZ28; Rules simplifications S1–S5 recorded as ⚑LZ28–LZ33; later the same day ⚑LZ9, LZ16, LZ28–LZ34 approved; the rest pending. LZ-P1, LZ-P2 and LZ-P3 **built 2026-11-20, uncommitted** (repo `YFex.Localization`; log: §7).
+> LZ15 folded into ⚑LZ28; Rules simplifications S1–S5 recorded as ⚑LZ28–LZ33; later the same day ⚑LZ9, LZ16, LZ28–LZ34 approved; the rest pending. **LZ-P4 built and closed 2026-11-21** (log §7). LZ-P1, LZ-P2 and LZ-P3 **built 2026-11-20, uncommitted** (repo `YFex.Localization`; log: §7).
 > Prefix `LZ` was unused.
 > Origin: review of the Rules "why" plan ([validation/14](../validation/14-explanations-for-ui.md)) against
 > `_ignore/SaleScenario`. The user found the plan too dependent on strings (`[Situation("sale")]`, `"stock.out"`,
@@ -288,7 +288,7 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | **LZ-P1** Core types ✅ 2026-11-20 | `MessageKey`, `MessageKey<…>`, attributes, typed `IMessageCatalog` overloads, `MessageKey → RuleCode` | builds; existing string APIs untouched |
 | **LZ-P2** Repo + generator ✅ 2026-11-20 | `YFex.Localization` (renderer moved), generator: C# declarations + culture JSON, index lookup, diagnostics; JSON-only path kept | the sale sample's `SaleMessages` switch is gone; benchmark not slower than today |
 | **LZ-P3** Declaration texts ✅ Rules part 2026-11-20 (Authorization consumption waits on ⚑LZ20) | Rules / Authorization `Title`, `Description`; field titles + inheritance | `Explain` shows the same pt-BR texts with no hand-written key |
-| **LZ-P4** Typed call sites | Validation, Rules, State, Messaging APIs of §3.6 | the sample compiles with zero identity literals outside declarations |
+| **LZ-P4** Typed call sites ✅ 2026-11-21 | Validation, Rules, State, Messaging APIs of §3.6 | the sample compiles with zero identity literals outside declarations |
 | **LZ-P5** Plurals + translators | ICU subset, plural tables, export/import CLI, pseudo-locale | "1 parcela / 3 parcelas"; round-trip XLIFF |
 | **LZ-P6** Consolidation | Capabilities, Delivery, UI texts, `IStringLocalizer` bridge (F12) | one catalog system in the ecosystem; F12 closed |
 | **LZ-P7** Enforcement | YFX0100 at ⚑LZ17 severities; shipped-identities file if ⚑LZ27 | Release build of every repo clean |
@@ -427,3 +427,20 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
     SaleScenario.
   - **LZ-P4 status:** all five steps built. Left to close the phase: the sale sample moves to declared keys
     (`SaleMessages` switch → `[Messages]` + `texts.pt-BR.json`, typed call sites) — its "done when".
+- **2026-11-21, LZ-P4 closed** — `_ignore/SaleScenario` migrated (its "done when"):
+  - `SaleMessages` (hand-written `IMessageSource` switch) removed; `SaleText` `[Messages]` declares `BoletoNeedsCustomer` and
+    `StockOut` (`MessageKey<decimal>`); every pt-BR text is in `Messages/texts.pt-BR.json` (messages, situations
+    `sale` / `sale.line`, rule set title/stages/groups, rules, tables, permissions, `fields.CloseSale.Lines[].Quantity`),
+    compiled into `SaleScenario.SaleScenarioMessages`; `YFexCultures=pt-BR`; no YFL warnings.
+  - Call sites: `v.Rule(…, on: c => c.CustomerId, SaleText.BoletoNeedsCustomer)` replaces the invariant;
+    `v.Add(CloseSale.Fields.Lines.At(i).Quantity, SaleText.StockOut, available)`; `editableAt: [SaleSituation.Fields.Tenant]`;
+    `[LimitMax(nameof(SaleSituation.Installments))]`; `PublishTable.For(SaleRules.Tables.InstallmentTable, …)`;
+    `Trace.For(SaleRules.Tables.InstallmentTable)`; `SaleRules.Ref.Code`; permission ids from `SalePermissions`;
+    `nameof(SaleVm.Installments)` for the bag and constraints. The demo's message printer asks for the field title with
+    the chain `sale.{path}|CloseSale.{path}`.
+  - **Verified:** builds; the run's 102 lines are identical to the run before the migration except the published row's
+    id (the old code serialized it with a fixed code-row id; `RowsJson` leaves ids to the publish, as documented).
+    Remaining literals are demo data (customer ids, products, tier values) and the declarations themselves.
+  - Open after LZ-P4: ⚑LZ8 (plurals, LZ-P5), ⚑LZ17/LZ27 (LZ-P7), ⚑LZ18–LZ25 (LZ-P6; ⚑LZ20 also blocks the Authorization
+    part of LZ-P3), the Mvvm catalog locator follow-up, `Explanation.ForOutput` with RX-P3, the sourceless-field title
+    diagnostic (LZ-P7).

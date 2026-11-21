@@ -1,5 +1,8 @@
 # 01 — Sale scenario, before and after
 
+> **2026-11-21:** LZ-P4 built; `_ignore/SaleScenario` now uses the "after" forms (README §7, "LZ-P4 closed"). The
+> remaining differences from this page: field titles come from sections (⚑LZ9) and outputs from `[Output]` methods (⚑LZ28).
+
 > **Superseded in part (2026-11-20):** the approved design keeps **no text in C#**: `Title = …` / `Description = …` on
 > `[Rule]`, `[RuleSet]`, `[Stage]`, `[Group]` and `[Permission]` below are replaced by the sections of
 > `texts.<culture>.json` (README §3.3, [language files](../../../../YFex.Localization/docs/language-files.md)), and
