@@ -81,6 +81,10 @@ Template syntax: `{field}` = field display name; `{0}`, `{1}` = `RuleArgs` forma
 
 ## 3. Module catalogs — generated, AOT-safe
 
+> **Moved 2026-11-20:** the generator and the engine (`MessageCatalog`) now live in the sibling repo `YFex.Localization`
+> (design [localization](../localization/README.md)); YFV0040/YFV0041 became YFL0002/YFL0001. New projects use typed keys
+> (`[Messages]`) and sectioned `texts.<culture>.json`; the flat `messages*.json` below still works.
+
 Each module adds `Messages/*.json` as `AdditionalFiles`:
 
 ```json

@@ -23,7 +23,7 @@ Building any of these yourself is a decision for the user, never a default. "(de
 | a value type or contract that several libraries name; money, quantities, units, percentages, validity periods | YFex core |
 | consent levels or a consent store | core `Consent` (`IConsentStore`), YFex.System |
 | e-mail or phone value types | core `Contacts` |
-| user-facing message text, message catalogs | core `Localization` (atlas F12) |
+| user-facing message text, message catalogs, typed message keys, translations | core `Localization` key types and contracts; `YFex.Localization` engine and generator (atlas F12, ⚑LZ) |
 | a canonical byte form for signing or hashing | core `ICanonicalValue<T>`; the writer and hashing in YFex.Cryptography |
 | field paths for errors | core `Paths` |
 

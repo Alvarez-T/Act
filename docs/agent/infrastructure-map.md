@@ -13,6 +13,7 @@ Read this file in full before designing a library, a phase or a feature, and che
 | Scope identity and scoped overrides | `YFex.Tenancy` | [`YFex.Tenancy/AGENTS.md`](../../../YFex.Tenancy/AGENTS.md) |
 | Scope-specific implementation selection | `YFex.CustomLogic` | [`YFex.CustomLogic/AGENTS.md`](../../../YFex.CustomLogic/AGENTS.md) |
 | Shape validation; rule evaluation and decisions (allowed, warned, needs approval, denied) for business and operational policies, including rules changed at run time (`YFex.Rules.Dynamic`); expression language | `YFex.Validation`, `YFex.Rules`, `YFex.Expressions` | [`validation/README.md`](../internal/validation/README.md) |
+| Message texts per culture: typed message keys, generated module catalogs, layers (dynamic, tenant, app, module, built-in), plurals, translator export; the no-magic-strings analyzer | core `Localization` (key types, contracts); `YFex.Localization` (engine `MessageCatalog` + generator; LZ-P1–P3 built 2026-11-20, uncommitted; ⚑LZ1–7 approved, rest pending) | [`localization/README.md`](../internal/localization/README.md) |
 | Screens and logic composed by end users | `YFex.Composer` (**proposal only**, 2026-09-30; working name; no repo) | [`composer-design.md`](../internal/composer-design.md) |
 | XML documents from typed models (XSD facets, serialization generator) | `YFex/src/XML` (`YFex.Xml`) | [`YFex.Xml` source](../../src/XML/YFex.Xml) |
 | CQRS contracts and dispatch | `YFex.Cqrs` | [`docs/public/cqrs.md`](../public/cqrs.md) |

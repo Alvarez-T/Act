@@ -16,7 +16,7 @@ Writing C#: load the `yfex-csharp` skill (`YFex/docs/agent/skills/yfex-csharp/SK
 
 ## 2. Dependency direction
 
-- Framework layers, no cycles: core → Validation → Persistence → Expressions / State → Rules → Cqrs → Messaging → NavigatR → Mvvm.
+- Framework layers, no cycles: core → Localization → Validation → Persistence → Expressions / State → Rules → Cqrs → Messaging → NavigatR → Mvvm.
 - Core references no sibling repository. Infrastructure never references a domain project. Domain may reference any infrastructure.
 - Ownership and boundaries between libraries: [infrastructure-map](../infrastructure-map.md).
 

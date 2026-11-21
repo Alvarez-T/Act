@@ -240,7 +240,7 @@ Design: `docs/internal/validation/03-validation-generator.md`. Bundled as analyz
 | Required inference | `build_property.YFexValidationInferRequired` (opt-in, P5) | `TypeModel` + YFV0030 |
 | Emit | Per type | `IValidatable<T>`: `FieldIds`, `Fields`, `Rules.<Member>` (consts, `Constraints`, `Check`, `CheckItem`, `Coerce`), `Validate` (+ `ProfileId` overload), `ValidateAt`, `ValidateMember`, `TryGetConstraints`, `TryGetFieldId` |
 | Collect | All types | YFV0012/YFV0014 graph checks; `[ModuleInitializer]` calling `ValidationSlots.Register<T>()` |
-| Messages | `messages*.json` AdditionalFiles | `<Module>Messages : IMessageSource` (static switch) + YFV0040/YFV0041 |
+| Messages | moved 2026-11-20 to YFex.Localization.Generator (§8) | — |
 | View models | `StateObject` subclasses with rules / `[Invariant]` / `[ValidatesAs<T>]` / obsolete typeof validators | Implements the State hooks: `__RunField_X` (borrowed + own + legacy rules → `ValidationBag`), async runners (tickets, `[Debounce]`), invariant masks + batch coalescing, explicit `IValidationSource`, `ValidateAll`, path maps, `ApplyServer<T>`, `ToT()`; YFV0020–0025 |
 
 Key decisions: StateObject VMs are NOT `IValidatable` — they get the hook implementations above and validate through
@@ -269,6 +269,19 @@ declares its group (YFR0011/0012), derived-field `[Then]` columns resolve agains
 the rule file's usings; operands touching the `RuleContext`, locals or private members make the rule non-splittable (YFR0016 info).
 Diagnostics are reported from nodes combined with the compilation (in-source locations → `#pragma` works). Gotcha: enum-typed
 attribute arguments arrive as their underlying integral type (`byte` for the YFex.Rules enums) — use `Names.EnumValue`.
+
+## 8. YFex.Localization.Generator
+
+Design: `docs/internal/localization` (⚑LZ); repo `YFex.Localization`. Referenced as an analyzer by projects with language
+files or `[Messages]` classes. It references no YFex library: declarations are found by attribute metadata name.
+
+| Stage | Input | Output |
+|---|---|---|
+| Files | `texts*.json` (sections) and `messages*.json` (legacy flat) AdditionalFiles, sorted by path (tracking name `Files`) | `TextFile` models: entries already mapped to catalog keys, with positions |
+| Classes | `ForAttributeWithMetadataName("YFex.Localization.MessagesAttribute")` (tracking name `Classes`) | `MessagesClassModel`: `[Message]` properties, containers, diagnostics |
+| Declarations | `ForAttributeWithMetadataName` for `[Rule]`, `[DecisionTable<T>]`, `[RuleSet<T>]` (stages from initializer constants, groups from field names), `[Situation]` (public properties), `[Permission]` | `DeclarationRef` list (diagnostics only) |
+| Emit | files + classes + options | `<Module>Messages : IMessageModule` (per-culture arrays by key index + string switches); per class: partial properties bound to the module + `Keys` constants |
+| Checks | everything + compilation (for in-source locations) | YFL0001–YFL0013; YFL0002 is the old literal-code check, still a broad `CreateSyntaxProvider` |
 
 ## Performance Considerations
 

@@ -1322,7 +1322,7 @@
         "YFex.Notifications"
       ],
       "detail": "Core has IMessageCatalog/MessageCatalog (Validation and the Notifications plan build on it). Capabilities defines ICapabilityLocalizer over Microsoft IStringLocalizer; Authentication.Delivery ships its own pt-BR/en/es templates.",
-      "recommendation": "Capabilities localizer as an adapter over IMessageCatalog; Delivery templates become catalog entries (moves with Notifications)."
+      "recommendation": "Capabilities localizer as an adapter over IMessageCatalog; Delivery templates become catalog entries (moves with Notifications). Planned in docs/internal/localization (⚑LZ18, ⚑LZ19, phase LZ-P6). 2026-11-20: the engine moved from core to repo YFex.Localization (LZ-P2); Capabilities and Delivery still separate."
     },
     {
       "id": "F16",

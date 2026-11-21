@@ -14,6 +14,7 @@ Core-specific: put a cross-cutting **type or contract** in `src/YFex` only when 
 |---|---|
 | Primitives, shared value types, core contracts | `src/YFex` |
 | Reactive state, MVVM, navigation, UI contracts | siblings `YFex.State`, `YFex.Mvvm`, `YFex.NavigatR`, `YFex.UI` |
+| Message texts per culture: catalog engine, language-file generator | sibling `YFex.Localization` (key types and contracts stay in `src/YFex/Localization`) |
 | Validation and pure rules | siblings `YFex.Validation`, `YFex.Rules`, `YFex.Expressions`; gather I/O into an immutable situation before sync evaluation |
 | Commands, queries, messaging, offline RPC | siblings `YFex.Cqrs`, `YFex.Messaging` |
 | Local app-state storage | sibling `YFex.Persistence` |

@@ -15,6 +15,19 @@
 - Names are spelled out (`Operation`, not `Op`). Qualify generic words that clash with business terms (`IPAddressScope`, not `AddressScope`).
 - Model closed sets so that a new case breaks the build: a union, a `closed` hierarchy, or an enum. Switch over them exhaustively, without a discard arm.
 
+## String identities and texts (no magic strings)
+
+A string that identifies something (a code, key, id, name or path that is stored, sent, looked up or matched) is an identity. A string shown to a person is a text. Neither is typed by hand at the places that use it.
+
+- Declare each identity once: in its declaring attribute or catalog member (`[Permission("sales.close")]`, `[Rule("promo.l3p2")]`, `[Message("stock.out", …)]`). Every other use goes through a symbol: a generated property or handle (`SalePermissions.Close`, `SaleText.StockOut`, `CloseSale.Fields.CustomerId`, `SaleSituation.Fields.Installments`), a generated `Ids.X` constant in attribute arguments, or `nameof(...)`.
+- Never write a string literal, interpolation or concatenation where an identity is expected: message keys and rule codes, rule set / table / situation names, permission ids, field paths and field names, cache, store, setting, route and event keys. When the API only accepts `string`, add the typed overload or the generated symbol in the owning library; don't write the literal and don't build a private constants class that repeats it.
+- Identities in public APIs are value objects (`RuleCode`, `MessageKey`, `FieldPath`, `Permission`), not `string`. Only text that really arrives as text (database, wire, tenant edits) is parsed, with `TryCreate` / `Parse`, at the boundary.
+- An identity that is stored, signed or sent keeps its explicit literal in the declaration, so renaming the C# symbol never changes it.
+- Text shown to people is never a literal in running code. Declare it with its key (neutral-culture text on the declaration, translations in culture files), pass typed arguments, and format it through the message catalog at the edge. Logs carry code + arguments, not texts.
+- Lists of names whose meaning the reader must guess (`string[] AmountFields => ["Total"]`) are not an API. Mark the member itself with an attribute the generator reads, or take the generated symbol.
+- Exempt: tests of parsing and formatting, the declaration itself, and developer-only exception messages.
+- Generators and analyzers enforce this: a library that introduces an identity ships its generated symbols and a diagnostic for literals. Design: [localization](../../internal/localization/README.md) (⚑LZ, pending).
+
 ## Encapsulation and YAGNI
 
 - Use the most restrictive access modifier. Types default to `internal`. `public` is only for an intentionally supported API consumed across assemblies.
