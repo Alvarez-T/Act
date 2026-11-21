@@ -493,6 +493,20 @@ public readonly struct RawValue : IEquatable<RawValue>, IComparable<RawValue>, I
     /// Culture-aware formatting for messages ("80", "R$ 1.000,00", "10 %", enum code). Typed values use their
     /// <see cref="RawType"/>'s formatter; <paramref name="format"/> is the type's own format string ("N0", "yyyy-MM-dd"…).
     /// </summary>
+    /// <summary>True when the value's type holds personal data (<see cref="RawType.IsSensitive"/>, ⚑LZ25).</summary>
+    public bool IsSensitive => _type != 0 && RawType.Find(_type)?.IsSensitive == true;
+
+    /// <summary>
+    /// Like <see cref="TryFormat(Span{char}, out int, ReadOnlySpan{char}, IFormatProvider?)"/>, but a value of a
+    /// <c>[Sensitive]</c> type writes its display mask (<c>***.456.789-**</c>): the form for logs and AI (⚑LZ25).
+    /// </summary>
+    public bool TryFormatMasked(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
+    {
+        if (_type != 0 && RawType.Find(_type)?.Masker is { } masker)
+            return masker(in this, destination, out charsWritten, format, provider);
+        return TryFormat(destination, out charsWritten, format, provider);
+    }
+
     public bool TryFormat(Span<char> destination, out int charsWritten, ReadOnlySpan<char> format, IFormatProvider? provider)
     {
         if (_type != 0 && RawType.Find(_type)?.Formatter is { } formatter)
