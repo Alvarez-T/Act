@@ -517,3 +517,31 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
   - **Left:** the YFex.Data server store (table + admin edits) and the YFex.Persistence device cache implementing
     `IMessageTextStore`; dynamic rule texts stay with the rule version (Rules.Dynamic), unchanged.
   - ⚑LZ21 is built in a separate session ("LZ21: UI built-in texts via internal catalog locator").
+- **2026-11-21, LZ-P6 — ⚑LZ21 built** (YFex.UI `8dee1c4`, YFex.Mvvm `9e4a254`):
+  - **Keys + texts:** `YFex.UI.Public/UiText.cs` (`[Messages]`, internal, 34 `ui.*` keys: OK/Cancel/Yes/No/Details, Close,
+    Dismiss, Back/Forward and "Back to {0}", leave-page question, calendar, date picker, text input steppers, breadcrumb
+    overflow, NavBar toggle and "New" badge, tab strip, dock auto hide); `Messages/texts.json` (English, invariant) and
+    `texts.pt.json` (pt-BR and pt-PT). Generated module `YFex.UI.Public.UiMessages` (`YFexMessagesClass`). YFex.UI.Public now
+    references YFex core + YFex.Localization (+ generator).
+  - **Locator (user's rule):** internal `MessageCatalogLocator` beside `ServiceLocators.cs`, visible to YFex.Avalonia, Uno,
+    Blazor, Mvvm and the tests through the existing InternalsVisibleTo; never on a public API. `Set(catalog)` once at startup
+    (`YFexAvaloniaServices.Register` reads the container's `IMessageCatalog`): a layered `MessageCatalog` gets `UiMessages`
+    as its last layer, so app language files override `ui.*` keys one by one; any other catalog is used as given. Default
+    when nothing is set: `BuiltIn` (the UI texts alone). `Text(key[, args])` formats in `CurrentUICulture` at the time of use.
+  - **Call sites:** `MessageBoxTexts` and `NavigationConfirmationTexts` keep their `init` properties; an unset one reads the
+    catalog each time (`get => field ?? …`), so a registered instance still wins. Avalonia templates use
+    `{x:Static loc:UiStrings.X}` (internal `YFex.Avalonia.Localization.UiStrings`, read when the template is applied);
+    C# uses `MessageCatalogLocator.Text(UiText.X)`. Changed: Dialogs, YCalendar, YDock, YTextInput, NavBar, NavBarItem,
+    YTabStrip, YTabStripItem templates; YBreadcrumb, YDatePicker, YHistoryButtons, YPageDockItem menu, AvaloniaNotification
+    buttons, MessageBoxNavigationConfirmation. Rule added to YFex.UI `docs/agent/component-contract.md` §6.
+  - **View models (follow-up recorded above, done):** `YFex.Mvvm.ViewModel.ConfigureValidation` sets
+    `ValidationBag.Catalog ??= MessageCatalogLocator.CurrentOrNull` (only an app catalog; the UI-only built-in is never
+    handed to validation). `ValidationMessages.Catalog` can now be removed once the gallery stops setting it.
+  - **Tests:** YFex.Avalonia.Tests `UiTextsTests` 4 (culture switch en/pt-BR/pt-PT/de, app override key by key, pt-BR
+    date picker and dialog close button from the template, view-model catalog). Full run 436/437: the one failure
+    (`GeometryEditorTests.Renderer_FallsBackWhenThemeBrushesAreTransparent`) is unrelated (brush colour). Release builds:
+    YFex.UI.Public, YFex.Avalonia, gallery, tests, YFex.Mvvm, YFex.Profiling.Ui.
+  - **Left (other sessions' uncommitted work in these files):** `YDockPane` tab menu (Close, Close others, Pin/Unpin tab,
+    Hide tabs, Move to new split…, Dock back, Float), `YDockHost` "Show {tab}", `YTabStrip.axaml.cs` "More tabs ({0})" and
+    "Close {0}", `YIconPicker.axaml` (untracked) "Search icons" / "No icon matches.". Not in the list but found: none in
+    YForm (labels already come from the catalog). Texts already shown do not change when the culture changes at run time.
