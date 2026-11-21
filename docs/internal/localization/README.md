@@ -377,3 +377,17 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
     were run one by one.
   - **Not done:** other admin commands (`PublishParameters`, `SetRuleOverride`, `GetRuleData`) still take code strings; a
     `For(RuleSetRef …)` on them is small if wanted.
+- **2026-11-21, LZ-P4 step 3 built** (⚑LZ12, LZ30) — **breaking for table declarations:**
+  - `[Then(DirectiveKind.X, "Field")]` is **removed**. Output columns use `[LimitMax(field)]`, `[LimitMin(field)]`,
+    `[Grant(field)]` (no argument = the member's name), `[Decrease]` / `[Increase]` (percent or amount from the cell type:
+    `Percentual` = percent), `[Deny(path)]`, `[Warn(path)]`, `[RequireApproval(path)]`. All derive from
+    `TableOutputAttribute`; `OnExceed` / `ApprovalPermission` stay on the limits. `DirectiveKind` stays public (table
+    schema, Rules.Dynamic).
+  - `[When]` without a name binds the member's name: a situation field, else a line field (→ `Lines[].X`, line table);
+    YFR0101 when nothing matches (new generator test). Every test table and the sale sample moved to `[When]` where the
+    member already had the field's name; line inference verified (`Category` → `Lines[].Category`, `Fragile` →
+    `Parcels[].Fragile`).
+  - Not built from the ⚑LZ30 sketch: `[Deny(Keys.X)] bool` (a fixed key on a yes/no column). Deny/Warn columns keep the
+    per-row message key (string); a fixed-key form is additive if wanted.
+  - Migrated: Rules tests + generator tests, Rules.Admin test fixture, `_ignore/SaleScenario` (builds and runs), docs
+    validation/05 §1.2 and 12, `DerivedField` doc. Tests: Rules 133 (+1), Rules.Admin 29.

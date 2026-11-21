@@ -177,8 +177,7 @@ public partial class ManualDiscountTable
     [Validatable]
     public readonly partial record struct Row(
         [property: When("Actor")] Match<ActorLevel> Actor,
-        [property: Then(DirectiveKind.LimitMax, "ManualDiscount", OnExceed = Exceed.RequireApproval,
-                        ApprovalPermission = "sales.discount.override"), Range("0", "100")] Percentual Max);
+        [property: LimitMax("ManualDiscount", OnExceed = Exceed.RequireApproval, ApprovalPermission = "sales.discount.override"), Range("0", "100")] Percentual Max);
 
     public static ReadOnlySpan<Row> DefaultRows =>
     [

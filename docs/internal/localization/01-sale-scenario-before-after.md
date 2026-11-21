@@ -166,7 +166,7 @@ public readonly partial record struct Row(
 [Stage(Title = "Itens")] public static partial Stage Items { get; }
 public readonly partial record struct Row(
     [property: When] Match<PaymentMethod> Payment,                                                // field = parameter name
-    [property: Then(DirectiveKind.LimitMax, nameof(SaleSituation.Installments)), Range(1, 48)] int MaxInstallments);
+    [property: LimitMax(nameof(SaleSituation.Installments)), Range(1, 48)] int MaxInstallments);
 ```
 
 ## 5. Program.cs (⚑LZ16, and **today** items)

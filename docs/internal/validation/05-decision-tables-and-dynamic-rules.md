@@ -32,8 +32,8 @@ public partial class InstallmentTable
         [property: When("Payment")] Match<PaymentMethod> Payment,       // Any | Is(x) | In(x,y) | Not(x)
         [property: When("Total")]   Band<Money> Total,                  // Any | From(a) | Below(b) | Between(a,b) — half-open [a,b)
         [property: When("Tier")]    Match<CustomerTier> Tier,
-        [property: Then(DirectiveKind.LimitMax, "Installments"), Range(1, 48)] int MaxInstallments,
-        [property: Then(DirectiveKind.LimitMin, "InstallmentValue")]      Money MinInstallment);
+        [property: LimitMax("Installments"), Range(1, 48)] int MaxInstallments,
+        [property: LimitMin("InstallmentValue")]      Money MinInstallment);
 
     /// Rows shipped with the code (Layer.Code). Tenants/stores publish their own versions on top.
     public static ReadOnlySpan<Row> DefaultRows =>
@@ -65,19 +65,21 @@ public readonly struct Band<T> where T : IComparable<T> { public static Band<T> 
 Static-import helpers (`using static YFex.Rules.Cells;`) provide `Any`, `Is`, `In`, `Not`, `From`,
 `Below`, `Between` for readable row literals.
 
-### 1.2 `[When]` / `[Then]`
+### 1.2 `[When]` and output columns (renamed 2026-11-21, localization ⚑LZ12, ⚑LZ30)
 
-- `[When("Field")]` binds to a situation field; for line tables use `[When("Lines[].Category")]`
-  and the table becomes a **line table** (evaluated per line, Items stage).
-- `[Then(DirectiveKind, "Field")]` outputs:
+- `[When]` binds the member's own name: a situation field, otherwise a field of the line type (the table becomes a
+  **line table**, evaluated per line, Items stage). Name the field only when the member is called differently:
+  `[When(nameof(SaleSituation.Tier))]`, or a line path `[When("Lines[].Category")]`. No match = YFR0101.
+- Output columns use attributes named like the `DirectiveWriter` methods (they replace `[Then(DirectiveKind, "Field")]`;
+  `DirectiveKind` stays the engine and Rules.Dynamic vocabulary):
 
-| DirectiveKind | Column type | Produces |
+| Attribute | Column type | Produces |
 |---|---|---|
-| `LimitMax` / `LimitMin` | field's type | `LimitDirective` (optionally `OnExceed`, `ApprovalPermission` named args) |
-| `Grant` | `OptionSet` / `Match<T>` | `GrantDirective` |
-| `DecreasePercent` / `DecreaseAmount` | `Percentual` / `Money` | `AdjustDirective` (`Target = Subtotal` or `Line` for line tables) |
-| `Deny` / `Warn` | `RuleCode` (string) | Deny/Warn with the row's code |
-| `RequireApproval` | `string` permission | `ApprovalDirective` |
+| `[LimitMax(field)]` / `[LimitMin(field)]` | field's type | `LimitDirective` (optionally `OnExceed`, `ApprovalPermission`); no argument = the member's name |
+| `[Grant(field)]` | `OptionSet` | `GrantDirective` |
+| `[Decrease]` / `[Increase]` | `Percentual` (percent of the base) or an amount (`Money`, `Mass`, `decimal`…) | `AdjustDirective` (total, or the line in line tables) |
+| `[Deny(path)]` / `[Warn(path)]` | `string` (the row's message key) | Deny/Warn with the row's code at `path` (none = object level) |
+| `[RequireApproval(path)]` | `string` permission | `ApprovalDirective` |
 
 Every row implicitly has hidden metadata columns managed by the store/editor:
 `RowId` (stable `Guid` — used in trace/audit: `RuleRef = table code + RowId + table version`),
