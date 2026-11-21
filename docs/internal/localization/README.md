@@ -356,3 +356,24 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
     session's uncommitted work, so not touched); `_ignore/SaleScenario` still has its `SaleMessages` switch and string call
     sites — it moves to declared keys when LZ-P4 closes (its acceptance test); Rules situations (`SaleSituation`) have no
     `Lines.At(i)` paths yet (line fields are separate situations).
+- **2026-11-21, follow-up recorded (user, later):** the app-wide catalog for view models comes through a static locator in
+  the MVVM layer, the existing pattern of `YFex.UI.Public/ServiceLocators.cs` (one internal locator per service, set once by
+  the platform at startup, read by the base view model): a `MessageCatalogLocator` the base view models use to set
+  `Validation.Catalog`, so no view model overrides `ValidationServices` for texts. When it exists, `ValidationMessages.Catalog`
+  can be removed. Deferred by the user; not part of LZ-P4.
+- **2026-11-21, LZ-P4 step 2 built** (⚑LZ32, LZ16):
+  - **Rules ⚑LZ32:** `RuleParameter<T>(name, default, ReadOnlySpan<SituationFieldRef> editableAt, …)`:
+    `editableAt: [SaleSituation.Fields.Tenant, SaleSituation.Fields.Store]`; the `string[]` form stays (`nameof` lists still
+    build). Tests moved to the typed form.
+  - **Rules ⚑LZ16:** new `RuleSetRef`, `TableRef` and `TableRef<TRow>` (`Definition/RuleRefs.cs`); the rule-set generator
+    emits `SaleRules.Ref` and `SaleRules.Tables.<TableClass>` (named after the table class, e.g.
+    `SaleRules.Tables.InstallmentTable`; the plan's `Tables.Installments` would need pluralizing, so the class name is
+    used). `TableRef<TRow>.RowsJson(rows, meta)` writes the table's row document. Overloads: `Set.TryGetTable(TableRef, …)`,
+    `Trace.For(TableRef)`.
+  - **Rules.Admin (YFex.Messaging):** `RuleAdmin.Commands.PublishTable.For(table, tierPath, baseVersion, effectiveFrom, rows,
+    note)` with typed rows and `RuleTierPath`; the admin publish tests use it.
+  - **Tests:** Rules 132 (+3 `RuleHandleTests`), Rules.Admin 29, Messaging 192 + Rpc 87 + Approvals 12; SaleScenario builds.
+    The Messaging solution restore fails on an existing NU1902 (MessagePack 3.1.7 in the AOT sample), so the test projects
+    were run one by one.
+  - **Not done:** other admin commands (`PublishParameters`, `SetRuleOverride`, `GetRuleData`) still take code strings; a
+    `For(RuleSetRef …)` on them is small if wanted.
