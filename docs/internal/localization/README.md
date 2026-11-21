@@ -1,7 +1,8 @@
 # Localization and typed identities (no magic strings)
 
 > Status: **APPROVED IN PART 2026-11-20.** ⚑LZ1–LZ7 approved (LZ2 and LZ10 as revised in §3.2–§3.3: every language lives in
-> files), plus sectioned language files and cultures pt-BR + en; the rest pending. LZ-P1, LZ-P2 and LZ-P3 **built 2026-11-20, uncommitted** (repo `YFex.Localization`; log: §7).
+> files), plus sectioned language files and cultures pt-BR + en. 2026-11-21: ⚑LZ12, LZ13, LZ14, LZ26 approved; LZ11 withdrawn;
+> LZ15 folded into ⚑LZ28; Rules simplifications S1–S5 recorded as ⚑LZ28–LZ33; later the same day ⚑LZ9, LZ16, LZ28–LZ34 approved; the rest pending. LZ-P1, LZ-P2 and LZ-P3 **built 2026-11-20, uncommitted** (repo `YFex.Localization`; log: §7).
 > Prefix `LZ` was unused.
 > Origin: review of the Rules "why" plan ([validation/14](../validation/14-explanations-for-ui.md)) against
 > `_ignore/SaleScenario`. The user found the plan too dependent on strings (`[Situation("sale")]`, `"stock.out"`,
@@ -167,7 +168,7 @@ Field names: one title on the situation or contract member. View models inherit 
 nested formats. .NET exposes no CLDR plural rules, so the library ships plural rules for the cultures YFex uses (pt, en,
 es first) as generated tables. The generator validates the syntax at build time.
 
-### 3.6 Rules-specific replacements (⚑LZ11–LZ16)
+### 3.6 Rules-specific replacements (⚑LZ11–LZ16, LZ28–LZ33)
 
 | Today | Proposed | ⚑ |
 |---|---|---|
@@ -207,14 +208,14 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | LZ6 ✅ | `MessageCatalog` renderer | moves from core to `YFex.Localization` | stays in core (core rule) | 3.7 |
 | LZ7 ✅ | Lookup | index into generated per-culture arrays; override layers only when present | static string switch (today); dictionary per lookup | 3.4 |
 | LZ8 | Plurals / select | ICU subset, generated CLDR plural tables for used cultures | none (texts like "1 parcelas"); full ICU (third-party) | 3.5 |
-| LZ9 | Field display names | one title on the situation / contract member; VMs inherit via `[SituationSource]` / `[ValidatesAs]` mapping | a title per VM, per contract and per situation (today's duplicates) | 3.3 |
+| LZ9 ✅ | Field display names | one title on the situation / contract member; VMs inherit via `[SituationSource]` / `[ValidatesAs]` mapping | a title per VM, per contract and per situation (today's duplicates) | 3.3 |
 | LZ10 ✅ | Rule, table, rule set, stage, group texts | sections of the language files, addressed by identity → catalog keys of ⚑RX7 (approved with P3 scope 2026-11-20) | hand-written keys in a catalog (today; RX7 as written) | 3.3 |
-| LZ11 | Stage declaration | `[Stage]` partial properties, code from member name (not stored separately from the rule set version) — check in LZ-P0 whether stage codes are persisted; if they are, explicit code once | `Stage.First(nameof(Items))`; literals (today) | 3.6 |
-| LZ12 | Table columns | `[When]` / `[Then]` infer the field from the parameter name; `nameof` otherwise; diagnostic when no field matches | literals (today) | 3.6 |
-| LZ13 | Nested field paths | generated `Fields.Lines.At(i).Quantity` for collection members of record element types | `FieldPath.Of("Lines[].Quantity", i)` (today) | 3.6 |
-| LZ14 | Cross-field checks | `.Message(key)` on field chains; `v.Rule(predicate, on:, key)`; `Invariant` for multi-violation cases | only `Invariant` (today's verbosity) | 3.6 |
-| LZ15 | Amount fields (supersedes ⚑RX14) | `[Amount]` on the VM property + `ForAmount()`; `ForField(SituationField)` typed | `AmountFields => ["Total"]` string list | 3.6 |
-| LZ16 | Rule set and table handles | generated `TableRef` / `RuleSetRef`; Rules.Admin `PublishTable.For(handle, …)` | string codes in admin calls | 3.6 |
+| LZ11 ⊘ | Stage declaration (**withdrawn 2026-11-21**: stage codes are stored, so `Stage.First("items")` is already the single declaration; any change belongs to the Rules simplification, ⚑LZ28–LZ33) | `[Stage]` partial properties, code from member name (not stored separately from the rule set version) — check in LZ-P0 whether stage codes are persisted; if they are, explicit code once | `Stage.First(nameof(Items))`; literals (today) | 3.6 |
+| LZ12 ✅ | Table columns (approved 2026-11-21; attribute names follow ⚑LZ29) | `[When]` / `[Then]` infer the field from the parameter name; `nameof` otherwise; diagnostic when no field matches | literals (today) | 3.6 |
+| LZ13 ✅ | Nested field paths | generated `Fields.Lines.At(i).Quantity` for collection members of record element types | `FieldPath.Of("Lines[].Quantity", i)` (today) | 3.6 |
+| LZ14 ✅ | Cross-field checks | `.Message(key)` on field chains; `v.Rule(predicate, on:, key)`; `Invariant` for multi-violation cases | only `Invariant` (today's verbosity) | 3.6 |
+| LZ15 → LZ28 | Amount fields (supersedes ⚑RX14; **folded into ⚑LZ28 2026-11-21**: outputs get `ForOutput`, inputs `ForField`) | `[Amount]` on the VM property + `ForAmount()`; `ForField(SituationField)` typed | `AmountFields => ["Total"]` string list | 3.6 |
+| LZ16 ✅ | Rule set and table handles | generated `TableRef` / `RuleSetRef`; Rules.Admin `PublishTable.For(handle, …)` | string codes in admin calls | 3.6 |
 | LZ17 | Analyzer severity | error in infrastructure and domain, warning in samples, off in tests | warning everywhere (ignored in practice) | 3.1 |
 | LZ18 | Capabilities localizer (atlas F12) | `ICapabilityLocalizer` becomes an adapter over `IMessageCatalog`; `ResourceKey` → `MessageKey` | keep its own `IStringLocalizer` path | 5 |
 | LZ19 | Authentication.Delivery templates (F12) | `ChallengeTemplates` become catalog entries (moves with Notifications) | keep its pt-BR/en/es table | 5 |
@@ -224,8 +225,15 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | LZ23 | Translator exchange | CLI export / import of XLIFF 2 and flat JSON; pseudo-locale (`qps-ploc`) for UI overflow tests | hand-edited JSON only | 3.7 |
 | LZ24 | `IStringLocalizer` bridge | optional `YFex.Localization.Extensions` (ASP.NET hosts, third-party components) | none; or make it the main API | 3.7 |
 | LZ25 | Personal data in arguments | arguments of `[Sensitive]` types are masked when a text is formatted for logs or AI; shown in the UI | always shown | 5 |
-| LZ26 | Ambient catalog | DI-provided `IMessageCatalog` + culture per call; remove `ErrorItem`'s static catalog setter | static global catalog (today, `YFex.State/Validation/ErrorItem.cs:55`) | 5 |
+| LZ26 ✅ | Ambient catalog | DI-provided `IMessageCatalog` + culture per call; remove `ErrorItem`'s static catalog setter | static global catalog (today, `YFex.State/Validation/ErrorItem.cs:55`) | 5 |
 | LZ27 | Shipped identities file | generator writes `Identities.Shipped.txt`; removing or renaming a shipped id is an error unless declared as moved (like PublicApiAnalyzers) — enables derived ids later | none (rely on explicit literals, ⚑LZ3) | 3.2 |
+| LZ28 ✅ | Rule-set outputs (S1; replaces `DerivedField` and ⚑LZ15) | `[Output]` static methods in the rule set, like `LineBase`: `[Output(After = nameof(Payment))] public static Money InstallmentValue(in SaleSituation s, in RunningTotals<Money> t) => …`; types from the signature (mismatch = compile error), generated ids and handles `SaleRules.Outputs.X`, `decision.Value(…)`, `Explanation.ForOutput(…)`, `ForObject()` | keep `DerivedField.After(stage, "Name", lambda)` (run-time type check, shared mutable object, "belongs to another rule set"); `RuleOutput<T>` fields | 3.6 |
+| LZ29 ✅ | Output name (S1a) | derived from the method name — checked 2026-11-21: output names are not stored (Rules.Dynamic specs bind only situation fields, `RuleStoreSchema` keeps cells in the payload; names match only at build time, `[ConstraintsFrom]` / table columns) | always explicit; derived + shipped-identities file (⚑LZ27) | 3.6 |
+| LZ30 ✅ | One directive vocabulary (S2; with ⚑LZ12) | table columns use attributes named like the `DirectiveWriter` methods: `[LimitMax(…)]`, `[LimitMin(…)]`, `[Grant(…)]`, `[Decrease(AdjustTarget.Line)]`, `[Deny(Keys.X)]`; `DirectiveKind` stays internal for the engine and Rules.Dynamic | `[Then(DirectiveKind.LimitMax, "Installments")]` (today) | 3.6 |
+| LZ31 ✅ | Typed messages in rules (S3; Rules side of ⚑LZ14) | `d.Deny(path, SaleText.X)`, `d.Warn(path, SaleText.StockLow, left)`, `d.RequireApproval(permission, path, SaleText.NeedsManager, max)` with `MessageKey<T>` argument types; `RawValue` overloads leave the authoring surface, stay for Rules.Dynamic | `RuleCode` + `RawValue` only (today) | 3.6 |
+| LZ32 ✅ | Typed field handles in Rules (S4) | `RuleParameter(…, editableAt: [SaleSituation.Fields.Tenant])`; attribute arguments keep `nameof` (constants required) | `nameof` string arrays (today) | 3.6 |
+| LZ33 ✅ | Rule method shapes (S5) | leave as is: marker `IRule<TS>` + generator check YFR0010 | `static abstract` / `static virtual` members (two interfaces for the with/without `RuleContext` shapes) | 3.6 |
+| LZ34 ✅ | Rules API documentation (user requirement 2026-11-21) | every public attribute, property, method and type of YFex.Rules gets a short `<summary>` and, where usage isn't obvious, an `<example><code>` (all-projects.md); the Rules generator writes `///` docs on every member it emits — `Fields.X`, `Outputs.X`, `Tables.X`, stage and group handles — saying what it is, where it comes from (`[Output]` method, `Stage.First("items")`, table code) and its title from the pt-BR file when there is one; partial members keep the doc on the user's declaring part | docs only on hand-written types | 3.6 |
 
 ## 5. Ecosystem fit
 
@@ -318,3 +326,12 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
   - **Not done, waiting on decisions:** Authorization reading permission titles from the catalog and `Name` → `Title`
     (⚑LZ20); typed call sites in Validation/Rules (LZ-P4, ⚑LZ13–LZ16); plurals (⚑LZ8); stage declaration order (⚑LZ11, still
     `Stage.First("…")`); YFX0100 literal analyzer (LZ-P7).
+- **2026-11-21** — decisions for LZ-P4: ⚑LZ12, LZ13, LZ14, LZ26 approved. ⚑LZ11 withdrawn (stage codes are stored;
+  the Rules simplification decides any change). ⚑LZ15 folded into ⚑LZ28. The Rules simplifications from the Rules review
+  (S1–S5) recorded as ⚑LZ28–LZ33, pending. Still pending for P4: ⚑LZ9 (examples given: one title on the situation member,
+  view models inherit through `[SituationSource]` / `[ValidatesAs]`, a `fields` entry overrides per type, YFL0011 when a
+  sourceless VM field has none), ⚑LZ16, ⚑LZ28–LZ33. LZ-P4 is one phase covering both plans, built in this order:
+  (1) LZ13 + LZ14 + LZ31 + LZ26, additive; (2) LZ32 + LZ16, handles; (3) LZ12 + LZ30, table attributes, breaking;
+  (4) LZ28 + LZ29, outputs, breaking, largest; (5) LZ9.
+- **2026-11-21 (later)** — approved ⚑LZ9, LZ16, LZ28, LZ29 (derived names; output names checked not stored), LZ30–LZ33.
+  New ⚑LZ34 approved: Rules XML docs, hand-written and generated, with examples. Every LZ-P4 decision is now taken.
