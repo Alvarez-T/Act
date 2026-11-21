@@ -287,7 +287,7 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | **LZ-P0** Inventory | YFX0100 in report-only mode over every repo: literal identities and literal UI texts per repo; check whether stage codes and field names are persisted | a count per repo and per identity kind in this folder; LZ11 settled |
 | **LZ-P1** Core types ✅ 2026-11-20 | `MessageKey`, `MessageKey<…>`, attributes, typed `IMessageCatalog` overloads, `MessageKey → RuleCode` | builds; existing string APIs untouched |
 | **LZ-P2** Repo + generator ✅ 2026-11-20 | `YFex.Localization` (renderer moved), generator: C# declarations + culture JSON, index lookup, diagnostics; JSON-only path kept | the sale sample's `SaleMessages` switch is gone; benchmark not slower than today |
-| **LZ-P3** Declaration texts ✅ Rules part 2026-11-20 (Authorization consumption waits on ⚑LZ20) | Rules / Authorization `Title`, `Description`; field titles + inheritance | `Explain` shows the same pt-BR texts with no hand-written key |
+| **LZ-P3** Declaration texts ✅ (Rules 2026-11-20, Authorization 2026-11-21) | Rules / Authorization `Title`, `Description`; field titles + inheritance | `Explain` shows the same pt-BR texts with no hand-written key |
 | **LZ-P4** Typed call sites ✅ 2026-11-21 | Validation, Rules, State, Messaging APIs of §3.6 | the sample compiles with zero identity literals outside declarations |
 | **LZ-P5** Plurals + translators | ICU subset, plural tables, export/import CLI, pseudo-locale | "1 parcela / 3 parcelas"; round-trip XLIFF |
 | **LZ-P6** Consolidation | Capabilities, Delivery, UI texts, `IStringLocalizer` bridge (F12) | one catalog system in the ecosystem; F12 closed |
@@ -450,3 +450,17 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
   (stores at their owners), LZ23 (XLIFF 2 / JSON CLI + pseudo-locale), LZ24 (optional `IStringLocalizer` bridge), LZ25
   (`[Sensitive]` arguments masked for logs/AI) **approved as recommended**. ⚑LZ27 (shipped identities file) **needs a
   review later** — LZ-P7 runs without it. Order: LZ20 (finishes LZ-P3), then LZ-P5, LZ-P6, LZ-P0 + LZ-P7.
+- **2026-11-21, ⚑LZ20 built — LZ-P3 complete:**
+  - `[Permission(id, Name = …)]` → `Title = …` (fallback for apps without language files); `PermissionEntry.Name` →
+    `Title`, plus `TitleKey` (`perm.{id}`) and `DescriptionKey`. New `PermissionCatalogs.DisplayText(key, catalog, culture)`:
+    catalog `perm.{id}` (the `permissions` section) → declared title → id; `TitleKeyOf(key)`. The Authorization generator
+    reads `Title`. ASP.NET `AuthorizationEndpointFilter.Problem(verdict, catalog)` translates `missingName` with the
+    request's `IMessageCatalog` and the current UI culture.
+  - Migrated 17 declaring files (`Name =` → `Title =`) in Authentication, Authorization tests, Capabilities, Installations,
+    Jobs, Messaging (Rules.Admin + tests), Offline, Rules tests; the sale sample drops its literal titles (they are in
+    `texts.pt-BR.json`). Docs: YFex.Authorization README §1, authorization-consolidation/03.
+  - **Breaking:** `PermissionAttribute.Name` and `PermissionEntry.Name` renamed (`Title`).
+  - Tests: Authorization 106 (+1 catalog → declared → id) + generator 12, Capabilities 33 + 10, Messaging 192 + Rpc 87 +
+    Approvals 12 + Rules.Admin 29, Rules 71. Authentication, Installations.Central and Offline.Central compile only with
+    `-p:WarningsNotAsErrors=NU1510` (an existing restore error in their csproj files, not touched here). Sale sample
+    output unchanged (row id aside).

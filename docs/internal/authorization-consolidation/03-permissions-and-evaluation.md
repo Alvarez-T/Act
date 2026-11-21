@@ -7,13 +7,13 @@
 [PermissionCatalog]
 public static partial class SalesPermissions
 {
-    [Permission("sales.discount.apply", Name = "Aplicar desconto")]
+    [Permission("sales.discount.apply", Title = "Aplicar desconto")]
     public static partial Permission DiscountApply { get; }
 
-    [Permission("sales.discount.override", Name = "Autorizar desconto acima do limite")]
+    [Permission("sales.discount.override", Title = "Autorizar desconto acima do limite")]
     public static partial Permission DiscountOverride { get; }
 
-    [Permission("sales.void", Name = "Cancelar venda", Description = "Cancela uma venda já finalizada")]
+    [Permission("sales.void", Title = "Cancelar venda", Description = "Cancela uma venda já finalizada")]
     public static partial Permission SaleVoid { get; }
 }
 ```
@@ -273,10 +273,10 @@ validation violation `authorization.permission.unknown` at publish time.
 [PermissionCatalog]
 public static partial class RuleAdminPermissions
 {
-    [Permission("rules.tables.publish", Name = "Publicar tabelas de regras")]  public static partial Permission TablesPublish { get; }
-    [Permission("rules.parameters.publish", Name = "Publicar parâmetros")]     public static partial Permission ParametersPublish { get; }
-    [Permission("rules.dynamic.publish", Name = "Publicar regras dinâmicas")]  public static partial Permission RulesPublish { get; }
-    [Permission("rules.override", Name = "Sobrepor regras")]                   public static partial Permission Override { get; }
+    [Permission("rules.tables.publish", Title = "Publicar tabelas de regras")]  public static partial Permission TablesPublish { get; }
+    [Permission("rules.parameters.publish", Title = "Publicar parâmetros")]     public static partial Permission ParametersPublish { get; }
+    [Permission("rules.dynamic.publish", Title = "Publicar regras dinâmicas")]  public static partial Permission RulesPublish { get; }
+    [Permission("rules.override", Title = "Sobrepor regras")]                   public static partial Permission Override { get; }
 }
 ```
 
