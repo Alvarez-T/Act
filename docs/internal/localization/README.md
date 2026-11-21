@@ -508,3 +508,12 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
   - **Left:** ⚑LZ21 (UI built-in texts: about 20 files in YFex.UI, a few with other sessions' uncommitted changes; controls
     need the catalog without DI — the static-locator pattern the user deferred) and ⚑LZ22 (tenant overrides in
     YFex.Tenancy, server store in YFex.Data, device cache in YFex.Persistence).
+- **2026-11-21, ⚑LZ22 — contract + Tenancy layer built** (user's scope: "contracts + one adapter"):
+  - Core `IMessageTextStore` (`TryGetTemplate` / `TryGetFieldName` for exactly one `TenancyPath` scope and culture).
+  - YFex.Tenancy `ScopedMessageSource : IMessageSource` — reads the scope in effect (`ScopeOverride`, then
+    `IScopeContext`) at lookup time and walks scope → parents → unscoped (`TenancyPath.None`); chain cached per identity;
+    put above the code modules, so one catalog serves every tenant. `InMemoryMessageTextStore` (tests, small apps, device
+    copy). Test: a store's texts, its tenant's, the global ones, another tenant never sees them (Tenancy 35).
+  - **Left:** the YFex.Data server store (table + admin edits) and the YFex.Persistence device cache implementing
+    `IMessageTextStore`; dynamic rule texts stay with the rule version (Rules.Dynamic), unchanged.
+  - ⚑LZ21 is built in a separate session ("LZ21: UI built-in texts via internal catalog locator").
