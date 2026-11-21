@@ -484,3 +484,27 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
   - **Tests:** Localization 33 (+11: plural theory 5, CLDR rules, select/nesting/fallback, tools 4) + generator 27 (+1).
     Release build of `localization.slnx` with zero warnings. The lookup benchmark was not re-run: lookup is unchanged
     (only rendering of `{…}` bodies changed: matching brace instead of the first `}`).
+- **2026-11-21, LZ-P6 in progress — 4 of 6 built** (each committed in its repo):
+  - **⚑LZ25** (core `fc70e72`, Localization `63c8d3c`): `RawType.IsSensitive` — set when the declaring type implements
+    `IClassifiedData` (the YFex.Privacy generator's `[Sensitive]` types) — and `RawValue.TryFormatMasked` (writes the type's
+    mask; hidden form when it cannot be read). `MessageCatalog.Masked`: the same catalog for logs and AI, masking sensitive
+    arguments (`#` included); the mode survives `WithLayer`. Not yet wired into YFex.Logging / AI callers (they format
+    texts themselves today): they switch to `catalog.Masked` when they format catalog texts.
+  - **⚑LZ24** (`63c8d3c`): new package `YFex.Localization.Extensions` — `CatalogStringLocalizer` / `<T>`,
+    `CatalogStringLocalizerFactory`, `services.AddYFexStringLocalizer()` (replaces the resx defaults); a key the catalog does
+    not know returns `ResourceNotFound`; `GetAllStrings` is empty (a catalog cannot list keys).
+  - **⚑LZ18** (Localization `84e3571`, Capabilities `bf642ae`): language files get a `capabilities` section
+    (`"Sales.SaleVm#Close": { "display", "ai", "keywords", "parameters": { … } }` → keys `cap:…:display|ai|keywords`,
+    `cap:…:{p}:desc`, not checked); `CatalogCapabilityLocalizer` (catalog → neutral seed → key; keywords unioned across
+    `KeywordCultures`), `AddCatalogCapabilityLocalizer()`; `ResourceKey.ToMessageKey()` + implicit conversion. **Deviation:**
+    `ResourceKey` is kept (53 uses) and converts to `MessageKey`, instead of being replaced.
+  - **⚑LZ19** (Authentication `7df1617`): the 42 built-in challenge/notice texts (en invariant, pt, es) move to
+    `Authentication.Delivery/Messages/texts*.json`, keys declared in `DeliveryText`; `ChallengeTemplates` = added texts →
+    app `IMessageCatalog` (from DI) → built-ins, purpose → `default`; templates keep `{code}` etc., so the code is never a
+    catalog argument (revealed only by `MessageTemplate`). The project's NU1510 reference is removed. "Moves with
+    Notifications" is not done: Notifications has no template store to move into yet.
+  - Tests: Localization 35 + generator 28, core 316, Capabilities 34 + 10, Authentication 247 (+2; built with
+    `-p:WarningsNotAsErrors=NU1510` because of the other Authentication projects).
+  - **Left:** ⚑LZ21 (UI built-in texts: about 20 files in YFex.UI, a few with other sessions' uncommitted changes; controls
+    need the catalog without DI — the static-locator pattern the user deferred) and ⚑LZ22 (tenant overrides in
+    YFex.Tenancy, server store in YFex.Data, device cache in YFex.Persistence).
