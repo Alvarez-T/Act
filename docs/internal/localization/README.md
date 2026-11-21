@@ -2,7 +2,7 @@
 
 > Status: **APPROVED IN PART 2026-11-20.** ⚑LZ1–LZ7 approved (LZ2 and LZ10 as revised in §3.2–§3.3: every language lives in
 > files), plus sectioned language files and cultures pt-BR + en. 2026-11-21: ⚑LZ12, LZ13, LZ14, LZ26 approved; LZ11 withdrawn;
-> LZ15 folded into ⚑LZ28; Rules simplifications S1–S5 recorded as ⚑LZ28–LZ33; later the same day ⚑LZ9, LZ16, LZ28–LZ34 approved; the rest pending. **LZ-P4 built and closed 2026-11-21** (log §7). LZ-P1, LZ-P2 and LZ-P3 **built 2026-11-20, uncommitted** (repo `YFex.Localization`; log: §7).
+> LZ15 folded into ⚑LZ28; Rules simplifications S1–S5 recorded as ⚑LZ28–LZ33; later the same day ⚑LZ9, LZ16, LZ28–LZ34 approved; the rest pending. **LZ-P4 built and closed 2026-11-21** (log §7). ⚑LZ8, LZ17–LZ25 approved 2026-11-21; ⚑LZ27 waits for a later review. LZ-P1, LZ-P2 and LZ-P3 **built 2026-11-20, uncommitted** (repo `YFex.Localization`; log: §7).
 > Prefix `LZ` was unused.
 > Origin: review of the Rules "why" plan ([validation/14](../validation/14-explanations-for-ui.md)) against
 > `_ignore/SaleScenario`. The user found the plan too dependent on strings (`[Situation("sale")]`, `"stock.out"`,
@@ -207,7 +207,7 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | LZ5 ✅ | New repository | `YFex.Localization` (engine, generator, analyzers, tools, optional bridge) | everything in core; generator stays in `YFex.Validation.Generator` (non-Validation libraries can't use it) | 3.7 |
 | LZ6 ✅ | `MessageCatalog` renderer | moves from core to `YFex.Localization` | stays in core (core rule) | 3.7 |
 | LZ7 ✅ | Lookup | index into generated per-culture arrays; override layers only when present | static string switch (today); dictionary per lookup | 3.4 |
-| LZ8 | Plurals / select | ICU subset, generated CLDR plural tables for used cultures | none (texts like "1 parcelas"); full ICU (third-party) | 3.5 |
+| LZ8 ✅ | Plurals / select | ICU subset, generated CLDR plural tables for used cultures | none (texts like "1 parcelas"); full ICU (third-party) | 3.5 |
 | LZ9 ✅ | Field display names | one title on the situation / contract member; VMs inherit via `[SituationSource]` / `[ValidatesAs]` mapping | a title per VM, per contract and per situation (today's duplicates) | 3.3 |
 | LZ10 ✅ | Rule, table, rule set, stage, group texts | sections of the language files, addressed by identity → catalog keys of ⚑RX7 (approved with P3 scope 2026-11-20) | hand-written keys in a catalog (today; RX7 as written) | 3.3 |
 | LZ11 ⊘ | Stage declaration (**withdrawn 2026-11-21**: stage codes are stored, so `Stage.First("items")` is already the single declaration; any change belongs to the Rules simplification, ⚑LZ28–LZ33) | `[Stage]` partial properties, code from member name (not stored separately from the rule set version) — check in LZ-P0 whether stage codes are persisted; if they are, explicit code once | `Stage.First(nameof(Items))`; literals (today) | 3.6 |
@@ -216,17 +216,17 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | LZ14 ✅ | Cross-field checks | `.Message(key)` on field chains; `v.Rule(predicate, on:, key)`; `Invariant` for multi-violation cases | only `Invariant` (today's verbosity) | 3.6 |
 | LZ15 → LZ28 | Amount fields (supersedes ⚑RX14; **folded into ⚑LZ28 2026-11-21**: outputs get `ForOutput`, inputs `ForField`) | `[Amount]` on the VM property + `ForAmount()`; `ForField(SituationField)` typed | `AmountFields => ["Total"]` string list | 3.6 |
 | LZ16 ✅ | Rule set and table handles | generated `TableRef` / `RuleSetRef`; Rules.Admin `PublishTable.For(handle, …)` | string codes in admin calls | 3.6 |
-| LZ17 | Analyzer severity | error in infrastructure and domain, warning in samples, off in tests | warning everywhere (ignored in practice) | 3.1 |
-| LZ18 | Capabilities localizer (atlas F12) | `ICapabilityLocalizer` becomes an adapter over `IMessageCatalog`; `ResourceKey` → `MessageKey` | keep its own `IStringLocalizer` path | 5 |
-| LZ19 | Authentication.Delivery templates (F12) | `ChallengeTemplates` become catalog entries (moves with Notifications) | keep its pt-BR/en/es table | 5 |
-| LZ20 | Permission names | `[Permission(Name, Description)]` texts go into the catalog under `perm.{id}`; rename `Name` → `Title` for one vocabulary | literal display names (not translatable, today) | 3.3 |
-| LZ21 | UI built-in texts | `IMessageBox` `Ok`/`Cancel`, YForm labels, NavBar texts become YFex.UI catalog keys (en, pt) | English literals (today) | 5 |
-| LZ22 | Tenant / dynamic text stores | tenant overrides through YFex.Tenancy scoped overrides; server store in YFex.Data; device cache in YFex.Persistence; dynamic rule texts stay with the rule version (Rules.Dynamic, signed by Offline) | a store inside YFex.Localization | 5 |
-| LZ23 | Translator exchange | CLI export / import of XLIFF 2 and flat JSON; pseudo-locale (`qps-ploc`) for UI overflow tests | hand-edited JSON only | 3.7 |
-| LZ24 | `IStringLocalizer` bridge | optional `YFex.Localization.Extensions` (ASP.NET hosts, third-party components) | none; or make it the main API | 3.7 |
-| LZ25 | Personal data in arguments | arguments of `[Sensitive]` types are masked when a text is formatted for logs or AI; shown in the UI | always shown | 5 |
+| LZ17 ✅ | Analyzer severity | error in infrastructure and domain, warning in samples, off in tests | warning everywhere (ignored in practice) | 3.1 |
+| LZ18 ✅ | Capabilities localizer (atlas F12) | `ICapabilityLocalizer` becomes an adapter over `IMessageCatalog`; `ResourceKey` → `MessageKey` | keep its own `IStringLocalizer` path | 5 |
+| LZ19 ✅ | Authentication.Delivery templates (F12) | `ChallengeTemplates` become catalog entries (moves with Notifications) | keep its pt-BR/en/es table | 5 |
+| LZ20 ✅ | Permission names | `[Permission(Name, Description)]` texts go into the catalog under `perm.{id}`; rename `Name` → `Title` for one vocabulary | literal display names (not translatable, today) | 3.3 |
+| LZ21 ✅ | UI built-in texts | `IMessageBox` `Ok`/`Cancel`, YForm labels, NavBar texts become YFex.UI catalog keys (en, pt) | English literals (today) | 5 |
+| LZ22 ✅ | Tenant / dynamic text stores | tenant overrides through YFex.Tenancy scoped overrides; server store in YFex.Data; device cache in YFex.Persistence; dynamic rule texts stay with the rule version (Rules.Dynamic, signed by Offline) | a store inside YFex.Localization | 5 |
+| LZ23 ✅ | Translator exchange | CLI export / import of XLIFF 2 and flat JSON; pseudo-locale (`qps-ploc`) for UI overflow tests | hand-edited JSON only | 3.7 |
+| LZ24 ✅ | `IStringLocalizer` bridge | optional `YFex.Localization.Extensions` (ASP.NET hosts, third-party components) | none; or make it the main API | 3.7 |
+| LZ25 ✅ | Personal data in arguments | arguments of `[Sensitive]` types are masked when a text is formatted for logs or AI; shown in the UI | always shown | 5 |
 | LZ26 ✅ | Ambient catalog | DI-provided `IMessageCatalog` + culture per call; remove `ErrorItem`'s static catalog setter | static global catalog (today, `YFex.State/Validation/ErrorItem.cs:55`) | 5 |
-| LZ27 | Shipped identities file | generator writes `Identities.Shipped.txt`; removing or renaming a shipped id is an error unless declared as moved (like PublicApiAnalyzers) — enables derived ids later | none (rely on explicit literals, ⚑LZ3) | 3.2 |
+| LZ27 ⏸ | Shipped identities file (**review later**, user 2026-11-21; not part of LZ-P7 until reviewed) | generator writes `Identities.Shipped.txt`; removing or renaming a shipped id is an error unless declared as moved (like PublicApiAnalyzers) — enables derived ids later | none (rely on explicit literals, ⚑LZ3) | 3.2 |
 | LZ28 ✅ | Rule-set outputs (S1; replaces `DerivedField` and ⚑LZ15) | `[Output]` static methods in the rule set, like `LineBase`: `[Output(After = nameof(Payment))] public static Money InstallmentValue(in SaleSituation s, in RunningTotals<Money> t) => …`; types from the signature (mismatch = compile error), generated ids and handles `SaleRules.Outputs.X`, `decision.Value(…)`, `Explanation.ForOutput(…)`, `ForObject()` | keep `DerivedField.After(stage, "Name", lambda)` (run-time type check, shared mutable object, "belongs to another rule set"); `RuleOutput<T>` fields | 3.6 |
 | LZ29 ✅ | Output name (S1a) | derived from the method name — checked 2026-11-21: output names are not stored (Rules.Dynamic specs bind only situation fields, `RuleStoreSchema` keeps cells in the payload; names match only at build time, `[ConstraintsFrom]` / table columns) | always explicit; derived + shipped-identities file (⚑LZ27) | 3.6 |
 | LZ30 ✅ | One directive vocabulary (S2; with ⚑LZ12) | table columns use attributes named like the `DirectiveWriter` methods: `[LimitMax(…)]`, `[LimitMin(…)]`, `[Grant(…)]`, `[Decrease(AdjustTarget.Line)]`, `[Deny(Keys.X)]`; `DirectiveKind` stays internal for the engine and Rules.Dynamic | `[Then(DirectiveKind.LimitMax, "Installments")]` (today) | 3.6 |
@@ -444,3 +444,9 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
   - Open after LZ-P4: ⚑LZ8 (plurals, LZ-P5), ⚑LZ17/LZ27 (LZ-P7), ⚑LZ18–LZ25 (LZ-P6; ⚑LZ20 also blocks the Authorization
     part of LZ-P3), the Mvvm catalog locator follow-up, `Explanation.ForOutput` with RX-P3, the sourceless-field title
     diagnostic (LZ-P7).
+- **2026-11-21, decisions:** ⚑LZ8 (ICU subset plurals/select), LZ17 (YFX0100 error in infrastructure/domain, warning in
+  samples, off in tests), LZ18 (Capabilities localizer over `IMessageCatalog`), LZ19 (Delivery templates as catalog
+  entries), LZ20 (permission texts from `perm.{id}`, `Name` → `Title`), LZ21 (UI built-in texts as YFex.UI keys), LZ22
+  (stores at their owners), LZ23 (XLIFF 2 / JSON CLI + pseudo-locale), LZ24 (optional `IStringLocalizer` bridge), LZ25
+  (`[Sensitive]` arguments masked for logs/AI) **approved as recommended**. ⚑LZ27 (shipped identities file) **needs a
+  review later** — LZ-P7 runs without it. Order: LZ20 (finishes LZ-P3), then LZ-P5, LZ-P6, LZ-P0 + LZ-P7.
