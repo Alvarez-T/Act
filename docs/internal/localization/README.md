@@ -391,3 +391,21 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
     per-row message key (string); a fixed-key form is additive if wanted.
   - Migrated: Rules tests + generator tests, Rules.Admin test fixture, `_ignore/SaleScenario` (builds and runs), docs
     validation/05 §1.2 and 12, `DerivedField` doc. Tests: Rules 133 (+1), Rules.Admin 29.
+- **2026-11-21, LZ-P4 step 4 built** (⚑LZ28, LZ29) — **breaking: `DerivedField` removed:**
+  - **Declaration:** `[Output]` static methods in the rule set, `static T X(in TS s, in RunningTotals<TAmount> t)` or
+    `static T X(in RunningTotals<TAmount> t)`; `[Output(After = nameof(Stage))]` or no `After` = after the last stage;
+    `[Requested]` now allowed on methods. Name = method name (⚑LZ29; output names are not stored).
+  - **Generator:** `SaleRules.Outputs.X` (`RuleOutput<TS, T>`) with XML docs (stage, method, requested); builder
+    `.Output(Outputs.X)`; tables bound by name resolve to `Outputs.X.Ref`. New diagnostics: **YFR0024** (the totals'
+    amount type ≠ the rule set's amount — was a run-time exception) and **YFR0025** (method shape, unsupported return type,
+    `After` not a Stage field). Generator tests for both (+3).
+  - **Runtime:** `RuleOutput` / `RuleOutput<TS>` / `RuleOutput<TS, T>` are immutable (index and id fixed at creation; the
+    "belongs to another rule set" mutation is gone; the builder checks the order); `RuleOutput.Create(...)` for hand-written
+    sets. `RuleSetDefinition.Outputs` / `TryGetOutput`; `Decision.Value(output)` (raw) and `Value<T>(RuleOutput<TS, T>)`
+    (typed), `Decision.ConstraintsFor(output)`; `d.Limit(SaleRules.Outputs.X, …)`. The atlas finding "two derived
+    concepts" (F3 of the Rules review) is gone with the name.
+  - **Not built: `Explanation.ForOutput`.** `Explanation` has no per-field query yet (`ForField` is RX-P3 in validation/14,
+    pending ⚑RX decisions); `ForOutput` is built there, on top of these handles.
+  - Migrated: Rules tests (sale, leave — now also an output without `After` and one without the situation parameter —,
+    freight generator test, hand-written sale), docs validation/04 and 12. Tests: Rules 136 (70 + 27 generator + 20 + 19),
+    Rules.Admin 29; SaleScenario builds.

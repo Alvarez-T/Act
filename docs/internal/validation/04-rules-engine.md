@@ -275,17 +275,18 @@ public static partial class SaleRules
 
     public static RoundingPolicy Rounding => RoundingPolicy.Currency(decimals: 2, MidpointRounding.AwayFromZero); // RoundingPolicy: YFex core
 
-    /// Post-stage field: computed by the ENGINE from running totals after a stage, so it can depend on
-    /// discounts (a [Derived] situation field cannot). Can be limited and [Requested]-checked like a
-    /// situation field; it appears in the schema (tables may bind [Then(LimitMin, "InstallmentValue")]).
-    [Requested]
-    public static readonly DerivedField<SaleSituation, Money> InstallmentValue =
-        DerivedField.After(Payment, "InstallmentValue",
-            static (in SaleSituation s, in RunningTotals<Money> t) => s.Installments > 0 ? t.Final / s.Installments : t.Final);
+    /// Output (localization ⚑LZ28, 2026-11-21; was DerivedField): computed by the ENGINE from running totals
+    /// after a stage, so it can depend on discounts (a [Derived] situation field cannot). Can be limited and
+    /// [Requested]-checked like a situation field; tables bind it by name ([LimitMin(nameof(InstallmentValue))]).
+    /// Name = method name; type = return type; RunningTotals<T> must be the rule set's amount (YFR0024).
+    [Output(After = nameof(Payment)), Requested]
+    public static Money InstallmentValue(in SaleSituation s, in RunningTotals<Money> t)
+        => s.Installments > 0 ? t.Final / s.Installments : t.Final;
 }
 ```
 
-Code references it as `SaleRules.InstallmentValue`; tables and dynamic rules bind it by name
+Code references it through the generated handle `SaleRules.Outputs.InstallmentValue` (`d.Limit(…)`,
+`decision.Value(…)`); tables and dynamic rules bind it by name
 (`"InstallmentValue"`) — the generator resolves column names against `Schema` ∪ the rule set's derived
 fields (the situation may live in a contracts assembly that cannot see the rule set).
 
@@ -445,7 +446,7 @@ public readonly struct DecisionTotals
       `MaxAmount` and group cap, round, never below zero; update running amounts; record
       `AppliedAdjustment` (rule ref, stage, target, base, rate, amount, note).
    5. **Accumulate** limits, grants, denies, warns, approvals.
-   6. After the stage's last group: compute the rule set's `DerivedField`s declared `After(thisStage)`.
+   6. After the stage's last group: compute the rule set's `[Output]` methods declared `After = nameof(thisStage)`; outputs without `After` are computed after the last stage.
 4. **Allocate** subtotal/payment-stage adjustments to lines proportionally to each line's current
    base; remainder cents go to the line with the largest base (deterministic tie-break: lowest index).
    Needed for NF-e `vDesc` per item (⚑P9).
@@ -572,8 +573,8 @@ re-runs. v1 may skip this: a full evaluation is microseconds for realistic rule 
 | `RuleTierPath` | readonly struct | up to 4 tier values built from the situation's `[RuleTier]` fields; `RuleTierPath.Code` = code tier |
 | `FieldRole` | enum | `Normal, Tier, EffectiveDate, Requested, Derived, Lines` — flag on `SituationFieldInfo` |
 | `SituationSchema` / `SituationFieldInfo` | sealed class / readonly struct | name, fields (id, name, `ValueKind`, role, enum codes, `Exposed`, line schema) |
-| `SituationFieldRef` | readonly record struct | untyped `(ushort Id, string Name)`; implicit from `SituationField<TS,T>` and `DerivedField<TS,T>` |
-| `DerivedField<TS,T>` + `DerivedField.After(stage, name, fn)` | sealed class | post-stage computed field; `fn` is `static` delegate `(in TS, in RunningTotals) → T` |
+| `SituationFieldRef` | readonly record struct | untyped `(ushort Id, string Name)`; implicit from `SituationField<TS,T>` and `RuleOutput<TS,T>` |
+| `[Output]` method + generated `RuleOutput<TS,T>` handle (`SaleRules.Outputs.X`) | attribute + sealed class | post-stage computed value (⚑LZ28): `static T X(in TS s, in RunningTotals<TAmount> t)` or `static T X(in RunningTotals<TAmount> t)`; immutable id fixed at creation |
 | `RunningTotals` | readonly ref struct | running gross/subtotal/final and per-line bases during evaluation |
 | `RoundingPolicy` | readonly struct — **YFex core** | decimals + `MidpointRounding`; `Currency(…)` factory; also used by `Rate.Apply` |
 | `StageRef` | readonly record struct | `(byte Order, string Code)` — persisted by code |

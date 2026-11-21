@@ -122,10 +122,9 @@ public static partial class SaleRules
 
     public static RoundingPolicy Rounding => RoundingPolicy.Currency(2, MidpointRounding.AwayFromZero);
 
-    [Requested]
-    public static readonly DerivedField<SaleSituation, Money> InstallmentValue =
-        DerivedField.After(Payment, "InstallmentValue",
-            static (in SaleSituation s, in RunningTotals<Money> t) => s.Installments > 0 ? t.Final / s.Installments : t.Final);
+    [Output(After = nameof(Payment)), Requested]   // handle: SaleRules.Outputs.InstallmentValue
+    public static Money InstallmentValue(in SaleSituation s, in RunningTotals<Money> t)
+        => s.Installments > 0 ? t.Final / s.Installments : t.Final;
 }
 
 // Line rule (Items stage) — code, sealed logic, promo product list is a parameter
