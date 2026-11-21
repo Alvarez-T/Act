@@ -48,7 +48,9 @@ public interface IMessageCatalog
         out int written, string? fieldKey = null);
 
     /// <summary>Display name for <paramref name="fieldKey"/>; falls back to the humanized member name
-    /// (<c>"SaleVm.ManualDiscount"</c> → <c>"Manual discount"</c>).</summary>
+    /// (<c>"SaleVm.ManualDiscount"</c> → <c>"Manual discount"</c>). The key may be a chain separated by <c>'|'</c>
+    /// (<c>"SaleVm.Installments|CloseSale.Installments|sale.Installments"</c>, ⚑LZ9): the first key with a title wins;
+    /// with none, the first key is humanized.</summary>
     string FieldName(string fieldKey, CultureInfo culture);
 
     /// <summary>Formats <paramref name="key"/>; a catalog that knows the key's module reads it by index.

@@ -409,3 +409,21 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
   - Migrated: Rules tests (sale, leave — now also an output without `After` and one without the situation parameter —,
     freight generator test, hand-written sale), docs validation/04 and 12. Tests: Rules 136 (70 + 27 generator + 20 + 19),
     Rules.Admin 29; SaleScenario builds.
+- **2026-11-21, LZ-P4 step 5 built** (⚑LZ9) — field titles written once, on the source:
+  - **Validation:** `FieldTitles` registry (`Inherit(fieldKey, sourceKey, priority)`, `KeyChain(fieldKey)` →
+    `"SaleVm.Installments|CloseSale.Installments|sale.Installments"`, cached). The Validation generator's module
+    initializer registers every `[ValidatesAs]` path-map entry (`CustomerFormVm.CpfCnpj` → `CreateCustomer.Document`,
+    priority contract); the Rules `[SituationSource]` generator emits a module initializer on the view model for every
+    same-named member (`SaleVm.Installments` → `sale.Installments`, priority situation). Generic view models are skipped.
+  - **Localization:** `MessageCatalog.FieldName` takes a `'|'` chain: the first key with a title wins (each key with its
+    culture fallback); none → the first key humanized. Contract documented on `IMessageCatalog.FieldName` (core).
+  - **State:** `ErrorItem` formats with `FieldTitles.KeyChain(type.path)`; a `fields.SaleVm.X` entry still overrides.
+  - **Not built:** a diagnostic for a view-model field with no source and no title (the example given for ⚑LZ9 named
+    YFL0011): the Localization generator does not see view models or their mappings; it needs either the Validation
+    generator to report it or an extra file of view-model fields — left for LZ-P7 (enforcement). Element paths
+    (`Lines[2].Quantity`) do not inherit yet (only top-level members are linked).
+  - **Tests:** Localization 48 (+1 chain), Validation 67 (+1 registry), State 384 (+1 `[ValidatesAs]` link) +
+    Validation.Generator 50, Rules 137 (+1 `[SituationSource]` title "Parcelas" from `situations.sale`). Builds: gallery,
+    SaleScenario.
+  - **LZ-P4 status:** all five steps built. Left to close the phase: the sale sample moves to declared keys
+    (`SaleMessages` switch → `[Messages]` + `texts.pt-BR.json`, typed call sites) — its "done when".
