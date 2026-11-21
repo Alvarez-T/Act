@@ -335,3 +335,24 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
   (4) LZ28 + LZ29, outputs, breaking, largest; (5) LZ9.
 - **2026-11-21 (later)** — approved ⚑LZ9, LZ16, LZ28, LZ29 (derived names; output names checked not stored), LZ30–LZ33.
   New ⚑LZ34 approved: Rules XML docs, hand-written and generated, with examples. Every LZ-P4 decision is now taken.
+- **2026-11-21, LZ-P4 step 1 built** (⚑LZ13, LZ14, LZ31, LZ26):
+  - **Validation:** typed `ViolationWriter.Add<T0>` / `Add<T0,T1>` and the same on `ViolationCollector` (argument types checked
+    against the `MessageKey<…>` declaration; a key with arguments cannot be passed without them, because only the plain
+    `MessageKey` converts to `RuleCode`). Fluent `.Message(key)` (stays compiled: the generator reads the key literal from
+    the `[Message]` property) and `v.Rule(holds, on:, key)` (runtime, one violation). Generator ⚑LZ13: a collection of
+    records gets `Fields.Lines` as a `LinesPaths` struct (`.Path` = `ref readonly FieldPath`, implicit `FieldPath`
+    conversion) and `Fields.Lines.At(i).Quantity` = `Lines[i].Quantity`; element members named `Path` / `Index` are
+    skipped. **Breaking:** user code that passed `in Fields.Lines` for such a member writes `Fields.Lines.Path` or drops
+    `in` (no case found in the ecosystem builds).
+  - **Rules:** typed `Deny<T0>`, `Deny<T0,T1>`, `Warn<T0>`, `Warn<T0,T1>`, `RequireApproval<T0>`; the `RawValue` overloads
+    are `[EditorBrowsable(Never)]` (kept for Rules.Dynamic). `SituationField<,>` converts to `FieldPath`, so
+    `d.Deny(SaleSituation.Fields.Payment, SaleText.X)` builds. XML docs + examples on every touched member (⚑LZ34).
+  - **State (⚑LZ26):** `ValidationBag.Catalog`, set by `StateObject` from `ValidationServices.GetService(IMessageCatalog)`
+    when the bag is created; `ErrorItem.Message` caches per culture and catalog; new `ErrorItem.Format(catalog, culture)`.
+    `ValidationMessages.Catalog` is `[Obsolete]` (fallback only); `ValidationMessages.BuiltIn` added.
+  - **Tests:** Validation 66 (+4), State 383 (+2) + Validation.Generator 50 (snapshot updated for `Fields.Lines.Path`),
+    Rules 129 (Listing denial now typed). Release builds: Validation, State, Cqrs, Rules, YFex.Avalonia gallery.
+  - **Left:** the gallery still sets `ValidationMessages.Catalog` (CS0618 warning; `FormsExampleModels.cs` has another
+    session's uncommitted work, so not touched); `_ignore/SaleScenario` still has its `SaleMessages` switch and string call
+    sites — it moves to declared keys when LZ-P4 closes (its acceptance test); Rules situations (`SaleSituation`) have no
+    `Lines.At(i)` paths yet (line fields are separate situations).
