@@ -3,7 +3,7 @@
 > **Status: proposal, 2026-11-19.** ⚑RX1, RX2, RX3, RX23, RX34 **approved 2026-11-21** (as recommended; RX-P0 started);
 > ⚑RX14 settled by ⚑LZ28 and the LZ10 part of ⚑RX7. ⚑RX4, RX5 (delete the never-produced `StackedWith` /
 > `ClampedByGuardrail` note cases), RX6, RX7, RX16, RX24 (decided with ⚑LZ40) and ⚑WH1 (core `Reasons`; RX-P1 adds only
-> `WhyKey`) **approved 2026-11-21** as recommended; the rest pending. **RX-P0 built 2026-11-21** (log §12); RX-P1 next. Consistency pass 2026-11-21 against the approved ⚑LZ decisions and `all-projects.md`: §11. Asked for by the YFex.UI "why"
+> `WhyKey`) **approved 2026-11-21** as recommended; the rest pending. **RX-P0 built 2026-11-21** (log §12); **RX-P1 built 2026-11-21** (log §12, uncommitted); RX-P2 next. Consistency pass 2026-11-21 against the approved ⚑LZ decisions and `all-projects.md`: §11. Asked for by the YFex.UI "why"
 > component plan ([`YFex.UI/docs/plans/why-component-plan.md`](../../../../YFex.UI/docs/plans/why-component-plan.md), ⚑WH1–WH12).
 > This document covers the **YFex.Rules side**: ⚑WH2 (owner changes), ⚑WH7 (rule as applied), ⚑WH8 (what if) and ⚑WH10
 > (trace cost), plus what Rules needs from ⚑WH1 (where the neutral reason model lives) and ⚑WH3 (the generated per-field source).
@@ -594,7 +594,7 @@ on its own; tests close each phase (00-start-here §3).
 | Phase | Content | Done when |
 |---|---|---|
 | **RX-P0** Sources + handles (joint start with the Rules simplification, 2026-11-21) — **built 2026-11-21**, §12 | benchmark baseline first (Off/Applied/Full); generated `SaleRules.Rules.X` (`RuleKey`), `TableRef` → `RuleKey`; `RuleSource` with `Is(RuleKey)`; `FieldLimit` sources + exceed/permission; `Decision` keeps the compiled set, `LimitOf(field)`, `RefOf`, `SourceOf`; fingerprint unchanged (⚑RX1–RX3, RX23, RX34) | `d.LimitOf(SaleSituation.Fields.Installments).MaxSource.Is(SaleRules.Tables.InstallmentTable)` and `d.RefOf(…)` names the row; Off allocations unchanged in count; no string names a rule in the new tests |
-| **RX-P1** Lines | `ExplanationLine` record; group, field, tier label, description, relations, path; Stack cap as `CappedByGroup`; guardrail notes with rule index; new messages (⚑RX4–RX7, RX16, RX24) | the sale sample explains every line with group, path and relations; no `RuleRef(groupName,…)` left |
+| **RX-P1** Lines — **built 2026-11-21**, §12 | `ExplanationLine` record; group, field, tier label, description, relations, path; Stack cap as `CappedByGroup`; guardrail notes with rule index; new messages (⚑RX4–RX7, RX16, RX24) | the sale sample explains every line with group, path and relations; no `RuleRef(groupName,…)` left |
 | **RX-P2** Conditions | `IsLineField`; `Decision.Conditions`; actual / missing / would-pass; table `TryDescribeWhen`; Dynamic explain with context and operand programs; `[Sensitive]` masking (⚑RX8–RX12, RX26) | the 12x checklist shows Passed / Failed (atual R$ 940, faltam R$ 60) / WouldPass; a table and a dynamic rule give the same shape |
 | **RX-P3** Per field | static `affects` from typed handles (generator + attribute + YFR0026), tables, dynamic; `Decision.Affects`; `Explanation.ForField` / `ForOutput` / `ForObject`; lazy Full re-evaluation (⚑RX13–RX15) | `ForField(SaleSituation.Fields.Installments)` returns the limit with its row, the not-applied 12x rule with its checklist, and nothing about unrelated fields; `ForOutput(SaleRules.Outputs.InstallmentValue)` shows the row's minimum |
 | **RX-P4** Reason model | after ⚑WH1 lands in core: `ToWhy`, `Decision.TryGetWhy`; Validation generator `IWhySource` (⚑RX17, RX23, RX25, RX27) | a validated view model with `[ConstraintsFrom] Decision<SaleSituation>` returns a `WhyReport` for "Installments" with no hand-written code |
@@ -1331,3 +1331,62 @@ Outside this document, fixed the same day: the localization README (§3.6, §5, 
   value, depth 0 `RuleText.TierCode`, row label `RuleText.Row`; ⚑RX16 `PathSegment(Kind, WhyKey, Text)`; ⚑RX24 + ⚑LZ40 one
   `[Messages] RuleText` class in YFex.Rules with en + pt-BR files replacing the `RuleMessages` switch (`rules.decision.mismatch`
   to YFex.Cqrs); ⚑WH1 = core `src/YFex/Reasons`, RX-P1 adds only `WhyKey`. RX-P1 built in its own session.
+- **2026-11-21 — RX-P1 built** (⚑RX4–RX7, RX16, RX24 + ⚑LZ40, ⚑WH1 `WhyKey`, the ⚑RX34 `GroupRef` part; uncommitted):
+  - **Core (⚑WH1):** `YFex.Reasons.WhyKey`, a value object over `{scheme}:{id}` (scheme `a-z0-9-`, id without white space;
+    `Create(scheme, id)`, `Scheme` / `Id` spans, `HasScheme`, `TryCreate`, `ISpanFormattable`, `IUtf8SpanFormattable`,
+    `ISpanParsable`, `ILogValue`, `[JsonConverter]` writing the text). Nothing else of the reason model yet (RX-P4).
+  - **Lines (⚑RX4):** `ExplanationLine` is a `sealed record` with init members (Title, Detail, Description, Kind, Rule,
+    Stage, Group, GroupTitle, Field, LineIndex, Amount, Direction, TierLabel, Related, Path; `Conditions` / `WhatIf` left for
+    RX-P2 / RX-P5). Kinds `Options` and `Denied` added. `Explanation` gains `Violations` (one line per decision violation,
+    Denied / Warning by severity, with `SourceOf`'s rule and the field); blocked candidates no longer appear in `NotApplied`.
+    Limit lines and the new options lines (`rules.explain.options`, plural) carry `Field`; approval lines carry the reason's
+    field and the permission title (`perm.{id}`).
+  - **Groups (⚑RX34):** `GroupRef(RuleSetRef RuleSet, string Name)`; `RuleGroup.RuleSet` (set by the definition builder) and
+    `RuleGroup.Ref`, so `line.Group == SaleRules.Installments.Ref`.
+  - **Relations (⚑RX5):** `RuleRelation(Kind, Other, Text, Group, From, To)`, kinds SupersededBy, Supersedes, CappedByGroup,
+    CappedByRule, StackedWith, ClampedByGuardrail, DisabledByTier, LimitedAlsoBy. A Stack cap is now `CappedBy(default, …)`
+    (no rule owns it; no `RuleRef(groupName, …)` is produced anywhere); `CappedBy.IsGroupCap(adjustedRule)` reads both that and
+    the group-name form of adjustments stored before, and the explanation takes the group from the rule's own group.
+    `StackedWith` is derived (other applied adjustments of the same Stack group and line); `Supersedes` / `SupersededBy` and
+    `LimitedAlsoBy` come from the trace (Full / Applied). The never-produced `StackedWith` / `ClampedByGuardrail` note cases
+    are deleted (re-checked: nothing in `C:\Dev\YFex` created them); `ResolutionNoteKind` keeps `CappedBy = 1`, `ApprovedBy = 4`.
+  - **Guardrails (⚑RX6):** `CompileNote` gains `Source` (`RuleSource` of the code rule / table), `Requested` and `Clamped`
+    (parameter values with a raw form). Parameter notes now carry the rule code in `Code` and the parameter key in `Detail`
+    (was the key in `Code`). The Full-trace entry of a compile note names the real rule (`RefOf(source)`: version, data
+    version; a rejected row's id), its group and stage. Explanation: `ClampedByGuardrail` on that rule's lines ("limitado pela
+    trava de 15%", From/To), no trace needed (notes live in the compiled set); the `Overridden(0)` guard entries are no longer
+    shown as "not applied".
+  - **Texts (⚑RX7):** tier label = `RuleText.Tier` ("{field} {0}", field key = the tier field) with the situation's value at
+    that depth ("Loja s1"), depth 0 → `RuleText.TierCode` ("Padrão" / "Default"); a code rule's depth is the most specific tier
+    of its parameter values in force (its `RuleRef.Tier` stays 0, as `RuleRef` documents); row label `RuleText.Row` (1-based
+    position in the version in force). Stage, group and rule-set titles from the LZ10 keys with the humanized last segment as
+    fallback; description `{code}.description` or null. Rule titles outside applied lines render their `{0}` empty and trimmed
+    ("Pix {0}" → "Pix"), which also fixes the raw `{0}` the not-applied lines showed before.
+  - **Paths (⚑RX16):** `PathSegment(Kind, WhyKey Key, Text)`, `ExplanationPath` (≤ 7, `Segments`, `Find`, `Contains`, value
+    equality; `ToString` joins with " › " for diagnostics). Order: rule set › stage › group › line › rule › row. Keys
+    `ruleset:sale`, `stage:sale/limits`, `group:sale/Installments`, `line:0`, `rule:sale.installments`,
+    `rule:sale.installments#{row id N}` (schemes declared once in `WhyScheme`). Doc-12 sale:
+    "Venda › Limites › Parcelamento › Tabela de parcelamento › linha 2".
+  - **Messages (⚑RX24, ⚑LZ40):** `[Messages] RuleText` (public, `Tracing/RuleText.cs`) with `Messages/texts.json` (en) +
+    `texts.pt.json`; the generated module keeps the name apps chain (`YFexMessagesClass` = `YFex.Rules.RuleMessages`), so
+    `RuleMessages.Instance` still works. It replaces the hand-written switch and `RuleEngineCodes` (callers use
+    `RuleText.X` / `RuleText.Keys.X`): limit and table codes, `rules.sealed`, condition templates, trace and explain phrases,
+    and the new Between, Missing, Actual, WouldPass, Row, Line, Tier, TierCode, relation texts (AlsoLimited, Stacked,
+    Guardrail, …) and WhatIfSummary, all with typed arguments. Engine literals moved to it: evaluator `[Requested]` codes,
+    `FrozenTable`, `TableGaps`, `ApplicabilityIndex`, Rules.Dynamic `RuleCompiler`. An app overrides a phrase through its own
+    `messages` entry (test). `rules.decision.mismatch` → `[Messages] CqrsText.DecisionMismatch` in YFex.Cqrs (`MessageKey<long,
+    long>`, en + pt files, module `CqrsMessages`; Cqrs now references the Localization generator).
+  - **Allocations / benchmark:** explanations are cold path; nothing on the evaluation path allocates more (the Stack cap note
+    lost a `RuleRef` built from the group name, no object). Allocation test unchanged and green. `TraceLevelBenchmarks`, committed
+    code and RX-P1 built side by side and run back to back (15 iterations, 5 warm-up): Off 3.25 → 3.19 µs, Applied 4.27 →
+    3.91 µs, Full 4.73 → 4.88 µs (noise both ways); allocated identical, 2.96 / 8.72 / 12.06 KB.
+  - **Tests:** Rules 95 (+14: `ExplanationLineTests` — Exclusive loser ↔ winner, group / stage / tier / description in pt and
+    en, code-rule path and keys, table-row path ending with the row, line-rule path with the item, tier labels depth 0 and 2,
+    disabled at a tier, guard-clamped parameter, also-limited, options lines, violation and approval lines, app override;
+    `StackExplanationTests` — CappedByGroup, StackedWith both ways, no group `RuleRef`, stored group-name notes still read as a
+    group cap; the guard test of `EngineScenarioTests` now expects the rule code, group and stage instead of the parameter key),
+    Dynamic 21, Generator 28, Data 19; core `WhyKeyTests` 14. Dependents: Cqrs (4 test projects: 17 + 3 + 26 + 11), Rules.Admin
+    29, Messaging 192, Jobs 176 + AOT smoke (published win-x64, 0 IL warnings, runs), Offline.Rules builds (NU1510 off),
+    `_ignore/SaleScenario` builds and prints every line with path, group, tier and relations.
+  - **Left / follow-ups:** `RulePublishCodes` (`rules.publish.*`) still have no texts and stay constants; the Rules generator
+    still emits the `rules.cond.*` strings into generated descriptors (data, matched by the module); next RX-P2 (conditions).
