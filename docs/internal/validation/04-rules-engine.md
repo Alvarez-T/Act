@@ -581,6 +581,7 @@ re-runs. v1 may skip this: a full evaluation is microseconds for realistic rule 
 | `RuleSetDefinition<TS>` | sealed class | frozen code part of a rule set (stages, groups, code rules, table bindings, derived fields) |
 | `CompiledRuleSet<TS>` | sealed class | definition + resolved data versions for one (scope, asOf); has `Evaluate` |
 | `RuleCatalog` / `RuleIds` | sealed class / generated consts | id ↔ code, group, stage, layer, editability, version, condition count, message keys |
+| `SaleRules.Rules.X` / `RuleKey`, `RuleSource` | generated keys / 8-byte struct | which code rule or table produced a limit or violation: `decision.LimitOf(field).MaxSource.Is(SaleRules.Tables.X)`, `decision.RefOf(source)`, `decision.SourceOf(i)` (validation/14 RX-P0) |
 | `ConditionId` | readonly record struct | `(ushort RuleId, byte Index)`; `None` |
 | `AdjustmentList` | readonly struct | exact-size `AppliedAdjustment[]` with struct enumerator |
 | `LineTotal` / `LineAllocation` | readonly structs | per-line gross/adjustments/net; per-line share of a subtotal/payment adjustment |

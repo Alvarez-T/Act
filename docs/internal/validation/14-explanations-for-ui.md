@@ -1,7 +1,7 @@
 # 14 — Explanations a UI can show ("why is this field like this?")
 
-> **Status: proposal, 2026-11-19.** Decisions **⚑RX1–⚑RX34** are pending except ⚑RX14 (settled by ⚑LZ28) and the LZ10 part
-> of ⚑RX7; nothing is built. Consistency pass 2026-11-21 against the approved ⚑LZ decisions and `all-projects.md`: §11. Asked for by the YFex.UI "why"
+> **Status: proposal, 2026-11-19.** ⚑RX1, RX2, RX3, RX23, RX34 **approved 2026-11-21** (as recommended; RX-P0 started);
+> ⚑RX14 settled by ⚑LZ28 and the LZ10 part of ⚑RX7; the rest pending. **RX-P0 built 2026-11-21** (log §12). Consistency pass 2026-11-21 against the approved ⚑LZ decisions and `all-projects.md`: §11. Asked for by the YFex.UI "why"
 > component plan ([`YFex.UI/docs/plans/why-component-plan.md`](../../../../YFex.UI/docs/plans/why-component-plan.md), ⚑WH1–WH12).
 > This document covers the **YFex.Rules side**: ⚑WH2 (owner changes), ⚑WH7 (rule as applied), ⚑WH8 (what if) and ⚑WH10
 > (trace cost), plus what Rules needs from ⚑WH1 (where the neutral reason model lives) and ⚑WH3 (the generated per-field source).
@@ -64,6 +64,9 @@ message catalog and stable keys for links and actions.
 ## 3. Design per gap
 
 ### 3.1 Sources of limits and options (gap 1) — ⚑RX1, RX2, RX3
+
+> **Built 2026-11-21 (§12)** with two refinements of the sketch below: a source records a kind (`CodeRule` / `Table` /
+> `RuntimeRule`) and an index instead of one owner number, and the approval permission is one `ApprovalPermission`.
 
 The decision keeps a compact source per bound. A source is resolved to a `RuleRef` on demand, through the compiled rule set the
 decision now keeps (it already keeps its `RuleSetDefinition` and the rule array; the compiled set is cached by the host).
@@ -511,9 +514,9 @@ d.ShouldNotApply(SaleRules.Rules.Card12x);         // test helpers (§9.11)
 
 | ⚑ | Topic | Proposal (recommended first) | Rejected alternatives | § |
 |---|---|---|---|---|
-| RX1 | Limit and option sources | compact `RuleSource` (owner, row, line) on `FieldLimit` + `MinExceed/MaxExceed/ApprovalPermission`; `Decision` keeps the `CompiledRuleSet` and resolves `RefOf` on demand | full `RuleRef` per bound inline (≈ 3 × 40 bytes, strings copied per limit); sources only from the trace (needs trace on every evaluation) | 3.1 |
-| RX2 | Options merged from several grants | keep the first grant + a count; the full list from the trace | an array of sources per field always (allocation per evaluation) | 3.1 |
-| RX3 | Row of table-issued violations | a `RuleSource[]` parallel to `Violations`, allocated only when there are violations | trace-only (no row with trace Off); extend `ViolationOrigin` in YFex.Validation (a small source + owner id shared by every validator; a table row does not belong there) | 3.1 |
+| RX1 ✅ | Limit and option sources | compact `RuleSource` (owner, row, line) on `FieldLimit` + `MinExceed/MaxExceed/ApprovalPermission`; `Decision` keeps the `CompiledRuleSet` and resolves `RefOf` on demand | full `RuleRef` per bound inline (≈ 3 × 40 bytes, strings copied per limit); sources only from the trace (needs trace on every evaluation) | 3.1 |
+| RX2 ✅ | Options merged from several grants | keep the first grant + a count; the full list from the trace | an array of sources per field always (allocation per evaluation) | 3.1 |
+| RX3 ✅ | Row of table-issued violations | a `RuleSource[]` parallel to `Violations`, allocated only when there are violations | trace-only (no row with trace Off); extend `ViolationOrigin` in YFex.Validation (a small source + owner id shared by every validator; a table row does not belong there) | 3.1 |
 | RX4 | `ExplanationLine` shape | `sealed record` with init members (breaking; only Rules tests use it) | keep the positional struct and add side arrays (unreadable); a new `ExplanationLine2` | 3.2 |
 | RX5 | Related rules and notes | `RuleRelation` list on lines; Stack cap as `CappedByGroup`; `StackedWith` derived by the explanation; delete the never-produced `StackedWith`/`ClampedByGuardrail` note cases (or keep reserved) | keep relations in `Detail` text only (no links); write `StackedWith` into the persisted note (one case per note) | 3.2 |
 | RX6 | Guardrail clamps | `CompileNote` gains the rule/table index and requested/clamped values; lines get `ClampedByGuardrail`; trace entries get real group/stage | leave them as anonymous `Overridden(0)` entries | 3.2 |
@@ -533,14 +536,14 @@ d.ShouldNotApply(SaleRules.Rules.Card12x);         // test helpers (§9.11)
 | RX20 | Rule as applied | pure `AppliedRules.Describe` in Rules; new query `RuleAdmin.Queries.DescribeAppliedRule` returning only the view, with its own `AppliedRulePermission` | add the view to `GetRuleDefinition` (it shares the admin view permission with raw data); raw JSON only; build the display in the UI (would interpret rules) | 3.6, 9.8 |
 | RX21 | Audit of decisions | request: `AuditDecision` carries applied `RuleRef`s and limit sources | app persists adjustments only (06 §2; limits and denials lost) | 3.6 |
 | RX22 | Old data versions offline | describe what the device has; otherwise "disponível online" | keep every version on devices (unbounded cache) | 3.6 |
-| RX23 | Refresh of a VM's "why" | fingerprint excludes sources (unchanged); generated code raises `WhyChanged` on every decision **reference** change, not only fingerprint changes | add sources to the fingerprint (client and server could disagree on sources while agreeing on the outcome → false mismatches) | 3.1, 3.9 |
+| RX23 ✅ | Refresh of a VM's "why" | fingerprint excludes sources (unchanged); generated code raises `WhyChanged` on every decision **reference** change, not only fingerprint changes | add sources to the fingerprint (client and server could disagree on sources while agreeing on the outcome → false mismatches) | 3.1, 3.9 |
 | RX24 | Messages (**revised 2026-11-21**; decide with ⚑LZ40, which proposes the same `[Messages]` class for the engine's existing codes `rules.table.*` and the `rules.cond.*` templates) | new **declared keys** in a `[Messages] RuleText` class of YFex.Rules with en + pt-BR language files (no new cases in the `RuleMessages` switch): `RuleText.Missing` (`rules.cond.missing`), `Actual`, `Between`, `WouldPass`, `Row`, `AlsoLimited`, `Stacked`, `Guardrail`, `TierCode`, `WhatIfSummary`, relation texts, with typed arguments (`MessageKey<Money>` …) | add cases to the hand-written `RuleMessages` switch (moving it to declared keys is an LZ item); texts built in code | 3.2–3.7 |
 | RX25 | Validation generator (⚑WH3) | emit `IWhySource` per `[ConstraintsFrom]` property calling `Decision.TryGetWhy`; rule-sourced violations in the bag link to their why through `ViolationOrigin` | hand-written per screen | 3.9 |
 | RX26 | Personal data in explanations (**realigned 2026-11-21 with ⚑LZ25** and the classification-on-the-type rule) | situation fields whose **type** is `[Sensitive]` (YFex.Privacy): `Actual` shown in the UI (as ⚑LZ25 decided for message arguments), masked when the explanation goes to logs, the AI JSON (⚑RX27), audit exports and server-attached reasons (⚑RX30) | mask in the UI by default with a per-screen opt-in (the 2026-11-19 proposal; contradicts ⚑LZ25); always clear everywhere (leaks in logs and AI) | 3.3 |
 | RX27 | AI and Capabilities | `WhyReport` JSON (source-generated) so YFex.Capabilities / YFex.Automation agents can answer "why" with the same data as the UI; `RuleSetDescription` stays for the rule set itself | separate AI-only explanation format | 3.9 |
 | RX28 | Tier value labels | tier label = catalog field name + the raw situation value; apps that want "Loja Centro" add the names to their message source (gathered before evaluation, Principle A) | Rules calls YFex.Tenancy to resolve scope names (I/O inside a pure library) | 3.2 |
 | RX29 | Reasons beyond Rules (⚑WH9) and across the wire | Cqrs `RulesStage` can attach a `WhyReport` to a Denied result for remote clients (needs string keys, §3.9); Authorization (`AuthorizationContext.ExplainUnavailable`, `DenialKind`) and Licensing produce `WhyReport` in their own phases | Rules explains permissions too (wrong owner) | 2, 3.9 |
-| RX34 | Typed rule handles (new 2026-11-21) | generated `SaleRules.Rules.X` (`RuleKey`: rule set, owner id, code) beside `RuleIds`; `TableRef` converts to `RuleKey`; `RuleGroup.Ref` → `GroupRef` (rule set + name) for explanation lines and relations, as `StageRef` is for stages; `RuleSource.Is` / `RuleRef.Is`; every RX API and test helper that names a rule takes `RuleKey`; strings only where the code is data (stored adjustments, wire queries, dynamic rules) | the rule struct as handle (`RefOf<Card12x>()`: needs a lookup from type to owner id at run time); `RefOf(string code)` (magic string) | 3.10 |
+| RX34 ✅ | Typed rule handles (new 2026-11-21) | generated `SaleRules.Rules.X` (`RuleKey`: rule set, owner id, code) beside `RuleIds`; `TableRef` converts to `RuleKey`; `RuleGroup.Ref` → `GroupRef` (rule set + name) for explanation lines and relations, as `StageRef` is for stages; `RuleSource.Is` / `RuleRef.Is`; every RX API and test helper that names a rule takes `RuleKey`; strings only where the code is data (stored adjustments, wire queries, dynamic rules) | the rule struct as handle (`RefOf<Card12x>()`: needs a lookup from type to owner id at run time); `RefOf(string code)` (magic string) | 3.10 |
 
 ## 5. Ecosystem fit
 
@@ -588,7 +591,7 @@ on its own; tests close each phase (00-start-here §3).
 
 | Phase | Content | Done when |
 |---|---|---|
-| **RX-P0** Sources + handles (joint start with the Rules simplification, 2026-11-21) | benchmark baseline first (Off/Applied/Full); generated `SaleRules.Rules.X` (`RuleKey`), `TableRef` → `RuleKey`; `RuleSource` with `Is(RuleKey)`; `FieldLimit` sources + exceed/permission; `Decision` keeps the compiled set, `LimitOf(field)`, `RefOf`, `SourceOf`; fingerprint unchanged (⚑RX1–RX3, RX23, RX34) | `d.LimitOf(SaleSituation.Fields.Installments).MaxSource.Is(SaleRules.Tables.InstallmentTable)` and `d.RefOf(…)` names the row; Off allocations unchanged in count; no string names a rule in the new tests |
+| **RX-P0** Sources + handles (joint start with the Rules simplification, 2026-11-21) — **built 2026-11-21**, §12 | benchmark baseline first (Off/Applied/Full); generated `SaleRules.Rules.X` (`RuleKey`), `TableRef` → `RuleKey`; `RuleSource` with `Is(RuleKey)`; `FieldLimit` sources + exceed/permission; `Decision` keeps the compiled set, `LimitOf(field)`, `RefOf`, `SourceOf`; fingerprint unchanged (⚑RX1–RX3, RX23, RX34) | `d.LimitOf(SaleSituation.Fields.Installments).MaxSource.Is(SaleRules.Tables.InstallmentTable)` and `d.RefOf(…)` names the row; Off allocations unchanged in count; no string names a rule in the new tests |
 | **RX-P1** Lines | `ExplanationLine` record; group, field, tier label, description, relations, path; Stack cap as `CappedByGroup`; guardrail notes with rule index; new messages (⚑RX4–RX7, RX16, RX24) | the sale sample explains every line with group, path and relations; no `RuleRef(groupName,…)` left |
 | **RX-P2** Conditions | `IsLineField`; `Decision.Conditions`; actual / missing / would-pass; table `TryDescribeWhen`; Dynamic explain with context and operand programs; `[Sensitive]` masking (⚑RX8–RX12, RX26) | the 12x checklist shows Passed / Failed (atual R$ 940, faltam R$ 60) / WouldPass; a table and a dynamic rule give the same shape |
 | **RX-P3** Per field | static `affects` from typed handles (generator + attribute + YFR0026), tables, dynamic; `Decision.Affects`; `Explanation.ForField` / `ForOutput` / `ForObject`; lazy Full re-evaluation (⚑RX13–RX15) | `ForField(SaleSituation.Fields.Installments)` returns the limit with its row, the not-applied 12x rule with its checklist, and nothing about unrelated fields; `ForOutput(SaleRules.Outputs.InstallmentValue)` shows the row's minimum |
@@ -1283,3 +1286,39 @@ with a `For(handle, …)` factory, the same pattern as `PublishTable.For` (⚑LZ
 
 Outside this document, fixed the same day: the localization README (§3.6, §5, §6 rows) and its 01 §3 no longer name
 `[Amount]` / `ForAmount`, and all-projects § String identities gives the real ⚑LZ status.
+
+## 12. Build log
+
+- **2026-11-21 — RX-P0 built** (⚑RX1, RX2, RX3, RX23, RX34; YFex.Rules):
+  - **Handles (⚑RX34):** `RuleKey(RuleSetRef, RuleSourceKind, Index, Code)`; the generator emits `SaleRules.Rules.X` (one per
+    code rule, next to `RuleIds`, with `///` docs); `TableRef<TRow>` gains `Index`, `Key` and an implicit conversion to
+    `RuleKey`, so `source.Is(SaleRules.Tables.InstallmentTable)` builds. `RuleRef.Is(RuleKey)` compares the stored code (works
+    for stored adjustments). `GroupRef` is left for RX-P1, where explanation lines use it.
+  - **Sources (⚑RX1, RX2):** `RuleSource` (8 bytes: kind in the top 2 bits of the index, row, line; `default` = none) with
+    `Is(RuleKey)`. Kinds `CodeRule` / `Table` / `RuntimeRule` instead of one owner number: the compiled set numbers tables after
+    the runtime rules (`Rules.Length + t`) while the generated `RuleIds` number them after the code rules, so a single owner id
+    would compare wrong as soon as a tenant publishes a dynamic rule. `FieldLimit` gains `MinSource`, `MaxSource`,
+    `OptionsSource`, `OptionsMerged` (grants combined, saturating at 255), `MinExceed`, `MaxExceed` and one
+    `ApprovalPermission` (the maximum's when both bounds need approval). `Decision` keeps the compiled set instead of the rule
+    array: `LimitOf(field)` (an `[Output]` handle converts to the field ref), `RefOf(in RuleSource)`.
+  - **Violations (⚑RX3):** `Decision.SourceOf(i)` from a source array parallel to `Violations`, allocated only when there are
+    violations: Deny / Warn directives and `[Requested]` checks (the limit's winner) record theirs.
+  - **Fingerprint (⚑RX23):** unchanged; a golden test pins three sale fingerprints captured on the code before the change.
+  - **Also:** explanation limit lines now carry the `RuleRef` of the bound's source (was `default`); the engine's ref helpers
+    moved to `CompiledRuleSet` (`RuleRefOf`, `TableRowRef`, `SourceOf`, `RefOf`), shared by the evaluator and the decision.
+  - **Generator bug fixed (found by the new benchmark):** a condition with a type in a type-only position
+    (`s.Total >= new Money(1000)`, a cast) crashed the Rules generator with `InvalidCastException` (CS8785, no output at all);
+    the splitter now rewrites type names as `TypeSyntax`. Generator test added. The §9.1 rule hit it.
+  - **Allocations:** a decision without violations allocates no new object; `FieldLimit` grows from 104 to 160 bytes (the plan
+    estimated ~40 per limit; the nullable permission is 24). The allocation test's sale: 2 496 → 2 672 bytes (budget 2 500 →
+    2 750, arithmetic in the test).
+  - **Benchmark** (new `TraceLevelBenchmarks`: two groups, a stack cap, a table with two limits, three lines; in-process
+    BenchmarkDotNet, 15 iterations; old and new code measured back to back because the machine drifted ~1 µs between
+    sessions): trace Off 4.08 → 4.30 µs (+5 %), Applied 5.30 → 5.59 µs (+5 %), Full 6.37 → 6.88 µs (+8 %); allocated
+    2.84 → 2.96 KB, 8.60 → 8.72 KB, 11.95 → 12.06 KB.
+  - **Tests:** Rules 81 (+10 `RuleSourceTests`: keys, table row source, most-restrictive winner across a rule and a table,
+    output limit, exceed and permission, violation sources, LeastRestrictive winner, grant count, golden fingerprints, empty
+    limit), Dynamic 21 (+1 runtime-rule source and tier), Generator 28 (+1), Data 19. Dependents build and pass: Cqrs,
+    Rules.Admin 29, Messaging 192, Jobs 176, Offline.Rules (built with NU1510 off: an existing restore warning-as-error in
+    Installations/Networking), `_ignore/SaleScenario` runs; Jobs AOT smoke publishes with 0 IL warnings and runs.
+  - **Next:** RX-P1 (lines: ⚑RX4–RX7, RX16, RX24 with ⚑LZ40).
