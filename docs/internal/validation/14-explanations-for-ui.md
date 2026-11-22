@@ -3,7 +3,7 @@
 > **Status: proposal, 2026-11-19.** ⚑RX1, RX2, RX3, RX23, RX34 **approved 2026-11-21** (as recommended; RX-P0 started);
 > ⚑RX14 settled by ⚑LZ28 and the LZ10 part of ⚑RX7. ⚑RX4, RX5 (delete the never-produced `StackedWith` /
 > `ClampedByGuardrail` note cases), RX6, RX7, RX16, RX24 (decided with ⚑LZ40) and ⚑WH1 (core `Reasons`; RX-P1 adds only
-> `WhyKey`) **approved 2026-11-21** as recommended; the rest pending. **RX-P0 built 2026-11-21** (log §12); **RX-P1 built 2026-11-21** (log §12); RX-P2 next. Consistency pass 2026-11-21 against the approved ⚑LZ decisions and `all-projects.md`: §11. Asked for by the YFex.UI "why"
+> `WhyKey`) **approved 2026-11-21** as recommended; ⚑RX9, RX10, RX11, RX12, RX26 **approved 2026-11-21** as recommended and ⚑RX8 approved the same day on condition that a union / closed hierarchy is weighed against the enum + flat `ConditionCheck` before building (§12); the rest pending. **RX-P0 built 2026-11-21** (log §12); **RX-P1 built 2026-11-21** (log §12); **RX-P2 built 2026-11-21** (log §12: ⚑RX8 kept the enum + flat `ConditionCheck`, ⚑RX11 reuses the generated `GetCondition` instead of a new `TryDescribeWhen`, both chosen by the user); ⚑RX13, RX15 **approved 2026-11-22** as recommended; RX-P2 committed (YFex.Rules `2caa69e`); RX-P3 next. Consistency pass 2026-11-21 against the approved ⚑LZ decisions and `all-projects.md`: §11. Asked for by the YFex.UI "why"
 > component plan ([`YFex.UI/docs/plans/why-component-plan.md`](../../../../YFex.UI/docs/plans/why-component-plan.md), ⚑WH1–WH12).
 > This document covers the **YFex.Rules side**: ⚑WH2 (owner changes), ⚑WH7 (rule as applied), ⚑WH8 (what if) and ⚑WH10
 > (trace cost), plus what Rules needs from ⚑WH1 (where the neutral reason model lives) and ⚑WH3 (the generated per-field source).
@@ -199,6 +199,11 @@ Fixes that come with it (all in YFex.Rules):
 | table row | declared key `RuleText.Row` ("linha {0}") with the 1-based row position in its version | — | ⚑RX7 |
 
 ### 3.3 Condition checklist (gap 3) — ⚑RX8, RX9, RX10, RX11, RX12
+
+> **Built 2026-11-21 (§12)** as sketched below, with two choices the user made before building: the check stays the enum +
+> flat record struct (no closed hierarchy, ⚑RX8), and table cells come from the generated `GetCondition` → `ConditionCell` that
+> already existed for the gap check, so there is no `TryDescribeWhen` / `CellCondition` (⚑RX11). `ConditionInfo` also gained
+> `ReadsBase` (the `$base` conditions an on-demand checklist reports `Unknown`).
 
 A public, on-demand checklist per rule (and per line for line rules). It is recomputed from the decision's situation —
 conditions are pure — so it needs **no trace** and costs nothing until asked for (⚑RX9).
@@ -523,14 +528,14 @@ d.ShouldNotApply(SaleRules.Rules.Card12x);         // test helpers (§9.11)
 | RX5 ✅ | Related rules and notes | `RuleRelation` list on lines; Stack cap as `CappedByGroup`; `StackedWith` derived by the explanation; delete the never-produced `StackedWith`/`ClampedByGuardrail` note cases (or keep reserved) | keep relations in `Detail` text only (no links); write `StackedWith` into the persisted note (one case per note) | 3.2 |
 | RX6 ✅ | Guardrail clamps | `CompileNote` gains the rule/table index and requested/clamped values; lines get `ClampedByGuardrail`; trace entries get real group/stage | leave them as anonymous `Overridden(0)` entries | 3.2 |
 | RX7 ✅ | Display texts (**revised 2026-11-21**: titles, descriptions, stages and groups settled by ⚑LZ10) | what is left: tier label = the tier field's title (⚑LZ9) + the situation's value, depth 0 → `RuleText.TierCode`; row label `RuleText.Row`; humanized fallbacks | attributes with display text on rules (not translatable); a separate `tiers` section in the language files (duplicates the field titles) | 3.2 |
-| RX8 | Condition states | Passed / Failed / NotChecked, plus WouldPass / WouldFail for field-op-literal operands compared by Rules itself | evaluate every operand (breaks `&&` guards, may throw); Passed / Failed only (hides "what else is missing") | 3.3 |
-| RX9 | When checklists are built | on demand from the decision's situation (`Decision.Conditions(rule, line)`) | stored in the Full trace (allocates per not-applied rule on every evaluation) | 3.3 |
-| RX10 | `ConditionInfo` additions | `bool IsLineField` (generator + Dynamic compiler) | resolve by name, situation first (wrong for same-named line fields) | 3.3 |
-| RX11 | Table cell text | generated `static virtual TryDescribeWhen(row, whenIndex, out CellCondition)` with a default | parse the row JSON at explain time (slow, duplicates the column logic); only "requer outro {field}" (today) | 3.3 |
-| RX12 | Dynamic rule checks | explain delegate takes `RuleContext` (fixes `$base`); operand programs for actual values of expressions | keep `$base` = null (wrong "failed" reports) | 3.3 |
-| RX13 | Static "affects" of code rules (**revised 2026-11-21**) | generator reads the typed handle (`SituationField<,>` / `RuleOutput<,>` symbol) of every `DirectiveWriter` call (⚑LZ31) + `[Rule(Affects = [nameof(…)])]` override + YFR0026 when unresolvable | match argument names (what the 2026-11-19 text assumed; fragile); attribute only (boilerplate on every rule); none (per-field view misses not-applied rules) | 3.4 |
+| RX8 ✅ | Condition states (approved 2026-11-21 on condition: weigh a union / closed hierarchy for the check model before building; the user kept the enum + flat record struct, §12) | Passed / Failed / NotChecked, plus WouldPass / WouldFail for field-op-literal operands compared by Rules itself | evaluate every operand (breaks `&&` guards, may throw); Passed / Failed only (hides "what else is missing") | 3.3 |
+| RX9 ✅ | When checklists are built | on demand from the decision's situation (`Decision.Conditions(rule, line)`) | stored in the Full trace (allocates per not-applied rule on every evaluation) | 3.3 |
+| RX10 ✅ | `ConditionInfo` additions | `bool IsLineField` (generator + Dynamic compiler) | resolve by name, situation first (wrong for same-named line fields) | 3.3 |
+| RX11 ✅ | Table cell text (**revised 2026-11-21 at build**: the existing generated `GetCondition` → `ConditionCell` already describes every cell, so the checklist reads it; no `TryDescribeWhen` / `CellCondition`, user's choice, §12) | generated `static virtual TryDescribeWhen(row, whenIndex, out CellCondition)` with a default | parse the row JSON at explain time (slow, duplicates the column logic); only "requer outro {field}" (today) | 3.3 |
+| RX12 ✅ | Dynamic rule checks | explain delegate takes `RuleContext` (fixes `$base`); operand programs for actual values of expressions | keep `$base` = null (wrong "failed" reports) | 3.3 |
+| RX13 ✅ | Static "affects" of code rules (**revised 2026-11-21**; approved 2026-11-22 as recommended) | generator reads the typed handle (`SituationField<,>` / `RuleOutput<,>` symbol) of every `DirectiveWriter` call (⚑LZ31) + `[Rule(Affects = [nameof(…)])]` override + YFR0026 when unresolvable | match argument names (what the 2026-11-19 text assumed; fragile); attribute only (boilerplate on every rule); none (per-field view misses not-applied rules) | 3.4 |
 | RX14 | Amount and outputs (**settled by ⚑LZ28 2026-11-21**; replaces `AmountFields` and ⚑LZ15) | as approved: `Explanation.ForField(SituationFieldRef)`, `ForOutput(RuleOutput)`, `ForObject()` for the receipt; no VM attribute — the why source maps properties by name to fields and outputs, the view's Receipt layout asks for `ForObject()` | `[Amount]` VM attribute + `ForAmount()` (⚑LZ15, dropped in the fold into LZ28); `AmountFields => ["Total"]` string list (magic strings); treat every adjustment as affecting every field | 3.4 |
-| RX15 | Trace cost for "why" screens | evaluate with Off/Applied; `Explain` re-evaluates once with Full on demand and caches the trace on the decision | Full on every UI evaluation (⚑WH10 as written); always Full | 3.8 |
+| RX15 ✅ | Trace cost for "why" screens (approved 2026-11-22 as recommended; Full on every evaluation + State `[Debounce]` weighed and rejected, §12) | evaluate with Off/Applied; `Explain` re-evaluates once with Full on demand and caches the trace on the decision | Full on every UI evaluation (⚑WH10 as written); always Full | 3.8 |
 | RX16 ✅ | Hierarchy path | `PathSegment(Kind, Key, Text)` list per line | strings only (UI cannot filter by level) | 3.5 |
 | RX17 | Reason model production | `Explanation.ToWhy()` + `Decision.TryGetWhy(field, catalog, culture, out report)` producing core `Reasons` types (needs ⚑WH1 = core and the five model changes in §3.9) | Rules references YFex.UI.Public (wrong layer direction); the UI renders `Explanation` directly (ties the control to Rules) | 3.9 |
 | RX18 | What if | counterfactual `Decision.TryWhatIf` / `WhatIf` on the same compiled set + generated `ISituation.TryWith` (static virtual, default false) | `IRuleSetHost.Simulate` (answers a different question: draft data on past situations); the app builds the changed situation by hand | 3.7 |
@@ -541,7 +546,7 @@ d.ShouldNotApply(SaleRules.Rules.Card12x);         // test helpers (§9.11)
 | RX23 ✅ | Refresh of a VM's "why" | fingerprint excludes sources (unchanged); generated code raises `WhyChanged` on every decision **reference** change, not only fingerprint changes | add sources to the fingerprint (client and server could disagree on sources while agreeing on the outcome → false mismatches) | 3.1, 3.9 |
 | RX24 ✅ | Messages (**revised 2026-11-21**; decide with ⚑LZ40, which proposes the same `[Messages]` class for the engine's existing codes `rules.table.*` and the `rules.cond.*` templates) | new **declared keys** in a `[Messages] RuleText` class of YFex.Rules with en + pt-BR language files (no new cases in the `RuleMessages` switch): `RuleText.Missing` (`rules.cond.missing`), `Actual`, `Between`, `WouldPass`, `Row`, `AlsoLimited`, `Stacked`, `Guardrail`, `TierCode`, `WhatIfSummary`, relation texts, with typed arguments (`MessageKey<Money>` …) | add cases to the hand-written `RuleMessages` switch (moving it to declared keys is an LZ item); texts built in code | 3.2–3.7 |
 | RX25 | Validation generator (⚑WH3) | emit `IWhySource` per `[ConstraintsFrom]` property calling `Decision.TryGetWhy`; rule-sourced violations in the bag link to their why through `ViolationOrigin` | hand-written per screen | 3.9 |
-| RX26 | Personal data in explanations (**realigned 2026-11-21 with ⚑LZ25** and the classification-on-the-type rule) | situation fields whose **type** is `[Sensitive]` (YFex.Privacy): `Actual` shown in the UI (as ⚑LZ25 decided for message arguments), masked when the explanation goes to logs, the AI JSON (⚑RX27), audit exports and server-attached reasons (⚑RX30) | mask in the UI by default with a per-screen opt-in (the 2026-11-19 proposal; contradicts ⚑LZ25); always clear everywhere (leaks in logs and AI) | 3.3 |
+| RX26 ✅ | Personal data in explanations (**realigned 2026-11-21 with ⚑LZ25** and the classification-on-the-type rule) | situation fields whose **type** is `[Sensitive]` (YFex.Privacy): `Actual` shown in the UI (as ⚑LZ25 decided for message arguments), masked when the explanation goes to logs, the AI JSON (⚑RX27), audit exports and server-attached reasons (⚑RX30) | mask in the UI by default with a per-screen opt-in (the 2026-11-19 proposal; contradicts ⚑LZ25); always clear everywhere (leaks in logs and AI) | 3.3 |
 | RX27 | AI and Capabilities | `WhyReport` JSON (source-generated) so YFex.Capabilities / YFex.Automation agents can answer "why" with the same data as the UI; `RuleSetDescription` stays for the rule set itself | separate AI-only explanation format | 3.9 |
 | RX28 | Tier value labels | tier label = catalog field name + the raw situation value; apps that want "Loja Centro" add the names to their message source (gathered before evaluation, Principle A) | Rules calls YFex.Tenancy to resolve scope names (I/O inside a pure library) | 3.2 |
 | RX29 | Reasons beyond Rules (⚑WH9) and across the wire | Cqrs `RulesStage` can attach a `WhyReport` to a Denied result for remote clients (needs string keys, §3.9); Authorization (`AuthorizationContext.ExplainUnavailable`, `DenialKind`) and Licensing produce `WhyReport` in their own phases | Rules explains permissions too (wrong owner) | 2, 3.9 |
@@ -595,7 +600,7 @@ on its own; tests close each phase (00-start-here §3).
 |---|---|---|
 | **RX-P0** Sources + handles (joint start with the Rules simplification, 2026-11-21) — **built 2026-11-21**, §12 | benchmark baseline first (Off/Applied/Full); generated `SaleRules.Rules.X` (`RuleKey`), `TableRef` → `RuleKey`; `RuleSource` with `Is(RuleKey)`; `FieldLimit` sources + exceed/permission; `Decision` keeps the compiled set, `LimitOf(field)`, `RefOf`, `SourceOf`; fingerprint unchanged (⚑RX1–RX3, RX23, RX34) | `d.LimitOf(SaleSituation.Fields.Installments).MaxSource.Is(SaleRules.Tables.InstallmentTable)` and `d.RefOf(…)` names the row; Off allocations unchanged in count; no string names a rule in the new tests |
 | **RX-P1** Lines — **built 2026-11-21**, §12 | `ExplanationLine` record; group, field, tier label, description, relations, path; Stack cap as `CappedByGroup`; guardrail notes with rule index; new messages (⚑RX4–RX7, RX16, RX24) | the sale sample explains every line with group, path and relations; no `RuleRef(groupName,…)` left |
-| **RX-P2** Conditions | `IsLineField`; `Decision.Conditions`; actual / missing / would-pass; table `TryDescribeWhen`; Dynamic explain with context and operand programs; `[Sensitive]` masking (⚑RX8–RX12, RX26) | the 12x checklist shows Passed / Failed (atual R$ 940, faltam R$ 60) / WouldPass; a table and a dynamic rule give the same shape |
+| **RX-P2** Conditions — **built 2026-11-21**, §12 | `IsLineField`; `Decision.Conditions`; actual / missing / would-pass; table `TryDescribeWhen`; Dynamic explain with context and operand programs; `[Sensitive]` masking (⚑RX8–RX12, RX26) | the 12x checklist shows Passed / Failed (atual R$ 940, faltam R$ 60) / WouldPass; a table and a dynamic rule give the same shape |
 | **RX-P3** Per field | static `affects` from typed handles (generator + attribute + YFR0026), tables, dynamic; `Decision.Affects`; `Explanation.ForField` / `ForOutput` / `ForObject`; lazy Full re-evaluation (⚑RX13–RX15) | `ForField(SaleSituation.Fields.Installments)` returns the limit with its row, the not-applied 12x rule with its checklist, and nothing about unrelated fields; `ForOutput(SaleRules.Outputs.InstallmentValue)` shows the row's minimum |
 | **RX-P4** Reason model | after ⚑WH1 lands in core: `ToWhy`, `Decision.TryGetWhy`; Validation generator `IWhySource` (⚑RX17, RX23, RX25, RX27) | a validated view model with `[ConstraintsFrom] Decision<SaleSituation>` returns a `WhyReport` for "Installments" with no hand-written code |
 | **RX-P5** What if | generated `ISituation.TryWith`; `WhatIfRequest` from checklists; `Decision.TryWhatIf` / `WhatIf` (⚑RX18, RX19) | "Com Total ≥ R$ 1.000: até 12x" from the 12x checklist |
@@ -1390,3 +1395,76 @@ Outside this document, fixed the same day: the localization README (§3.6, §5, 
     `_ignore/SaleScenario` builds and prints every line with path, group, tier and relations.
   - **Left / follow-ups:** `RulePublishCodes` (`rules.publish.*`) still have no texts and stay constants; the Rules generator
     still emits the `rules.cond.*` strings into generated descriptors (data, matched by the module); next RX-P2 (conditions).
+- **2026-11-21 — RX-P2 decisions:** ⚑RX9, RX10, RX11, RX12, RX26 approved as recommended; ⚑RX8 approved on condition that a union
+  be weighed for the check model first. Before building, the user was shown both shapes and chose:
+  - **⚑RX8: enum `ConditionState` + flat `readonly record struct ConditionCheck(Info, State, Actual, Missing)`** over a `closed`
+    record hierarchy (one case per state). Reasons: `Actual` / `Missing` stay optional inside `Failed` anyway (an expression
+    operand has no actual, an `=` has no distance), so the hierarchy would only remove the fields where they can never apply;
+    `RawValue.None` is the existing "no value" convention; no object per check; it would have been YFex's first `closed` type.
+    (A `union` declaration was not a candidate: the cases are related types of one assembly, which the skill models as a closed
+    hierarchy.)
+  - **⚑RX11 revised: reuse the generated `GetCondition(row, column)` → `ConditionCell`** (Match kind / values / band bounds, built
+    for the `Complete` gap check in Phase 3) instead of adding `TryDescribeWhen` + `CellCondition`, which would have described
+    the same cell twice. §1 was wrong that a row's cell could not be read. Hand-written tables keep the default `Unknown` cell
+    and explain the column ("requer outro {field}").
+- **2026-11-21 — RX-P2 built** (⚑RX8–RX12, RX26; YFex.Rules only, uncommitted):
+  - **Checklist (⚑RX8, RX9):** `ConditionState` (Passed, Failed, NotChecked, WouldPass, WouldFail, Unknown), `ConditionCheck`,
+    `RuleConditions` (`Rule`, `LineIndex`, `Row`, `Checks`, `AllPassed`, `FailedIndex`, `Format(i, catalog, culture)`,
+    `FormatCondition`), built by an internal `Checklist` (`Tracing/RuleConditions.cs`). `Decision.Conditions(RuleKey, line)`
+    (code rule, table or runtime-rule key; null for another rule set's key, a line rule without its line, or an unknown rule)
+    and `Decision.Conditions(in RuleRef, line)` (an explanation line's or adjustment's rule; a table row by its row id). Recomputed
+    from `Situation` on demand; a trace entry for the rule (NotApplicable → its failing index; Applied / Superseded / Capped /
+    Blocked → all passed) is used when present, so a Full trace makes `$base` conditions exact.
+  - **States:** operands before the failing one Passed, the failing one Failed; after it, only "field op value" templates
+    (`rules.cond.eq/neq/lt/lte/gt/gte/true/false` with a field) are compared, by YFex.Rules with `RawValue.TryCompareTo` on the
+    value read through `TS.Read` / `TS.ReadLine` → WouldPass / WouldFail; anything else NotChecked (a guard such as
+    `s.Lines.Length > 0 && s.Lines[0]…` is never run). Code rules the generator could not split run their own `Applies` on
+    demand unless it takes the `RuleContext` (then `Unknown`).
+  - **Actual / missing:** actual = the field by name through the schema (`IsLineField` picks the line schema), None for a member
+    that is not a field. Missing for Failed / WouldFail on ordering templates over numbers or amounts of one type: ≥ / > →
+    value − actual, ≤ / < → actual − value, typed as the operands (Money stays Money). Texts: `Missing` ("faltam {0}"),
+    new `MissingStrict` ("faltam mais de {0}"), `Excess` ("excede em {0}"), `ExcessStrict` ("precisa baixar mais de {0}"; also
+    a band's exclusive top), `CheckWithActual` ("{0} ({1})"), `CheckWithMissing` ("{0} ({1} · {2})"), `CondIn`
+    ("requer {field} em {0}"), en + pt. The 12x check reads "requer Total ≥ R$ 1.000,00 (atual R$ 940,00 · faltam R$ 60,00)".
+  - **`IsLineField` (⚑RX10):** `ConditionInfo` gains `IsLineField` and `ReadsBase` as init members (the positional shape is
+    unchanged); the generator's splitter knows which parameter a member is read from and emits `{ IsLineField = true }`; the
+    Dynamic compiler marks `{"line": …}` reads outside aggregates. Condition texts of line fields now use the line schema's
+    field key (`sale.line.Category`), which was also wrong in RX-P1's not-applied lines.
+  - **Tables (⚑RX11 as revised):** a table key gives the row the evaluation selected (all Passed) or the closest row; a row ref
+    gives that row. One check per `[When]` cell that is not `Any`: Value / `Is` → `=`, `Not` → `≠`, `In` → `CondIn` with the
+    list, bands → between / ≥ / <; later cells compared with the cell's own semantics (half-open band). `TableInstance` gains
+    internal `MatchRow` / `ConditionOf`.
+  - **Dynamic rules (⚑RX12):** `RuleExplainFn<TS>(in TS s, int line, in RuleContext c)`; the evaluator passes the running
+    context (built inside `NoteNotApplicable`, so trace Off does not build it), and Rules.Dynamic's explain uses its base and date:
+    a `$base` condition that holds is no longer reported failed. The compiler emits a program for the non-literal side of a
+    comparison (`sum(Lines.Quantity) >= 10`) and the descriptor gains an optional `RuleOperandFn<TS>` that runs it, so the check
+    shows "atual 7". `ReadsBase` marks conditions that read `$base` (`RuleExpressions.BaseName`, declared once).
+  - **Explanation:** not-applied lines whose conditions were false carry `ExplanationLine.Conditions` (built with the trace's
+    failing index) and their `Detail` is the failing check's `Format` with actual and distance. One existing expectation changed:
+    "requires Category ≠ services" → "requires Category ≠ services (currently services)".
+  - **`[Sensitive]` (⚑RX26):** no new code path: actual values are `RawValue`s of the field's type, formatted through the catalog,
+    so the UI catalog shows them and `MessageCatalog.Masked` (⚑LZ25) writes their mask, in `RuleConditions.Format` and in
+    `Explain` details alike. The AI form (`WhyReport` JSON, RX-P4) will format with the masked catalog.
+  - **Generator:** `ConditionModel` gains `IsLineField` / `ReadsBase`; the explain lambda takes the context; a non-split
+    `Applies` that takes the context emits `ReadsBase = true`.
+  - **Tests:** Rules 105 (+10 `ConditionTests`: the 12x checklist in pt and en; an applied rule all Passed; guarded operand
+    NotChecked; same-named line / situation `Category` by `IsLineField` + strict `>` "mais de"; table closest row with a Value
+    and a Band cell, below and above the band; `In` cell of the doc-12 table's selected row; hand-written table explains the
+    column; not-applied line carries the checklist; `[Sensitive]` actual shown with the UI catalog and masked with
+    `catalog.Masked`; foreign / unknown handles → null. Fixtures in their own rule sets `sale.why`, `why.order`, `why.member`,
+    so the pinned `SaleRules` fingerprints did not move), Dynamic 25 (+4: `$base` condition Passed with a Full trace and on the
+    traced on-demand checklist; Unknown + WouldFail without a trace; aggregate actual 7; dynamic line rule `IsLineField` and
+    "6 short"), Generator 30 (+2: `IsLineField` / `ReadsBase` / explain-with-context emission; `GetCondition` emission for Value and
+    Band cells and no `TryDescribeWhen`), Data 19.
+  - **Allocations / benchmark:** the allocation test is unchanged and green; checklists are cold path. `TraceLevelBenchmarks`,
+    committed code (`git archive HEAD` copy) and RX-P2 run back to back, 15 iterations, 5 warm-up. A first build that created
+    the explain context in `ProcessGroup` measured Off 3.20 → 3.45 µs and 3.00 → 3.16 µs in both orders; after moving it into
+    `NoteNotApplicable`, two old/new pairs: Off 3.14 → 3.09 µs and 3.10 → 3.46 µs (± 0.28 µs, noisy), Applied 3.82 → 4.02 /
+    3.83 → 3.88 µs, Full 4.49 → 4.62 / 4.76 → 4.49 µs; allocated identical in every run (2.96 / 8.72 / 12.06 KB).
+  - **Dependents:** Cqrs (17 + 3 + 26 with 1 skipped + 11), Jobs 176 + Hub.Worker 20 + AOT smoke (published win-x64, 0 IL warnings,
+    runs "AOT smoke OK"), Rules.Admin builds, Rules.Admin.Tests 29, Messaging.Tests 192 (2 skipped), Offline.Rules builds
+    (NU1510 off), `_ignore/SaleScenario` builds and runs (not-applied lines now read "Pix — requer Payment = Pix (atual
+    CreditCard)").
+  - **Left / follow-ups:** the code-rule splitter still rejects operands that read the `RuleContext` (`s.Total >= c.Get(Min)`), so
+    such rules stay one custom condition; letting it split them (with `ReadsBase` for `c.Base`) is a small follow-up. A strict
+    `>` that misses by zero reads "faltam mais de 0" (correct, unusual). `ExplanationLine.WhatIf` is RX-P5. Next RX-P3 (per field).
