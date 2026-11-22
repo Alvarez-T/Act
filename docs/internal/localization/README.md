@@ -238,6 +238,12 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | LZ36 ⚑ | Who records text edits | `SqlMessageTextStore` edits also go to YFex.Audit (who changed a tenant's wording, before/after) | the edit log's `edited_by`/`edited_at` columns are enough (today) | 7 |
 | LZ37 ⚑ | Duplicate in-memory text stores | YFex.Tenancy's `InMemoryMessageTextStore` stays for tests only; the two adapters keep their own dictionary (about 20 lines each) | one shared in-memory store type, but core holds no behaviour and Data/Persistence must not reference Tenancy | 7 |
 | LZ38 ⚑ | Edit log growth | no compaction: edits are rare | `CompactAsync` keeping the latest row per text (devices below the cut then reload in full) | 7 |
+| LZ39 ⚑ | Built-in validation codes (LZ-P0) | one `BuiltInCodes` class in YFex.Validation; `Fluent.cs` uses it | keep literals, exempt `Fluent.cs` | [02](02-lz-p0-inventory.md) §6 |
+| LZ40 ⚑ | Engine rule codes (`rules.table.*`, `rules.decision.mismatch`) | `[Messages]` keys in YFex.Rules / YFex.Cqrs | literals with an exemption | [02](02-lz-p0-inventory.md) §6 |
+| LZ41 ⚑ | `FieldPath` literals naming DTO members (31 in src) | `nameof` / generated `Fields` | keep literals | [02](02-lz-p0-inventory.md) §6 |
+| LZ42 ⚑ | Which literal texts are UI texts | ProblemDetails titles, chart defaults, libsecret label become keys; operator/developer texts exempt via an attribute (`[DeveloperText]`) | localize all; exempt by namespace | [02](02-lz-p0-inventory.md) §6 |
+| LZ43 ⚑ | Apps (YFex.LoggY views, YFex.Devices.Manager menus) | warning as samples; LoggY to keys when next worked on | out of LZ-P7 scope | [02](02-lz-p0-inventory.md) §6 |
+| LZ44 ⚑ | Gallery texts (970 XAML + 110 C#) | warning only | move to keys | [02](02-lz-p0-inventory.md) §6 |
 
 ## 5. Ecosystem fit
 
@@ -288,7 +294,7 @@ generator package (smaller move, but behaviour stays in core against the core ru
 
 | Phase | Content | Done when |
 |---|---|---|
-| **LZ-P0** Inventory | YFX0100 in report-only mode over every repo: literal identities and literal UI texts per repo; check whether stage codes and field names are persisted | a count per repo and per identity kind in this folder; LZ11 settled |
+| **LZ-P0** Inventory ✅ 2026-11-21 | YFX0100 in report-only mode over every repo: literal identities and literal UI texts per repo; check whether stage codes and field names are persisted | a count per repo and per identity kind in this folder; LZ11 settled |
 | **LZ-P1** Core types ✅ 2026-11-20 | `MessageKey`, `MessageKey<…>`, attributes, typed `IMessageCatalog` overloads, `MessageKey → RuleCode` | builds; existing string APIs untouched |
 | **LZ-P2** Repo + generator ✅ 2026-11-20 | `YFex.Localization` (renderer moved), generator: C# declarations + culture JSON, index lookup, diagnostics; JSON-only path kept | the sale sample's `SaleMessages` switch is gone; benchmark not slower than today |
 | **LZ-P3** Declaration texts ✅ (Rules 2026-11-20, Authorization 2026-11-21) | Rules / Authorization `Title`, `Description`; field titles + inheritance | `Explain` shows the same pt-BR texts with no hand-written key |
@@ -580,3 +586,23 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
   - New pending decisions from the ecosystem check: ⚑LZ35 (Offline site feed carries the text feed), ⚑LZ36 (text edits to
     YFex.Audit), ⚑LZ37 (in-memory store duplication), ⚑LZ38 (edit log compaction).
   - **Next:** LZ-P0 (inventory) and LZ-P7 (enforcement); ⚑LZ27 still to review.
+- **2026-11-21, RX plan revised on the simplified API** ([validation/14](../validation/14-explanations-for-ui.md)): ⚑RX7
+  narrowed to the tier and row labels (the rest is ⚑LZ10); ⚑RX13 reads typed handles; ⚑RX14 rewritten as
+  `ForField(SituationFieldRef)` / `ForOutput` / `ForObject()` exactly as approved in ⚑LZ28 (no `[Amount]`: it went with
+  ⚑LZ15; the State/Rules ecosystem rows above that still name `[Amount]` / `ForAmount` predate the fold); ⚑RX24 = declared `RuleText` keys; new ⚑RX34 generated
+  `SaleRules.Rules.X` (`RuleKey`) so no RX API takes a rule code string. Before / after snippets: validation/14 §10.
+- **2026-11-21, LZ-P0 done** (inventory: [02-lz-p0-inventory.md](02-lz-p0-inventory.md); uncommitted):
+  - **Analyzer** `LiteralAnalyzer` in `YFex.Localization.Generator`: YFX0100 (literal identity: conversion, constructor or
+    static factory of 17 identity types found by metadata name, opt-in `YFexIdentityAttribute`) and YFX0101 (literal UI
+    text: UI properties, named parameters, `SetName`/`SetTip`). Both Info (report-only) until LZ-P7. Every project that
+    already uses the generator now shows them as Info messages. Tests: generator 31 (+3).
+  - **Runner** `tools/LiteralInventory` (analyzer-only assembly linking the same source, injected through
+    `CustomAfterMicrosoftCommonTargets`, SARIF per project, XAML scan). 50 repos, 376 project builds.
+  - **Counts:** YFX0100 40 src / 12 sample / 48 test (src: FieldPath 31, RuleCode 9; no literal MessageKey, Permission,
+    Stage or refs left); YFX0101 25 src / 151 sample / 3 test; XAML 100 src (YFex.LoggY app) / 974 sample (gallery 970);
+    YFex.UI src XAML 0.
+  - **Persisted:** stage/group codes and situation field names are stored in dynamic rule specs (`RuleSpec.Group`,
+    `DirectiveSpec.Field`); rule codes in audit. LZ11 stays withdrawn.
+  - Gates: localization.slnx Release 0 warnings, tests 35 + 31, AOT smoke 0 IL warnings, exit 0.
+  - New pending decisions ⚑LZ39–LZ44 (built-in codes, engine codes, FieldPath literals, which texts are UI texts, apps,
+    gallery). **Next:** LZ-P7 after those answers (and ⚑LZ27 review).
