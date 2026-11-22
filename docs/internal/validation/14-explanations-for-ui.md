@@ -3,7 +3,7 @@
 > **Status: proposal, 2026-11-19.** ⚑RX1, RX2, RX3, RX23, RX34 **approved 2026-11-21** (as recommended; RX-P0 started);
 > ⚑RX14 settled by ⚑LZ28 and the LZ10 part of ⚑RX7. ⚑RX4, RX5 (delete the never-produced `StackedWith` /
 > `ClampedByGuardrail` note cases), RX6, RX7, RX16, RX24 (decided with ⚑LZ40) and ⚑WH1 (core `Reasons`; RX-P1 adds only
-> `WhyKey`) **approved 2026-11-21** as recommended; the rest pending. **RX-P0 built 2026-11-21** (log §12); **RX-P1 built 2026-11-21** (log §12, uncommitted); RX-P2 next. Consistency pass 2026-11-21 against the approved ⚑LZ decisions and `all-projects.md`: §11. Asked for by the YFex.UI "why"
+> `WhyKey`) **approved 2026-11-21** as recommended; the rest pending. **RX-P0 built 2026-11-21** (log §12); **RX-P1 built 2026-11-21** (log §12); RX-P2 next. Consistency pass 2026-11-21 against the approved ⚑LZ decisions and `all-projects.md`: §11. Asked for by the YFex.UI "why"
 > component plan ([`YFex.UI/docs/plans/why-component-plan.md`](../../../../YFex.UI/docs/plans/why-component-plan.md), ⚑WH1–WH12).
 > This document covers the **YFex.Rules side**: ⚑WH2 (owner changes), ⚑WH7 (rule as applied), ⚑WH8 (what if) and ⚑WH10
 > (trace cost), plus what Rules needs from ⚑WH1 (where the neutral reason model lives) and ⚑WH3 (the generated per-field source).
@@ -1331,7 +1331,7 @@ Outside this document, fixed the same day: the localization README (§3.6, §5, 
   value, depth 0 `RuleText.TierCode`, row label `RuleText.Row`; ⚑RX16 `PathSegment(Kind, WhyKey, Text)`; ⚑RX24 + ⚑LZ40 one
   `[Messages] RuleText` class in YFex.Rules with en + pt-BR files replacing the `RuleMessages` switch (`rules.decision.mismatch`
   to YFex.Cqrs); ⚑WH1 = core `src/YFex/Reasons`, RX-P1 adds only `WhyKey`. RX-P1 built in its own session.
-- **2026-11-21 — RX-P1 built** (⚑RX4–RX7, RX16, RX24 + ⚑LZ40, ⚑WH1 `WhyKey`, the ⚑RX34 `GroupRef` part; uncommitted):
+- **2026-11-21 — RX-P1 built** (⚑RX4–RX7, RX16, RX24 + ⚑LZ40, ⚑WH1 `WhyKey`, the ⚑RX34 `GroupRef` part; committed: YFex.Rules 265e391, YFex.Cqrs f67b742, YFex.Messaging 93e10c0):
   - **Core (⚑WH1):** `YFex.Reasons.WhyKey`, a value object over `{scheme}:{id}` (scheme `a-z0-9-`, id without white space;
     `Create(scheme, id)`, `Scheme` / `Id` spans, `HasScheme`, `TryCreate`, `ISpanFormattable`, `IUtf8SpanFormattable`,
     `ISpanParsable`, `ILogValue`, `[JsonConverter]` writing the text). Nothing else of the reason model yet (RX-P4).
