@@ -388,12 +388,17 @@
       "id": "YFex.State",
       "name": "State",
       "group": "data",
-      "status": "done",
-      "progress": 95,
+      "status": "building",
+      "progress": 55,
       "summary": "Generated reactive state objects (bitmap change tracking), collections, undo/redo history (+persistence), MVVM and Blazor adapters.",
       "docs": [
+        "YFex/docs/internal/state",
         "YFex/docs/internal/state-internals.md",
         "YFex/docs/public/state.md"
+      ],
+      "next": "Answer the ST-P0 decisions (⚑ST2, ST7, ST49–ST51), then ST-P0 (defects B1–B7, YFEX0190). Audit 2026-11-19: 17 of 26 documented attributes not generated.",
+      "pending": [
+        "⚑ST1–ST51"
       ]
     },
     {
@@ -1917,6 +1922,65 @@
         "YFex.Notifications/src/YFex.Notifications/Outbox.cs:24"
       ],
       "recommendation": "Rename Notifications' record, or merge both through F09, before Notifications N1."
+    },
+    {
+      "id": "F48",
+      "severity": "medium",
+      "category": "duplication",
+      "status": "open",
+      "title": "E-mail and phone value types exist twice (domain vs core)",
+      "components": [
+        "YFex.Domain",
+        "YFex"
+      ],
+      "detail": "YFex.Entity.Public.Email duplicates core EmailAddress (which was generalised from it, AN3) and Telefone duplicates core PhoneNumber. Forms would need two inputs and two sets of hints per concept. Plan YFex.Domain/docs/value-types-plan.md, decisions VT1-VT2 (Forms FM31).",
+      "evidence": [
+        "YFex.Domain/src/YFex.Entity.Public/Email.cs:30",
+        "YFex/src/YFex/Contacts/EmailAddress.cs:29",
+        "YFex.Domain/src/YFex.Entity.Public/Telefone.cs:12",
+        "YFex/src/YFex/Contacts/PhoneNumber.cs:30",
+        "YFex.Farma/src/YFexFarma.Entity.Public/Customer.cs:11"
+      ],
+      "recommendation": "Remove Email in favour of EmailAddress; make Telefone a Brazilian view over PhoneNumber. Settle before Forms FM-P2."
+    },
+    {
+      "id": "F49",
+      "severity": "high",
+      "category": "correctness",
+      "status": "open",
+      "title": "YFex.State: 17 documented attributes are declared but not generated",
+      "components": [
+        "YFex.State",
+        "YFex.UI",
+        "YFex.Validation"
+      ],
+      "detail": "[Computed], [ReactsTo], method [Debounce], [Throttle], [Poll], [Busy], [Gate], [RequiresAll], [ErrorBucket], [Queue], [Cooldown], [ObserveItems], [Propagate], [Epoch], [Trackable], [Snapshot], [ResetTo], [LoadOnInit], [LogChanges] compile and do nothing; the public guide shows them working. Consumers work around them (gallery hand-set computed fields, XxxUiCommand wrappers). Plan docs/internal/state, decisions ST1-ST41.",
+      "evidence": [
+        "YFex.State/src/YFex.State.Generator/StateGenerator.cs:22",
+        "YFex.State/src/YFex.State.Generator/StateGenerator.cs:63",
+        "YFex.State/src/YFex.State.Generator/ObservableParser.cs:202",
+        "YFex.UI/src/Avalonia/YFex.Avalonia.Gallery/ViewModels/GalleryShellViewModel.cs:106",
+        "YFex/docs/public/state.md:235"
+      ],
+      "recommendation": "ST-P0: warning YFEX0190 on every unbuilt attribute and a status column in the guide; then ST-P1..P6."
+    },
+    {
+      "id": "F50",
+      "severity": "medium",
+      "category": "duplication",
+      "status": "open",
+      "title": "Three debounce timers in State and Validation, none on TimeProvider",
+      "components": [
+        "YFex.State",
+        "YFex.Validation"
+      ],
+      "detail": "DebounceState (does not cancel the previous token: TryReset unregisters instead of cancelling, confirmed 2026-11-19), ValidationBag.EndPauseAsync and the Validation generator's __vDebounced_X (one uncancelled Task.Delay per keystroke). None can be tested with a fake clock.",
+      "evidence": [
+        "YFex.State/src/YFex.State/Timing/DebounceState.cs:24",
+        "YFex.State/src/YFex.State/Validation/ValidationBag.cs:295",
+        "YFex.Validation/src/YFex.Validation.Generator/Emitter.Vm.cs:149"
+      ],
+      "recommendation": "One StateTimer on the owner's TimeProvider (state plan ST10, ST38); fix DebounceState in ST-P0."
     }
   ]
 }

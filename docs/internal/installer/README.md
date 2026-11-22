@@ -61,3 +61,4 @@ What the Installer will own (design to be written in this folder):
 | IN6 | Who updates the updater, and with which privilege model? |
 | IN7 | Linux: own updater, or rely on the distro package manager (apt/dnf repository)? |
 | IN8 | Do desktop apps share the machine updater, or embed an update client? |
+| IN9 | Model files for YFex.Inference (added 2026-11-18, [inference](../inference/README.md) ⚑IF17): installed and updated as payload with a hash (recommended), or fetched by the app on first use? |

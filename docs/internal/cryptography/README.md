@@ -168,3 +168,9 @@ All rows were confirmed as recommended. K2 was refined (core = types only), and 
 | **K17** | Name | ✅ **`YFex.Cryptography`** (assembly, repo, core namespace). Type names without abbreviations (`SealedValue`, `MessageAuthentication`, `KeyDerivation`, `RecipientSealing`, `PasswordHashing`) | `YFex.Crypto` (abbreviation); `YFex.Security` (taken by the network-intelligence repo); `YFex.Keys` (too narrow) | 07 §7 |
 | **K18** | Browser and mobile | ✅ Library reports capabilities; WASM gets `AlgorithmUnavailable` (no AES-GCM in the browser). Storage encryption on WASM = a later WebCrypto design; Android Keystore/Linux libsecret providers in Phase 5 | make WASM "work" with a managed AES (unreviewed, slow, keys in JS-reachable memory) | 07 §5, 12 Phase 5 |
 | **K19** | Android Keystore (added 2026-10-20 for installations ⚑I26) | ✅ **confirmed by the user 2026-10-20** ("a variant of the Crypto"): package **`YFex.Cryptography.Android`** (`net11.0-android`) with a Keystore `ISigningKeyStore` (P-256, StrongBox → TEE → software, real `KeyProtection`), a Keystore-wrapped `IRootKeyProvider` and an attestation reader (record only). Hardware preferred, never required here | inside `YFex.Installations.Android` (key code outside the crypto library, architecture-test exception) | 14 §9 |
+
+### Added 2026-11-18 — pending
+
+| ⚑ | Question | Recommendation | Alternative (cost) | Details |
+|---|---|---|---|---|
+| **K20** | Verifying YFex.Inference model files ([inference](../inference/README.md) ⚑IF17) | **no new API:** the built `Hashing.Sha256Async(Stream)` checks each file against the hash in a signed bundle (Installations ⚑I45) before load | a model-signature API here | inference README §5 |

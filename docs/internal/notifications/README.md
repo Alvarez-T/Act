@@ -1,6 +1,6 @@
 # YFex.Notifications — one way to send messages to people (e-mail, SMS, WhatsApp, chat, webhooks, in-app, push) — Plan
 
-> **Status:** PROPOSED 2026-11-04, **revised 2026-11-04** (ecosystem review, see 06 log). Docs only, no code. Decisions ⚑N1–⚑N20 (§5):
+> **Status:** PROPOSED 2026-11-04, **revised 2026-11-04** (ecosystem review, see 06 log). Docs only, no code. Decisions ⚑N1–⚑N20 and ⚑N30 (§5; ⚑N30 added 2026-11-18 for YFex.Inference, pending; N21–N29 belong to YFex.Networking):
 > agreed ⚑N1–⚑N5, ⚑N9, ⚑N14–⚑N20 and the UI integration (§3); open ⚑N6–⚑N8, ⚑N10–⚑N13.
 > **Repo:** `C:\Dev\YFex\YFex.Notifications` (sibling, template YFex.Networking; own `notifications.slnx`). **Phase N0 built 2026-11-09** (06 log); next N1.
 > **Origin:** 2026-11-04. The Jobs ownership review (Plan D §11, O4) found that a Jobs notifier would be the **third** way the ecosystem
@@ -141,6 +141,7 @@ optional seam (⚑N19), so Notifications does not wait for it.
 | N18 | Provider per scope | **agreed 2026-11-09:** "scope" = the **Tenancy** scope (tenant / store). Per-tenant credentials already live in `IApiEndpointStore.GetAsync(name, tenant)` (YFex.Web); the tenant's endpoint record also **names the provider** (Twilio, Zenvia, …), so switching provider is data, no code. **YFex.CustomLogic** only when a tenant needs its own code (a custom provider implementation or routing rule) | CustomLogic for every provider choice | 02 §2 |
 | N19 | Licensing | **agreed 2026-11-09:** the concepts belong to **YFex.Licensing** (reusable by every product): `IUsageMeter` (licensing 07) and module gating (licensing 06). Notifications only calls them, through an optional seam because Licensing is not built: usage meters `notifications.{channel}.sent` through `IUsageMeter` (licensing 07) and optional module gating of paid channels (licensing 06) → `DeliveryRefused(NotLicensed)`; default seam = no meter, no gate. Meters **never block** (licensing 07 §3); blocking for cost is the ⚑N9 quota | hard reference to Licensing | 04 §5 |
 | N20 | Name of the send interface | **agreed 2026-11-09:** rename `INotifications` → **`INotificationSender`** so it does not read like YFex.UI's `INotification` (a displayed notice) | keep `INotifications` | 02 §2 |
+| N30 | Triage of inbound messages (added 2026-11-18, pending; N21–N29 are YFex.Networking's; [inference](../inference/README.md) ⚑IF36) | **no engine change**: an app inbound handler (inbound router, ⚑N13) asks YFex.Inference a choice (queue: order, complaint, question, delivery) and a score (urgency); opt-out keywords and receipts stay deterministic here | triage inside the Notifications engine; no triage | inference 01 §7 |
 
 ## 6. Phase summary
 

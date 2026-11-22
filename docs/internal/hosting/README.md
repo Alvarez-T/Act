@@ -123,6 +123,7 @@ central, observable and controllable**, so a store PC runs one YFex service inst
 | **H20** | Names that clash with Licensing | Hosting says **host module** (`HostModuleId`, e.g. `offline.broker`); Licensing's `ModuleId` (`fiscal`) stays; a host module may **require** a license module (when Licensing exists) | one shared "module" concept | 05 §9 |
 | **H22** | Should the host drain spools (logs, audit) left by **closed apps** on the same machine? | **Not in v1.** Each process ships its own data; senders are owned by Logging/Audit/Profiling, the road by Installations/Rpc (05 §0); a later machine-wide forwarder would be a Logging/Audit-owned module | Hosting forwards every process' data |  05 §0 |
 | **H21** | Identity of an app-built host on a machine that already runs `yfex-host` | its **own installation** (own enrollment, shown in the roster, same machine hint) | share the generic host's installation (needs a local key-sharing path) | 05 §5 |
+| **H23** | Host module serving a local model (added 2026-11-18, [inference](../inference/README.md) ⚑IF18) | ⚑ **pending, later:** a host module (`inference.local`) loads verified model files once per machine and serves YFex.Inference requests to the apps and, on a site broker, to terminals (⚑O33); off unless the profile enables it | each app process loads its own copy | inference README §2 |
 
 ## 6. Packages
 

@@ -1,6 +1,11 @@
 # 08 — UI integration (YFex.Avalonia, YFex.UI repo)
 
 > Load for: **Phase 5**.
+> Status 2026-11-19 (forms ⚑FM33, [forms/08](../forms/08-fm-p3-part2-summaries.md)): built in YFex.UI: `YValidation`
+> (`Field`, inherited `Source`, `IsEnabled`, outputs, pseudo-classes, Touch), validation display on `YTextInput`,
+> `YComboBox` and `YSwitch`, and `YValidationSummary`. Not built: `IConstraintTarget`/`IOptionsTarget` (min/max/step,
+> options), automatic `Field` from `.Bind()` and `{y:Field}`, the `ErrorItem` theme template, `YRuleBreakdown`,
+> `YDecisionTableEditor` and the approval flow.
 > Repo: `C:\Dev\YFex\YFex.UI` (read its `CLAUDE.md`: Avalonia 12, .NET 11, **no external deps beyond
 > the framework SDK** — YFex.Validation/YFex.Rules are own libraries and are allowed).
 > Relevant existing code:

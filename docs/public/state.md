@@ -2,6 +2,11 @@
 
 **Libraries:** YFex.State, YFex.State.Mvvm, YFex.State.Collections, YFex.State.Blazor, YFex.State.Testing
 
+> **Build status (2026-11-19).** Generated today: `[Observable]`, `[StateCommand]`, `[EqualityComparer]`,
+> `[NotifyOnTaskCompletion]`, `[IgnoreActivation]`; `[Debounce]` on a property/class delays its validation (YFex.Validation);
+> `[Persist]` is read by YFex.Persistence (snapshot on demand). Every other attribute in this guide is **being implemented**
+> (phases ST-P1–ST-P7 of the [State completion plan](../internal/state/README.md)) and has no effect yet.
+
 ---
 
 ## 1. Overview
@@ -686,54 +691,50 @@ Extends `StateObject` with `INotifyPropertyChanged`, `INotifyPropertyChanging`, 
 
 #### MvvmCommandAdapter
 
-Bridges `IStateCommand` / `IAsyncStateCommand` to `System.Windows.Input.ICommand` for XAML binding. The generated `SaveCommand` property is already an `ICommand`. Compiled binding systems (Avalonia, WinUI) bind to the typed overloads for zero-boxing.
+Bridges `IStateCommand` / `IAsyncStateCommand` to `System.Windows.Input.ICommand` for XAML binding. Until generated commands implement `ICommand` themselves (state plan ⚑ST14, ST-P3), wrap them: `public ICommand SaveUiCommand => field ??= new MvvmCommandAdapter(SaveCommand);`. Compiled binding systems (Avalonia, WinUI) bind to the typed overloads for zero-boxing.
 
 ---
 
 ### StateList\<T\>
 
-Zero-allocation observable list backed by `ArrayPool<T>`. Notifications flow through `INotifyChanged` (not `INotifyCollectionChanged`).
+Observable list backed by `ArrayPool<T>`, for models and views alike. Models subscribe through `INotifyChanged` (no event
+args); views bind it directly — it is `INotifyCollectionChanged`, `INotifyPropertyChanged` (`Count`, `Item[]`) and a
+non-generic `IList`. Collection event args are built only while a view listens. (`StateCollection<T>` /
+`ToStateCollection()` were merged into it on 2026-11-19, state plan ⚑ST52.)
 
 ```csharp
 using YFex.State.Collections;
 
 var list = new StateList<string>(initialCapacity: 16);
 list.Add("Alice");
-list.AddRange(new[] { "Bob", "Charlie" });
+list.AddRange(["Bob", "Charlie"]);
+list.Insert(0, "Zoe");
 list.Remove("Bob");
 
 // Zero-allocation iteration via Span
 foreach (var item in list.AsSpan()) { /* ... */ }
 ```
 
+```xml
+<ItemsControl ItemsSource="{Binding Lines}" />   <!-- bind the StateList itself -->
+```
+
 **API summary:**
 
-| Method | Notes |
-|---|---|
-| `Add(T)` | Fires `ItemsAdded` notification |
-| `AddRange(ReadOnlySpan<T>)` | Batch add, single notification |
-| `Remove(T)` | Fires `ItemsRemoved` |
-| `RemoveAt(int)` | Fires `ItemsRemoved` |
-| `Clear()` | Fires `ItemsCleared` |
-| `IndexOf(T)` | Returns index or -1 |
-| `AsSpan()` | `ReadOnlySpan<T>` over the live buffer -- zero-allocation iteration |
-| `this[int]` | Indexer, fires `ItemReplaced` on set |
-| `Count` | Current item count |
+| Member | `INotifyChanged` | View events |
+|---|---|---|
+| `Add(T)`, `Insert(int, T)` | `ItemsAdded` | `Add` (item, index) + `Count`, `Item[]` |
+| `AddRange(ReadOnlySpan<T>)` | one `ItemsAdded` | one `Add` with all items (Avalonia/WinUI handle range events; WPF collection views do not) |
+| `Remove(T)`, `RemoveAt(int)` | `ItemsRemoved` (`OldItem` = removed item) | `Remove` (item, index) |
+| `this[int] = value` | `ItemReplaced` (`OldItem`) | `Replace` (new, old, index) |
+| `Clear()` | `ItemsCleared` | `Reset` |
+| `IndexOf(T)`, `Contains(T)`, `CopyTo`, `AsSpan()`, `Count` | — | — |
 
-**Lifecycle integration:**
-- Items implementing `IActivatable` are auto-activated/deactivated with the list.
-- Items implementing `INotifyChanged` can relay their changes upward (see `[ObserveItems]`).
-
-#### StateCollection\<T\> (XAML adapter)
-
-Wraps `StateList<T>` with `INotifyCollectionChanged` for XAML `ItemsSource` binding:
-
-```csharp
-using YFex.State.Mvvm.Collections;
-
-var collection = myStateList.ToStateCollection();
-// Bind to ItemsSource in XAML
-```
+**Lifecycle and items:**
+- Items implementing `IActivatable` are activated/deactivated with the list (and when added, removed or replaced).
+- Items implementing `INotifyChanged` relay their changes to the list's `INotifyChanged` subscribers (the model side, see
+  `[ObserveItems]`). They are **not** collection events: each item notifies its own row.
+- One owner thread: mutate the list on the thread that owns the model; nothing is marshaled.
 
 ---
 
@@ -749,7 +750,7 @@ var collection = myStateList.ToStateCollection();
 
 `StateComponent<TViewModel>`:
 - Auto-subscribes to the ViewModel's change notifications via `IChangedHandler`.
-- Coalesces `StateHasChanged()` calls with an 8ms debounce window to prevent render thrash when multiple properties change in quick succession.
+- Coalesces `StateHasChanged()`: the first change schedules one render 8 ms later (`RenderWindow`) and every change inside that window joins it, so a burst renders once and a steady stream still renders every window. The timer is a `StateTimer` on the component's `TimeProvider` (overridable for tests).
 - The ViewModel is injected via `[Inject]` -- register it in DI.
 - Disposes the subscription automatically.
 
@@ -1138,6 +1139,7 @@ If you omit `DependsOn`, the computed property never re-evaluates automatically.
 | `OnDeactivated()` | Virtual hook -- fires after this object transitions to inactive |
 | `Validation : ValidationBag` | Lazy-created validation container |
 | `IsActive : bool` | Whether this object is currently activated |
+| `TimeProvider : TimeProvider` | Clock for timed behaviour (`StateTimer`: debounce, throttle, cooldown, poll). Default `TimeProvider.System`; override to inject one (tests: `FakeTimeProvider`) |
 
 ### CommandStatus Enum
 

@@ -59,7 +59,7 @@ Not built (waiting on decisions): summaries per section/form and error dots on c
 | # | Finding | Next |
 |---|---|---|
 | P3-1 | Grown fields no longer line up across rows (Code ends at track 2, Kind at 6): the price of rows without holes | acceptable; designers keep alignment by choosing sizes that add up |
-| P3-2 | Validation messages use the field key ("Name é obrigatório"), not the catalog label | pass the form's labels to the validation message catalog (FieldName lookup) |
-| P3-3 | `YComboBox`/`YSwitch` have no validation display | give them the helper line and error state (UI plan C7 / B3) |
-| P3-4 | Server violations through `ApplyServer` not tested at form level; collection paths (`Contacts[2].Phone`) wait for FM-P6 | add a form test with a `[ValidatesAs]` contract |
-| P3-5 | AOT spike still covers FM-P0 features only (P2-3) | extend the spike model |
+| P3-2 | Validation messages use the field key ("Name é obrigatório"), not the catalog label | ⚑FM61 ([08](08-fm-p3-part2-summaries.md) P3b-1) |
+| P3-3 | `YComboBox`/`YSwitch` have no validation display | **done in part 2** ([08](08-fm-p3-part2-summaries.md)) |
+| P3-4 | Server violations through `ApplyServer` not tested at form level; collection paths (`Contacts[2].Phone`) wait for FM-P6 | **form level done in part 2** (bag `ApplyServer`; the `[ValidatesAs]` path mapping is Validation's own test); collections FM-P6 |
+| P3-5 | AOT spike still covers FM-P0 features only (P2-3) | **done**: sections 5 (FM-P4) and 6 (validation, part 2) |

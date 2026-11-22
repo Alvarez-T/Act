@@ -1,6 +1,6 @@
 # YFex.Files — remote file stores (FTP/FTPS, SFTP, S3, Azure Blob, folders) and partner file exchange — Plan
 
-> **Status:** PROPOSED 2026-10-29. No code. ⚑F1 (name) confirmed by the user 2026-10-29; ⚑F2–F22 wait for the user (§5).
+> **Status:** PROPOSED 2026-10-29. No code. ⚑F1 (name) confirmed by the user 2026-10-29; ⚑F2–F23 wait for the user (§5; ⚑F23 added 2026-11-18 for YFex.Inference).
 > **Repo:** `C:\Dev\YFex\YFex.Files` (sibling, template YFex.Networking / YFex.Time). **Core types:** none in v1 (⚑F2) except the
 > proposed `DataSize` (⚑F21).
 > **Origin:** the user asked where an FTP client/server belongs (2026-10-29). Answer: not Authentication, Authorization or YFex.Web —
@@ -124,6 +124,7 @@ Cloud identity chains (AWS SSO/instance roles, Azure managed identity) are **opt
 | **F20** | Target frameworks | `.Public` multi-targets **net11.0 + net10.0** (LTS apps can read the contract); engines net11.0 only | net11.0 only | 06 §4 |
 | **F21** | Size value type | new core **`DataSize`** (readonly struct over `long` bytes, `IUtf8SpanFormattable` "12.4 MB", parse "10MiB") — reusable by Networking, Logging retention, Offline bundles | `long` bytes in our API | 02 §2 |
 | **F22** | Encrypted payloads (OpenPGP) | **out**; if a partner needs it, a YFex.Cryptography request (format + keys), applied by Exchange as a pipeline step | implement OpenPGP here | 05 §8 |
+| **F23** | Catalogue inbound partner files (added 2026-11-18, [inference](../inference/README.md) ⚑IF9) | **optional Exchange step** before import: the DataMining column profiler (shapes, value-type hit ratios) + a YFex.Inference choice over declared column types; proposals only, the partner mapping stays explicit and confirmed | per-partner hand mapping only; auto-applied mappings | inference 01 §3 |
 
 ## 6. Phases (details and acceptance in [07](07-phases-and-acceptance.md))
 

@@ -2,6 +2,8 @@
 
 This document covers the internal architecture of `YFex.State` and `YFex.State.Generator`: how observable properties are identified and dispatched, how activation cascades through object graphs, how MVVM bridging works, and how the source generator pipelines transform attributes into emitted code. Read this when you're modifying the state engine, the generator, or debugging property notification issues.
 
+> **Status 2026-11-19:** only `[Observable]`, `[StateCommand]`, `[EqualityComparer]`, `[NotifyOnTaskCompletion]` and `[IgnoreActivation]` are generated here (plus `[Debounce]`/validation timing by YFex.Validation and `[Persist]` by YFex.Persistence). The other attributes in `Attributes.cs` do nothing yet: see the audit and completion plan in [state/](state/README.md).
+
 ---
 
 ## Property ID Allocation
@@ -37,7 +39,7 @@ ExitUpdate() → decrements _updateDepth; if reaches 0: DispatchPending(_pending
 
 > **Why bitmaps instead of a list?** A 64-bit mask fits 64 properties in a single `ulong`. Checking "did anything change?" is a single zero-test. Draining uses CPU intrinsics (`tzcnt`). No heap allocation, no list iteration, no hash lookups.
 
-> **Warning:** `PropertyBitmap64` supports at most 64 observable properties per class hierarchy. If you exceed this limit, the generator emits a diagnostic. This is unlikely in practice — a StateObject with 64+ observable properties should be decomposed.
+> **Warning:** `PropertyBitmap64` supports at most 64 observable properties per class hierarchy. **No diagnostic exists yet**: a 65th ID silently aliases bit 0 in a batch (defect B6, fixed in [state plan](state/README.md) ST-P0). A StateObject with 64+ observable properties should be decomposed.
 
 ---
 

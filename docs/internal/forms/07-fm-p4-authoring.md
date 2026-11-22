@@ -264,4 +264,4 @@ Each step builds; tests, gallery and AOT smoke at the end (A8).
 | P4-3 | `YFormSection` placing a **group** by key (not a child model) is not supported; groups come only through `YFormRest` or a generated form | `YFormSection Group="Contact"` if a screen needs it |
 | P4-4 | `FieldOverride.Preset` waits for ⚑FM14 | — |
 | P4-5 | A mixed form in XAML must use `DataContext` + `x:DataType` (Avalonia resolves only `DataContext` against the parent scope) | documented on `YForm` and in the gallery sample |
-| P4-6 | FM-P3 findings P3-2 (catalog labels in messages), P3-3 (`YComboBox`/`YSwitch` without validation display) and P3-4 (server violations at form level) are still open | FM-P3 part 2 |
+| P4-6 | FM-P3 findings P3-2 (catalog labels in messages), P3-3 (`YComboBox`/`YSwitch` without validation display) and P3-4 (server violations at form level) are still open | P3-3, P3-4 done in FM-P3 part 2 ([08](08-fm-p3-part2-summaries.md)); P3-2 is ⚑FM61 |

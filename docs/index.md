@@ -70,6 +70,7 @@ For framework contributors working on YFex internals.
 | Document | What It Covers |
 |---|---|
 | [State Internals](internal/state-internals.md) | Property ID allocation, bitmap dispatch, activation cascade, MVVM marshaling, generator pipelines |
+| [State completion plan (YFex.State)](internal/state/README.md) | Audit 2026-11-19: 17 of the 26 documented attributes are not generated, defects B1–B12. Plan to build them all (computed values, reactions, debounce/throttle, polls, command gates/busy/errors/queues, dirty tracking) on one dependents dispatch and one `TimeProvider` timer, plus YFex.UI controls that show command/busy/error/dirty state without hand bindings; ⚑ST1–⚑ST51 pending |
 | [State.History Internals](internal/state-history-internals.md) | Undo stack data structures, delta recording, coalescing, persistence serialization |
 | [NavigatR Internals](internal/navigatr-internals.md) | Navigator state machine, pool eviction, prefetch lifecycle, return value plumbing, generator emission |
 | [CQRS Internals](internal/cqrs-internals.md) | Registry build process, expression compilation, group expansion, analyzer implementation |

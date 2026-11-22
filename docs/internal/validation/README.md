@@ -5,7 +5,8 @@
 > [13-phases-and-acceptance.md](13-phases-and-acceptance.md). **Phase 6 B + C done** (2026-09-30, "Phase 6 implementation log"):
 > `YFex.Rules.Dynamic` (JSON rules with arithmetic + built-in/app/contract functions) and the AI schema export (validatable types,
 > situations, rule sets, rule specs; YFex.Capabilities `ParametersSchema`). Open: Phase 6A Fiscal (deferred by the user), then
-> Phase 5 (Avalonia) last (needs a reusable table/grid design).
+> Phase 5 (Avalonia) last (needs a reusable table/grid design). **Proposed 2026-11-19:** explanations for the UI "why"
+> component, decisions ⚑RX1–RX33 pending ([14](14-explanations-for-ui.md)).
 > **Audience:** AI sessions that will implement it. Read this file first, then only the files your
 > phase needs (see [13-phases-and-acceptance.md](13-phases-and-acceptance.md)).
 > **Normative vs sketch:** type names, member names and signatures in code blocks are **normative**
@@ -61,6 +62,7 @@ channel** (`IValidationSource`), so auto-binding handles both.
 | 11 | [performance-aot-and-pitfalls](11-performance-aot-and-pitfalls.md) | AOT/perf checklist, pitfalls & tradeoffs (drift, time, debounce, generators…), reference libraries |
 | 12 | [workflow-example-sale](12-workflow-example-sale.md) | End-to-end POS sale: contracts → rules → tables → VM → view → server → failures → tenant edit → offline → tests |
 | 13 | [phases-and-acceptance](13-phases-and-acceptance.md) | Implementation phases, tasks, acceptance criteria, what each session loads |
+| 14 | [explanations-for-ui](14-explanations-for-ui.md) | **Proposal 2026-11-19, ⚑RX1–RX33 pending:** what Rules adds so a UI can explain a field ("why?"): limit sources, richer lines, condition checklists, per-field query, path, rule as applied, what if, `ToWhy` (for the YFex.UI "why" plan) |
 
 ## Projects
 
@@ -224,6 +226,7 @@ Confirmed by the user in the design conversation:
 | D37 | Rule tiers (user, 2026-09-30): publishing levels are **app-declared** — `[RuleTier]` on situation fields (declaration order = level, max 4) → `RuleTierPath` (replaces `ScopeKey`); data published at a path applies to every evaluation below it, deepest wins. `EditScope` → `EditableAt = [nameof(…)]` (tier field names, generator-checked YFR0107); `RuleLayer` → tier depth (`int`, 0 = code) on `RuleRef`/`CompileNote`/`Overridden`/`ParameterValue`; `ScopeKind` (Channel/User) removed — those are ordinary fields. `RuleOrigin` (proposed) deferred to Phase 6 (nothing distinguishes it today). `IRuleScopeGuard` → `IRuleTierGuard`. |
 | D38 | Explicit names (user, 2026-09-30): `[AsOf]` → **`[RuleEffectiveDate]`** (`ISituation.EffectiveDate`, `RuleContext.EffectiveDate`, `NotEffective(EffectiveDate)`), `Scope(in s)` → `TierPath(in s)`. |
 | D34 | Approvals (2026-09-30): `OverrideToken` verified through `IOverrideTokenVerifier`; ships **online HMAC** (server key + KeyId rotation) **and offline device-signed** approvals, the latter **capped** (per-permission max) and **always flagged** for review on replay. Security review of the offline path still required before production. |
+| D39 | **Pending (2026-11-18), not confirmed:** model judgments as rule facts ([inference](../inference/README.md) ⚑IF11). A situation may carry a YFex.Inference probability (e.g. `p(unusual shift) = 0.93`) gathered before evaluation like any other I/O; the rule decides (`≥ 0.9 → NeedsApproval`); a rule never calls a model, and an abstained judgment is a missing fact the rule must handle. Optional fact source; no change to the evaluator. |
 
 Proposed while writing this design (**confirm or change before/while implementing** — each is
 marked `⚑ P#` where it appears):
