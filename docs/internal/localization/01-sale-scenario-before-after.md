@@ -128,7 +128,11 @@ v.Add(CloseSale.Fields.Lines.At(i).Quantity, SaleText.StockOut, available);
 
 Cons: nested path structs add generated code per collection member; `.Message` and `Rule` are new Validation API.
 
-## 3. Amount fields (⚑LZ15, supersedes ⚑RX14)
+## 3. Amount fields (⚑LZ15 → folded into ⚑LZ28, supersedes ⚑RX14)
+
+> **Corrected 2026-11-21:** the `[Amount]` attribute and `ForAmount()` below were dropped when ⚑LZ15 was folded into
+> ⚑LZ28. As approved: no view-model attribute; the receipt is `Explanation.ForObject()`, outputs explain with `ForOutput`, the
+> view asks for the receipt layout (validation/14 §3.4, ⚑RX14). The snippets show the approved form.
 
 Before — a string list whose meaning is unclear ("which UI fields show the rule set's amount?"):
 
@@ -136,19 +140,20 @@ Before — a string list whose meaning is unclear ("which UI fields show the rul
 public static string[] AmountFields => ["Total"];
 ```
 
-After — the view model marks the property that shows the decision's amount; no rule-set declaration at all:
+After — no list and no attribute: the receipt has its own query and the view asks for it:
 
 ```csharp
 [Observable, ConstraintsFrom] public partial Decision<SaleSituation>? Policy { get; set; }
 
-/// <summary>"Why" on this field shows the receipt: initial, adjustments, final.</summary>
-[Amount] public Money Total => Policy?.Totals.Final.As<Money>() ?? Money.Zero;
+// no attribute: the view asks for the receipt — YMoneyText().Bind(vm.Total).Why(layout: WhyLayout.Receipt) → ForObject()
+public Money Total => Policy?.Totals.Final.As<Money>() ?? Money.Zero;
 ```
 
 Server and thin clients ask by symbol, not by name:
 
 ```csharp
-explanation.ForAmount();                                         // the receipt
+explanation.ForObject();                                         // the receipt
+explanation.ForOutput(SaleRules.Outputs.InstallmentValue);       // an [Output] value
 explanation.ForField(SaleSituation.Fields.Installments);         // limits, rules, checklist for one field
 explanation.ForField(SaleLineSituation.Fields.Quantity, line: 2);
 ```

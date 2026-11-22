@@ -26,7 +26,7 @@ A string that identifies something (a code, key, id, name or path that is stored
 - Text shown to people is never a literal in running code. Declare it with its key (neutral-culture text on the declaration, translations in culture files), pass typed arguments, and format it through the message catalog at the edge. Logs carry code + arguments, not texts.
 - Lists of names whose meaning the reader must guess (`string[] AmountFields => ["Total"]`) are not an API. Mark the member itself with an attribute the generator reads, or take the generated symbol.
 - Exempt: tests of parsing and formatting, the declaration itself, and developer-only exception messages.
-- Generators and analyzers enforce this: a library that introduces an identity ships its generated symbols and a diagnostic for literals. Design: [localization](../../internal/localization/README.md) (⚑LZ, pending).
+- Generators and analyzers enforce this: a library that introduces an identity ships its generated symbols and a diagnostic for literals. Design: [localization](../../internal/localization/README.md) (⚑LZ1–LZ34 approved, LZ11 withdrawn, LZ27 on hold, LZ35 onward pending).
 
 ## Encapsulation and YAGNI
 

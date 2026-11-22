@@ -176,7 +176,7 @@ es first) as generated tables. The generator validates the syntax at build time.
 | `[When("Payment")]`, `[Then(LimitMax, "Installments")]` | `[When]` infers the field from the row parameter name; `[Then(LimitMax, nameof(SaleSituation.Installments))]` when names differ | LZ12 |
 | `FieldPath.Of("Lines[].Quantity", i)` | `CloseSale.Fields.Lines.At(i).Quantity` (generated nested path structs) | LZ13 |
 | `v.Invariant(static (in CloseSale c, ref ViolationWriter w) => { if … w.Add(…) })` | `v.Field(c => c.CustomerId).Required().When(c => c.Payment == PaymentMethod.Boleto).Message(SaleText.BoletoNeedsCustomer)`; general case `v.Rule(c => …, on: c => c.CustomerId, SaleText.X)`; `Invariant` stays for several violations, written `(in c, ref w) =>` (C# 14 modifiers without types) | LZ14 |
-| `public static string[] AmountFields => ["Total"]` (⚑RX14) | `[Amount]` on the view-model property that shows the decision's amount; `Explanation.ForAmount()`; `ForField(SaleSituation.Fields.Installments)` instead of `ForField("Installments")` | LZ15 |
+| `public static string[] AmountFields => ["Total"]` (⚑RX14) | ~~`[Amount]` on the view-model property + `Explanation.ForAmount()`~~ (dropped 2026-11-21 when ⚑LZ15 folded into ⚑LZ28: the receipt is `Explanation.ForObject()`, outputs `ForOutput`, no VM attribute); `ForField(SaleSituation.Fields.Installments)` instead of `ForField("Installments")` | LZ15 → LZ28 |
 | `Set.TryGetTable("sale.installments", …)`, `Trace.For("sale.installments")`, `PublishTable("sale", "sale.installments", …)` | `SaleRules.Tables.Installments` (`TableRef<InstallmentTable.Row>`), `InstallmentTable.Code`, `PublishTable.For(SaleRules.Tables.Installments, …)` | LZ16 |
 
 ### 3.7 Placement (⚑LZ5, LZ6)
@@ -214,7 +214,7 @@ generator package (smaller move, but behaviour stays in core against the core ru
 | LZ12 ✅ | Table columns (approved 2026-11-21; attribute names follow ⚑LZ29) | `[When]` / `[Then]` infer the field from the parameter name; `nameof` otherwise; diagnostic when no field matches | literals (today) | 3.6 |
 | LZ13 ✅ | Nested field paths | generated `Fields.Lines.At(i).Quantity` for collection members of record element types | `FieldPath.Of("Lines[].Quantity", i)` (today) | 3.6 |
 | LZ14 ✅ | Cross-field checks | `.Message(key)` on field chains; `v.Rule(predicate, on:, key)`; `Invariant` for multi-violation cases | only `Invariant` (today's verbosity) | 3.6 |
-| LZ15 → LZ28 | Amount fields (supersedes ⚑RX14; **folded into ⚑LZ28 2026-11-21**: outputs get `ForOutput`, inputs `ForField`) | `[Amount]` on the VM property + `ForAmount()`; `ForField(SituationField)` typed | `AmountFields => ["Total"]` string list | 3.6 |
+| LZ15 → LZ28 | Amount fields (supersedes ⚑RX14; **folded into ⚑LZ28 2026-11-21**: outputs get `ForOutput`, inputs `ForField`, the receipt `ForObject()`; the `[Amount]` attribute and `ForAmount()` were dropped) | `[Amount]` on the VM property + `ForAmount()`; `ForField(SituationField)` typed | `AmountFields => ["Total"]` string list | 3.6 |
 | LZ16 ✅ | Rule set and table handles | generated `TableRef` / `RuleSetRef`; Rules.Admin `PublishTable.For(handle, …)` | string codes in admin calls | 3.6 |
 | LZ17 ✅ | Analyzer severity | error in infrastructure and domain, warning in samples, off in tests | warning everywhere (ignored in practice) | 3.1 |
 | LZ18 ✅ | Capabilities localizer (atlas F12) | `ICapabilityLocalizer` becomes an adapter over `IMessageCatalog`; `ResourceKey` → `MessageKey` | keep its own `IStringLocalizer` path | 5 |
@@ -251,9 +251,9 @@ generator package (smaller move, but behaviour stays in core against the core ru
 |---|---|---|---|
 | YFex core | **used, better placement** | holds key types and contracts; renderer moves out | LZ1, LZ5, LZ6 |
 | YFex.Validation | **used, lacks feature** | typed `Add` overloads, `.Message(key)`, `Rule(...)`, nested paths; its `MessagesGenerator` moves out | LZ4, LZ13, LZ14 |
-| YFex.Rules | **used, lacks feature** | texts on declarations, `[Stage]`, `[When]` inference, `TableRef`, `ForField(SituationField)`, `ForAmount()`; `RuleMessages` becomes declared keys | LZ10–LZ16 |
+| YFex.Rules | **used, lacks feature** | texts on declarations, `[Stage]`, `[When]` inference, `TableRef`, `ForField(SituationField)`, `ForOutput` / `ForObject()` (⚑LZ28); `RuleMessages` becomes declared keys | LZ10–LZ16, LZ28 |
 | YFex.Expressions | not a fit | expression text is formula source, not display text | — |
-| YFex.State | **fits, lacks feature** | `[Amount]` VM attribute, `[SituationSource]` field-title inheritance, `ErrorItem` catalog via DI | LZ9, LZ15, LZ26 |
+| YFex.State | **fits, lacks feature** | `[SituationSource]` field-title inheritance, `ErrorItem` catalog via DI (the `[Amount]` VM attribute went with ⚑LZ15) | LZ9, LZ26 |
 | YFex.Persistence | fits | device cache of tenant texts | LZ22 |
 | YFex.Data | fits | server store of tenant texts | LZ22 |
 | YFex.Cqrs | used | formats ProblemDetails at the edge with the typed catalog; error codes become `MessageKey`s | LZ1 |
@@ -282,8 +282,8 @@ generator package (smaller move, but behaviour stays in core against the core ru
 |---|---|---|---|---|
 | YFex core | `MessageKey` types, `[Messages]`/`[Message]`; renderer moves out | yes (namespace of `MessageCatalog` construction) | LZ1, LZ6 | LZ-P1 |
 | YFex.Validation | typed `Add`, `.Message`, `Rule`, nested paths; generator move | additive + generator move | LZ4, LZ13, LZ14 | LZ-P4 |
-| YFex.Rules | declaration texts, `[Stage]`, `[When]` inference, refs, typed `ForField`, `ForAmount` | yes (stages, `ForField`) | LZ10–LZ16 | LZ-P3, LZ-P4 |
-| YFex.State | `[Amount]`, title inheritance, DI catalog | additive / removal of static setter | LZ9, LZ15, LZ26 | LZ-P4 |
+| YFex.Rules | declaration texts, `[Stage]`, `[When]` inference, refs, typed `ForField`, `ForOutput` / `ForObject()` | yes (stages, `ForField`) | LZ10–LZ16 | LZ-P3, LZ-P4 |
+| YFex.State | title inheritance, DI catalog | additive / removal of static setter | LZ9, LZ26 | LZ-P4 |
 | YFex.Messaging | `PublishTable.For` | additive | LZ16 | LZ-P4 |
 | YFex.Authorization | permission texts to catalog, `Name` → `Title` | yes (rename) | LZ20 | LZ-P3 |
 | YFex.Capabilities, YFex.Authentication | adapters / templates (F12) | internal | LZ18, LZ19 | LZ-P6 |
@@ -589,7 +589,7 @@ Tests close each phase (00-start-here §3); AOT smoke for the new repo.
 - **2026-11-21, RX plan revised on the simplified API** ([validation/14](../validation/14-explanations-for-ui.md)): ⚑RX7
   narrowed to the tier and row labels (the rest is ⚑LZ10); ⚑RX13 reads typed handles; ⚑RX14 rewritten as
   `ForField(SituationFieldRef)` / `ForOutput` / `ForObject()` exactly as approved in ⚑LZ28 (no `[Amount]`: it went with
-  ⚑LZ15; the State/Rules ecosystem rows above that still name `[Amount]` / `ForAmount` predate the fold); ⚑RX24 = declared `RuleText` keys; new ⚑RX34 generated
+  ⚑LZ15; the §3.6, §5 and §6 rows and 01 §3 that named `[Amount]` / `ForAmount` were corrected the same day); ⚑RX24 = declared `RuleText` keys; new ⚑RX34 generated
   `SaleRules.Rules.X` (`RuleKey`) so no RX API takes a rule code string. Before / after snippets: validation/14 §10.
 - **2026-11-21, LZ-P0 done** (inventory: [02-lz-p0-inventory.md](02-lz-p0-inventory.md); uncommitted):
   - **Analyzer** `LiteralAnalyzer` in `YFex.Localization.Generator`: YFX0100 (literal identity: conversion, constructor or
