@@ -6,7 +6,7 @@
 > `YFex.Rules.Dynamic` (JSON rules with arithmetic + built-in/app/contract functions) and the AI schema export (validatable types,
 > situations, rule sets, rule specs; YFex.Capabilities `ParametersSchema`). Open: Phase 6A Fiscal (deferred by the user), then
 > Phase 5 (Avalonia) last (needs a reusable table/grid design). **Proposed 2026-11-19:** explanations for the UI "why"
-> component, ⚑RX1–RX34 ([14](14-explanations-for-ui.md)); RX-P0 (limit and violation sources, rule keys) built 2026-11-21.
+> component, ⚑RX1–RX42 ([14](14-explanations-for-ui.md)); RX-P0–RX-P7 built (RX-P7 server reasons and thin-client explain / what-if: 2026-11-23); open ⚑RX28, RX29, RX33.
 > **Audience:** AI sessions that will implement it. Read this file first, then only the files your
 > phase needs (see [13-phases-and-acceptance.md](13-phases-and-acceptance.md)).
 > **Normative vs sketch:** type names, member names and signatures in code blocks are **normative**
@@ -62,7 +62,7 @@ channel** (`IValidationSource`), so auto-binding handles both.
 | 11 | [performance-aot-and-pitfalls](11-performance-aot-and-pitfalls.md) | AOT/perf checklist, pitfalls & tradeoffs (drift, time, debounce, generators…), reference libraries |
 | 12 | [workflow-example-sale](12-workflow-example-sale.md) | End-to-end POS sale: contracts → rules → tables → VM → view → server → failures → tenant edit → offline → tests |
 | 13 | [phases-and-acceptance](13-phases-and-acceptance.md) | Implementation phases, tasks, acceptance criteria, what each session loads |
-| 14 | [explanations-for-ui](14-explanations-for-ui.md) | **Proposal 2026-11-19, ⚑RX1–RX34; RX-P0 built 2026-11-21:** what Rules adds so a UI can explain a field ("why?"): limit sources, richer lines, condition checklists, per-field query, path, rule as applied, what if, `ToWhy` (for the YFex.UI "why" plan) |
+| 14 | [explanations-for-ui](14-explanations-for-ui.md) | **Proposal 2026-11-19, ⚑RX1–RX42; RX-P0–RX-P7 built (P7 2026-11-23):** what Rules adds so a UI can explain a field ("why?"): limit sources, richer lines, condition checklists, per-field query, path, rule as applied, what if, `ToWhy` (for the YFex.UI "why" plan) |
 
 ## Projects
 

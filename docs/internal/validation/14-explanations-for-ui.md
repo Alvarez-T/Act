@@ -3,7 +3,7 @@
 > **Status: proposal, 2026-11-19.** ⚑RX1, RX2, RX3, RX23, RX34 **approved 2026-11-21** (as recommended; RX-P0 started);
 > ⚑RX14 settled by ⚑LZ28 and the LZ10 part of ⚑RX7. ⚑RX4, RX5 (delete the never-produced `StackedWith` /
 > `ClampedByGuardrail` note cases), RX6, RX7, RX16, RX24 (decided with ⚑LZ40) and ⚑WH1 (core `Reasons`; RX-P1 adds only
-> `WhyKey`) **approved 2026-11-21** as recommended; ⚑RX9, RX10, RX11, RX12, RX26 **approved 2026-11-21** as recommended and ⚑RX8 approved the same day on condition that a union / closed hierarchy is weighed against the enum + flat `ConditionCheck` before building (§12); the rest pending. **RX-P0 built 2026-11-21** (log §12); **RX-P1 built 2026-11-21** (log §12); **RX-P2 built 2026-11-21** (log §12: ⚑RX8 kept the enum + flat `ConditionCheck`, ⚑RX11 reuses the generated `GetCondition` instead of a new `TryDescribeWhen`, both chosen by the user); ⚑RX13, RX15 **approved 2026-11-22** as recommended; RX-P2 committed (YFex.Rules `2caa69e`); RX-P3 next. Consistency pass 2026-11-21 against the approved ⚑LZ decisions and `all-projects.md`: §11. Asked for by the YFex.UI "why"
+> `WhyKey`) **approved 2026-11-21** as recommended; ⚑RX9, RX10, RX11, RX12, RX26 **approved 2026-11-21** as recommended and ⚑RX8 approved the same day on condition that a union / closed hierarchy is weighed against the enum + flat `ConditionCheck` before building (§12); the rest pending. **RX-P0 built 2026-11-21** (log §12); **RX-P1 built 2026-11-21** (log §12); **RX-P2 built 2026-11-21** (log §12: ⚑RX8 kept the enum + flat `ConditionCheck`, ⚑RX11 reuses the generated `GetCondition` instead of a new `TryDescribeWhen`, both chosen by the user); ⚑RX13, RX15 **approved 2026-11-22** as recommended; RX-P2 committed (YFex.Rules `2caa69e`); **RX-P3 built 2026-11-22** (log §12); ⚑RX17, RX25, RX27 and new ⚑RX35 **approved 2026-11-22**; **RX-P4 built 2026-11-22** (log §12); ⚑RX18, RX19 and new ⚑RX36, RX37 **approved 2026-11-22**; **RX-P5 built 2026-11-22** (log §12); RX-P6 next (⚑RX20–RX22, RX31 pending). Consistency pass 2026-11-21 against the approved ⚑LZ decisions and `all-projects.md`: §11. Asked for by the YFex.UI "why"
 > component plan ([`YFex.UI/docs/plans/why-component-plan.md`](../../../../YFex.UI/docs/plans/why-component-plan.md), ⚑WH1–WH12).
 > This document covers the **YFex.Rules side**: ⚑WH2 (owner changes), ⚑WH7 (rule as applied), ⚑WH8 (what if) and ⚑WH10
 > (trace cost), plus what Rules needs from ⚑WH1 (where the neutral reason model lives) and ⚑WH3 (the generated per-field source).
@@ -415,8 +415,11 @@ public sealed class Decision<TSituation>
   request (the UI hides "Simular").
 - The summary compares the field before and after (limit, options, verdict, adjustments on amount fields) with catalog key
   `rules.whatif.summary` ("Com {condition}: {result}").
-- A condition on a `[Derived]` situation field (e.g. `Total` computed from lines) is changed directly in the copy; the
-  summary says it is hypothetical for the rule's conditions — the lines are not changed.
+- A condition on a `[Derived]` situation field (e.g. `Total` computed from lines) gets **no what-if** (⚑RX36, revised
+  2026-11-22): the engine reads the computed property, so a copy cannot hold another value; the checklist still shows the
+  distance. (The 2026-11-19 text proposed changing it in the copy.)
+- As built (⚑RX37): `WhatIfChange` / `WhatIfRequest` are typed (no `ushort` tuples); `WhatIfResult<TS>`; the report item's
+  `WhyItem.WhatIf` key and `Decision.TryGetWhatIf(WhyKey)`; `IWhySource.TryWhatIf`; log §12.
 - Cost: one evaluation (microseconds), only when the user asks.
 
 ### 3.8 Trace cost (gap 8) — ⚑RX15
@@ -537,19 +540,24 @@ d.ShouldNotApply(SaleRules.Rules.Card12x);         // test helpers (§9.11)
 | RX14 | Amount and outputs (**settled by ⚑LZ28 2026-11-21**; replaces `AmountFields` and ⚑LZ15) | as approved: `Explanation.ForField(SituationFieldRef)`, `ForOutput(RuleOutput)`, `ForObject()` for the receipt; no VM attribute — the why source maps properties by name to fields and outputs, the view's Receipt layout asks for `ForObject()` | `[Amount]` VM attribute + `ForAmount()` (⚑LZ15, dropped in the fold into LZ28); `AmountFields => ["Total"]` string list (magic strings); treat every adjustment as affecting every field | 3.4 |
 | RX15 ✅ | Trace cost for "why" screens (approved 2026-11-22 as recommended; Full on every evaluation + State `[Debounce]` weighed and rejected, §12) | evaluate with Off/Applied; `Explain` re-evaluates once with Full on demand and caches the trace on the decision | Full on every UI evaluation (⚑WH10 as written); always Full | 3.8 |
 | RX16 ✅ | Hierarchy path | `PathSegment(Kind, Key, Text)` list per line | strings only (UI cannot filter by level) | 3.5 |
-| RX17 | Reason model production | `Explanation.ToWhy()` + `Decision.TryGetWhy(field, catalog, culture, out report)` producing core `Reasons` types (needs ⚑WH1 = core and the five model changes in §3.9) | Rules references YFex.UI.Public (wrong layer direction); the UI renders `Explanation` directly (ties the control to Rules) | 3.9 |
-| RX18 | What if | counterfactual `Decision.TryWhatIf` / `WhatIf` on the same compiled set + generated `ISituation.TryWith` (static virtual, default false) | `IRuleSetHost.Simulate` (answers a different question: draft data on past situations); the app builds the changed situation by hand | 3.7 |
-| RX19 | What-if target values | literal for eq/gte/lte; ± one precision step for gt/lt; none for neq and expressions | always the literal (wrong for strict comparisons); let the user type a value (UI work, later) | 3.7 |
-| RX20 | Rule as applied | pure `AppliedRules.Describe` in Rules; new query `RuleAdmin.Queries.DescribeAppliedRule` returning only the view, with its own `AppliedRulePermission` | add the view to `GetRuleDefinition` (it shares the admin view permission with raw data); raw JSON only; build the display in the UI (would interpret rules) | 3.6, 9.8 |
-| RX21 | Audit of decisions | request: `AuditDecision` carries applied `RuleRef`s and limit sources | app persists adjustments only (06 §2; limits and denials lost) | 3.6 |
-| RX22 | Old data versions offline | describe what the device has; otherwise "disponível online" | keep every version on devices (unbounded cache) | 3.6 |
-| RX23 ✅ | Refresh of a VM's "why" | fingerprint excludes sources (unchanged); generated code raises `WhyChanged` on every decision **reference** change, not only fingerprint changes | add sources to the fingerprint (client and server could disagree on sources while agreeing on the outcome → false mismatches) | 3.1, 3.9 |
+| RX17 ✅ | Reason model production (approved 2026-11-22 as recommended, with enums for `WhyKind` / `WhyCheck` and a neutral core `WhyStep` that Rules maps its typed path to; §12) | `Explanation.ToWhy()` + `Decision.TryGetWhy(field, catalog, culture, out report)` producing core `Reasons` types (needs ⚑WH1 = core and the five model changes in §3.9) | Rules references YFex.UI.Public (wrong layer direction); the UI renders `Explanation` directly (ties the control to Rules) | 3.9 |
+| RX18 ✅ | What if (approved 2026-11-22: copy + re-evaluate; derived fields per ⚑RX36) | counterfactual `Decision.TryWhatIf` / `WhatIf` on the same compiled set + generated `ISituation.TryWith` (static virtual, default false) | `IRuleSetHost.Simulate` (answers a different question: draft data on past situations); the app builds the changed situation by hand | 3.7 |
+| RX19 ✅ | What-if target values (approved 2026-11-22; table cells: Is / value, first of In, band start or below its exclusive top) | literal for eq/gte/lte; ± one precision step for gt/lt; none for neq and expressions | always the literal (wrong for strict comparisons); let the user type a value (UI work, later) | 3.7 |
+| RX20 ✅ | Rule as applied | pure `AppliedRules.Describe` in Rules; new query `RuleAdmin.Queries.DescribeAppliedRule` returning only the view, with its own `AppliedRulePermission` | add the view to `GetRuleDefinition` (it shares the admin view permission with raw data); raw JSON only; build the display in the UI (would interpret rules) | 3.6, 9.8 |
+| RX21 ✅ | Audit of decisions | request: `AuditDecision` carries applied `RuleRef`s and limit sources | app persists adjustments only (06 §2; limits and denials lost) | 3.6 |
+| RX22 ✅ | Old data versions offline | describe what the device has; otherwise "disponível online" | keep every version on devices (unbounded cache) | 3.6 |
+| RX23 ✅ | Refresh of a VM's "why" (**revised 2026-11-22**, ⚑RX35: State setters skip an equal decision, so the reference change needs the State same-value hook) | fingerprint excludes sources (unchanged); generated code raises `WhyChanged` on every decision **reference** change, not only fingerprint changes | add sources to the fingerprint (client and server could disagree on sources while agreeing on the outcome → false mismatches) | 3.1, 3.9 |
 | RX24 ✅ | Messages (**revised 2026-11-21**; decide with ⚑LZ40, which proposes the same `[Messages]` class for the engine's existing codes `rules.table.*` and the `rules.cond.*` templates) | new **declared keys** in a `[Messages] RuleText` class of YFex.Rules with en + pt-BR language files (no new cases in the `RuleMessages` switch): `RuleText.Missing` (`rules.cond.missing`), `Actual`, `Between`, `WouldPass`, `Row`, `AlsoLimited`, `Stacked`, `Guardrail`, `TierCode`, `WhatIfSummary`, relation texts, with typed arguments (`MessageKey<Money>` …) | add cases to the hand-written `RuleMessages` switch (moving it to declared keys is an LZ item); texts built in code | 3.2–3.7 |
-| RX25 | Validation generator (⚑WH3) | emit `IWhySource` per `[ConstraintsFrom]` property calling `Decision.TryGetWhy`; rule-sourced violations in the bag link to their why through `ViolationOrigin` | hand-written per screen | 3.9 |
+| RX25 ✅ | Validation generator (⚑WH3) (approved 2026-11-22) | emit `IWhySource` per `[ConstraintsFrom]` property calling `Decision.TryGetWhy`; rule-sourced violations in the bag link to their why through `ViolationOrigin` | hand-written per screen | 3.9 |
 | RX26 ✅ | Personal data in explanations (**realigned 2026-11-21 with ⚑LZ25** and the classification-on-the-type rule) | situation fields whose **type** is `[Sensitive]` (YFex.Privacy): `Actual` shown in the UI (as ⚑LZ25 decided for message arguments), masked when the explanation goes to logs, the AI JSON (⚑RX27), audit exports and server-attached reasons (⚑RX30) | mask in the UI by default with a per-screen opt-in (the 2026-11-19 proposal; contradicts ⚑LZ25); always clear everywhere (leaks in logs and AI) | 3.3 |
-| RX27 | AI and Capabilities | `WhyReport` JSON (source-generated) so YFex.Capabilities / YFex.Automation agents can answer "why" with the same data as the UI; `RuleSetDescription` stays for the rule set itself | separate AI-only explanation format | 3.9 |
+| RX27 ✅ | AI and Capabilities (approved 2026-11-22: a source-generated `WhyJson` in core now, formatted with the masked catalog) | `WhyReport` JSON (source-generated) so YFex.Capabilities / YFex.Automation agents can answer "why" with the same data as the UI; `RuleSetDescription` stays for the rule set itself | separate AI-only explanation format | 3.9 |
 | RX28 | Tier value labels | tier label = catalog field name + the raw situation value; apps that want "Loja Centro" add the names to their message source (gathered before evaluation, Principle A) | Rules calls YFex.Tenancy to resolve scope names (I/O inside a pure library) | 3.2 |
 | RX29 | Reasons beyond Rules (⚑WH9) and across the wire | Cqrs `RulesStage` can attach a `WhyReport` to a Denied result for remote clients (needs string keys, §3.9); Authorization (`AuthorizationContext.ExplainUnavailable`, `DenialKind`) and Licensing produce `WhyReport` in their own phases | Rules explains permissions too (wrong owner) | 2, 3.9 |
+| RX36 ✅ | What if on derived fields (found 2026-11-22; approved) | no what-if when a failing condition is on a `[Derived]` situation field, compares with ≠, is an expression or has no field: `RuleConditions.WhatIf` is null, the checklist keeps the distance ("faltam R$ 60,00") | change the derived value in the copy (impossible: the engine reads the computed property, so §3.7's 2026-11-19 text was wrong); assume the rule applies for those (a hybrid: answers that other rules on the same field would contradict) | 3.7 |
+| RX37 ✅ | Shape and reach of a what-if (2026-11-22; approved) | typed `WhatIfChange(SituationFieldRef Field, bool IsLineField, int Line, RawValue Value)` and `WhatIfRequest(RuleRef Rule, int Line, ImmutableArray<WhatIfChange>)` (no `ushort` tuples, §11 C4); `RuleConditions.WhatIf`; core `WhyItem.WhatIf` key (`whatif:{code}[#row][@line]`); `Decision.TryGetWhatIf(WhyKey)` rebuilds the request (thin clients send only the key, ⚑RX32); core `IWhySource.TryWhatIf(key, path, catalog, culture, out report)`, generated for `[ConstraintsFrom]` | Rules API only, each screen handling a `SimulateRequested` event itself (§9.2 sketch) | 3.7, 3.9 |
+| RX38 ✅ | Home of `ToAuditDecision` (found 2026-11-22, RX-P6) | in **YFex.Cqrs** (already references Rules; the command pipeline is where `AuditScope.Current` exists); Cqrs gains a reference to `YFex.Audit.Public` (core + Actors only) | Rules references `YFex.Audit.Public` (a pure engine learns about audit); each app writes the mapping (every app repeats it, and limit sources get forgotten) | 3.6, 9.5 |
+| RX39 ✅ | Audit encoding of applied rules (found 2026-11-22, RX-P6; **revised on approval 2026-11-22**: no stored data exists yet, so no compatibility is kept) | the refs (code, version, tier, data version, row id, role, field) and the `CodeVersion` are appended **inside `0x12 Decision`**; `AuditFormat.Version` stays 1 (nothing was stored with the old layout). Proposed first: a repeatable `0x13` section to keep old entries readable | bump the entry format to v2 (every reader branches on the version for one optional list) | 3.6 |
+| RX35 ✅ | Equal-but-new decisions (found 2026-11-22; approved) | State emits `partial void __OnSameValue_X(in T value, ref T field)` called when a reference-type `[Observable]` gets an `Equals` but not `ReferenceEquals` value (no `PropertyChanged`; removed by the compiler when not implemented); the Validation generator implements it for `[ConstraintsFrom]`: stores the new decision and raises `WhyChanged` only | accept stale sources ("why" can name a rule that no longer sets the limit); `[EqualityComparer(typeof(ReferenceEqualityComparer))]` per property (boilerplate, `PropertyChanged` on every evaluation, and the State emitter calls `.Default`, which `ReferenceEqualityComparer` lacks) | 3.9 |
 | RX34 ✅ | Typed rule handles (new 2026-11-21) | generated `SaleRules.Rules.X` (`RuleKey`: rule set, owner id, code) beside `RuleIds`; `TableRef` converts to `RuleKey`; `RuleGroup.Ref` → `GroupRef` (rule set + name) for explanation lines and relations, as `StageRef` is for stages; `RuleSource.Is` / `RuleRef.Is`; every RX API and test helper that names a rule takes `RuleKey`; strings only where the code is data (stored adjustments, wire queries, dynamic rules) | the rule struct as handle (`RefOf<Card12x>()`: needs a lookup from type to owner id at run time); `RefOf(string code)` (magic string) | 3.10 |
 
 ## 5. Ecosystem fit
@@ -601,11 +609,11 @@ on its own; tests close each phase (00-start-here §3).
 | **RX-P0** Sources + handles (joint start with the Rules simplification, 2026-11-21) — **built 2026-11-21**, §12 | benchmark baseline first (Off/Applied/Full); generated `SaleRules.Rules.X` (`RuleKey`), `TableRef` → `RuleKey`; `RuleSource` with `Is(RuleKey)`; `FieldLimit` sources + exceed/permission; `Decision` keeps the compiled set, `LimitOf(field)`, `RefOf`, `SourceOf`; fingerprint unchanged (⚑RX1–RX3, RX23, RX34) | `d.LimitOf(SaleSituation.Fields.Installments).MaxSource.Is(SaleRules.Tables.InstallmentTable)` and `d.RefOf(…)` names the row; Off allocations unchanged in count; no string names a rule in the new tests |
 | **RX-P1** Lines — **built 2026-11-21**, §12 | `ExplanationLine` record; group, field, tier label, description, relations, path; Stack cap as `CappedByGroup`; guardrail notes with rule index; new messages (⚑RX4–RX7, RX16, RX24) | the sale sample explains every line with group, path and relations; no `RuleRef(groupName,…)` left |
 | **RX-P2** Conditions — **built 2026-11-21**, §12 | `IsLineField`; `Decision.Conditions`; actual / missing / would-pass; table `TryDescribeWhen`; Dynamic explain with context and operand programs; `[Sensitive]` masking (⚑RX8–RX12, RX26) | the 12x checklist shows Passed / Failed (atual R$ 940, faltam R$ 60) / WouldPass; a table and a dynamic rule give the same shape |
-| **RX-P3** Per field | static `affects` from typed handles (generator + attribute + YFR0026), tables, dynamic; `Decision.Affects`; `Explanation.ForField` / `ForOutput` / `ForObject`; lazy Full re-evaluation (⚑RX13–RX15) | `ForField(SaleSituation.Fields.Installments)` returns the limit with its row, the not-applied 12x rule with its checklist, and nothing about unrelated fields; `ForOutput(SaleRules.Outputs.InstallmentValue)` shows the row's minimum |
-| **RX-P4** Reason model | after ⚑WH1 lands in core: `ToWhy`, `Decision.TryGetWhy`; Validation generator `IWhySource` (⚑RX17, RX23, RX25, RX27) | a validated view model with `[ConstraintsFrom] Decision<SaleSituation>` returns a `WhyReport` for "Installments" with no hand-written code |
-| **RX-P5** What if | generated `ISituation.TryWith`; `WhatIfRequest` from checklists; `Decision.TryWhatIf` / `WhatIf` (⚑RX18, RX19) | "Com Total ≥ R$ 1.000: até 12x" from the 12x checklist |
+| **RX-P3** Per field — **built 2026-11-22**, §12 | static `affects` from typed handles (generator + attribute + YFR0026), tables, dynamic; `Decision.Affects`; `Explanation.ForField` / `ForOutput` / `ForObject`; lazy Full re-evaluation (⚑RX13–RX15) | `ForField(SaleSituation.Fields.Installments)` returns the limit with its row, the not-applied 12x rule with its checklist, and nothing about unrelated fields; `ForOutput(SaleRules.Outputs.InstallmentValue)` shows the row's minimum |
+| **RX-P4** Reason model — **built 2026-11-22**, §12 | after ⚑WH1 lands in core: `ToWhy`, `Decision.TryGetWhy`; Validation generator `IWhySource` (⚑RX17, RX23, RX25, RX27) | a validated view model with `[ConstraintsFrom] Decision<SaleSituation>` returns a `WhyReport` for "Installments" with no hand-written code |
+| **RX-P5** What if — **built 2026-11-22**, §12 | generated `ISituation.TryWith`; `WhatIfRequest` from checklists; `Decision.TryWhatIf` / `WhatIf` (⚑RX18, RX19) | "Com Total ≥ R$ 1.000: até 12x" from the 12x checklist |
 | **RX-P6** Rule as applied | `AppliedRules.Describe`; `DescribeAppliedRule` query + `AppliedRulePermission`; Audit request; stored-decision replay (⚑RX20–RX22, RX31) | the same view for a code rule, a table row of version 42 and a dynamic rule; a stored sale replays to its fingerprint and explains |
-| **RX-P7** Server and thin clients | `EnforceOptions.Reasons`, `Reasons` on `ValidationProblem` / `ApprovalRequired`, culture from the call, `ApplyServer` keeps them; generic explain / what-if handlers (⚑RX30, RX32) | a thin client shows the same "why" as the rich client, from a rejection or an explain query (§9) |
+| **RX-P7** Server and thin clients — **built 2026-11-23**, §12 | `EnforceOptions.Reasons`, `Reasons` on `ValidationProblem` / `ApprovalRequired`, culture from the call, `ApplyServer` keeps them; generic explain / what-if handlers (⚑RX30, RX32) | a thin client shows the same "why" as the rich client, from a rejection or an explain query (§9) |
 
 UI mapping: the UI plan's W3 needs RX-P0–RX-P4; W5 needs RX-P5 and RX-P6; thin clients (Blazor, Uno web) need RX-P7. Code examples for each scenario: §9.
 
@@ -1083,10 +1091,13 @@ d.WhatIf(d.Conditions(SaleRules.Rules.Card12x)!.WhatIf!.Value, SaleSituation.Fie
 
 | ⚑ | Topic | Proposal | Rejected alternatives | § |
 |---|---|---|---|---|
-| RX30 | Reasons on server rejections | `EnforceOptions.Reasons` (None default / Fields / Full); `ValidationProblem` and `ApprovalRequired` gain an optional `Reasons` (`WhyReportSet`: field → report); catalog from DI, culture from `CurrentUICulture` set by the RPC middleware from `CallContext.Culture`; generated `ApplyServer` keeps them for `IWhySource` until the next local decision | the client re-evaluates to explain (impossible for thin clients, wrong when the server's data differs); always attach (cost on every rejection) | 9.4, 9.6, 9.10 |
-| RX31 | Explaining stored decisions | `DecisionReplay` (load data ≤ the stored data version, then pure evaluation, fingerprint check) with a fallback to persisted adjustments + limit refs | store the explanation text with the document (culture-bound, bulky, stale after catalog fixes); replay only (fails after code changes) | 9.9 |
-| RX32 | Thin-client explain / what-if | app-declared typed queries (`ICarriesSituation`, the module's own authorization, cacheable) + generic handlers `ExplainFieldHandler` / `WhatIfHandler` in YFex.Cqrs; what-if only as a key from the report | one generic `RuleAdmin.Queries.Explain(RuleSet, byte[] situation)` (untyped, bypasses the module's authorization); what-if with arbitrary values from the client | 9.7 |
+| RX30 ✅ | Reasons on server rejections (approved 2026-11-23; with RX40–RX42) | `EnforceOptions.Reasons` (None default / Fields / Full); `ValidationProblem` and `ApprovalRequired` gain an optional `Reasons` (`WhyReportSet`: field → report); catalog from DI, culture from `CurrentUICulture` set by the RPC middleware from `CallContext.Culture`; generated `ApplyServer` keeps them for `IWhySource` until the next local decision | the client re-evaluates to explain (impossible for thin clients, wrong when the server's data differs); always attach (cost on every rejection) | 9.4, 9.6, 9.10 |
+| RX31 ✅ | Explaining stored decisions (approved 2026-11-22) | `DecisionReplay` (load data ≤ the stored data version, then pure evaluation, fingerprint check) with a fallback to persisted adjustments + limit refs | store the explanation text with the document (culture-bound, bulky, stale after catalog fixes); replay only (fails after code changes) | 9.9 |
+| RX32 ✅ | Thin-client explain / what-if (approved 2026-11-23; both queries return `WhyReport`, no `WhatIfView`) | app-declared typed queries (`ICarriesSituation`, the module's own authorization, cacheable) + generic handlers `ExplainFieldHandler` / `WhatIfHandler` in YFex.Cqrs; what-if only as a key from the report | one generic `RuleAdmin.Queries.Explain(RuleSet, byte[] situation)` (untyped, bypasses the module's authorization); what-if with arbitrary values from the client | 9.7 |
 | RX33 | Limit sources on the document | optional (`RecordLimit`), the app decides; replay (RX31) recovers them anyway | always persist them with the adjustments (most apps don't need it) | 9.5 |
+| RX40 ✅ | Culture of server reasons (found 2026-11-23 at RX-P7 start: `CallContext.Culture` exists, but nothing sets `CurrentUICulture` from it) | rejections: YFex.Messaging.Rpc sets `CultureInfo.CurrentUICulture` for the call from `CallContext.Culture` (one place, every handler benefits), the rules stage reads it; explain / what-if queries: `Culture` is a **query field** (cacheable, as `DescribeAppliedRule` in RX-P6) | the stage reads `CallContext` (Cqrs must not reference Messaging); culture in `EnforceOptions` (one culture per command) | 9.4, 9.7 |
+| RX41 ✅ | Masking of server reasons (found 2026-11-23: ⚑RX26 says "server-attached reasons" are masked, but a thin client's explain answer is UI) | rejection reasons (`EnforceOptions.Reasons`) use `catalog.Masked` (they also reach sync-failure logs and queues); explain / what-if query answers are full (the UI asked, under the module's own authorization, ⚑LZ25) | mask both (thin client shows "***" where the rich client shows the CPF); mask neither (rejections leak into logs) | 9.6, 9.7 |
+| RX42 ✅ | Which view models keep server reasons (found 2026-11-23: a thin-client VM has no `[ConstraintsFrom]`, so no `IWhySource`) | the Validation generator emits `IWhySource` + `__serverReasons` for every VM with Cqrs `ApplyServer` overloads, not only `[ConstraintsFrom]`; answers from server reasons first, until the next local decision | only `[ConstraintsFrom]` VMs (thin clients get no "?" from a rejection); a hand-written source per screen | 9.6 |
 
 New helpers named above and not yet in §3: `Decision.LimitOf(SituationFieldRef)` (§3.1), `DescribeAppliedRule.For(RuleSetRef, RuleRef)`,
 `WhyReportSet`, `ToAuditDecision`, `StoredDecisions.ToWhy`, `ShouldLimit/ShouldFailOn/AndWouldPass` test helpers.
@@ -1468,3 +1479,227 @@ Outside this document, fixed the same day: the localization README (§3.6, §5, 
   - **Left / follow-ups:** the code-rule splitter still rejects operands that read the `RuleContext` (`s.Total >= c.Get(Min)`), so
     such rules stay one custom condition; letting it split them (with `ReadsBase` for `c.Base`) is a small follow-up. A strict
     `>` that misses by zero reads "faltam mais de 0" (correct, unusual). `ExplanationLine.WhatIf` is RX-P5. Next RX-P3 (per field).
+
+- **2026-11-22 — RX-P3 decisions:** ⚑RX13 (typed-handle scan + `[Rule(Affects)]` + YFR0026) and ⚑RX15 (lazy Full on demand)
+  approved as recommended. Weighed for ⚑RX15 at the user's question: Full on every evaluation with State's `[Debounce]` on the
+  view-model properties. Rejected: debounce lowers how many evaluations run, not what each costs, so it helps both options
+  equally; discrete changes (a payment pick, a scanned line, a checkbox) are not debounced and would each pay the Full trace;
+  debouncing more fields to hide the cost delays limits and denials the user acts on; State's `[Debounce]` today only delays
+  validation and has open timer bugs (state/01 B1, B12). Debounce stays a State/Forms concern for typed fields.
+- **2026-11-22 — RX-P3 built** (⚑RX13–RX15; YFex.Rules only, uncommitted):
+  - **Static affects (⚑RX13):** new `RuleAffect(SituationFieldRef Field, bool IsLineField)`. `RuleDescriptor.Affects` /
+    `AdjustsAmount` (new optional `affects` / `adjustsAmount` on `Create` / `CreateLine`), `TableBinding.Affects` /
+    `AdjustsAmount` (resolved from the output columns when the definition is built), and the public resolver
+    `RuleSetDefinition.TryGetAffect(nameOrPath, lineField, out RuleAffect)` (situation field, output, `Lines[].X` or a line
+    field) that tables and Rules.Dynamic use. Per compiled set an internal `AffectIndex` (bool arrays for situation, line and
+    output ids; rules / tables disabled at a tier left out), built on first use.
+  - **Generator:** `AffectScanner` reads `Evaluate` **by syntax**, because `SaleSituation.Fields.X` and `SaleRules.Outputs.X`
+    are emitted by the same generator and have no symbol while it runs (a first `IOperation` version found nothing): for each
+    call on the writer parameter, the `field` / `path` argument (named or positional; `RequireApproval`'s second) must be
+    `T.Fields.X` with T the situation or line type (checked against T's members) or `R.Outputs.X` with R a `[RuleSet]` that
+    has an `[Output]` X; conditionals take both sides, casts and parentheses are skipped. `Decrease` / `Increase` / `Adjust`
+    → `adjustsAmount`. A local, a helper receiving the writer, or `d.Add` → **YFR0026** (warning; the rule still builds).
+    `[Rule(Affects = [nameof(…)])]` (new `RuleAttribute.Affects`) replaces the scan and silences YFR0026; a name that is no
+    situation / line field is matched to the rule set's outputs at assembly, **YFR0027** (error) when it is none. Emitted as
+    `affects: [new(global::Ns.SaleSituation.Fields.Installments), new(Outputs.Each), new(…Line.Fields.Qty, true)]`. Both ids in
+    `AnalyzerReleases.Unshipped.md`.
+  - **Dynamic rules:** `RuleCompiler` derives affects from the compiled directives (limit / grant fields; deny / warn /
+    approval paths through `TryGetAffect`, a line rule's bare path as its line's field first; decrease / increase →
+    `adjustsAmount`) and passes them to the descriptor.
+  - **`Decision.Affects` (⚑RX13):** `Affects(SituationFieldRef)`, `Affects(RuleOutput)`, `Affects(SituationFieldRef lineField,
+    int line)`, `Affects(in FieldPath)`: the static index, else a limit, violation or approval on the field. Allocation-free
+    (test: 200 calls, 0 bytes). A handle is classified by id **and** name, so a line handle passed to the one-argument
+    overloads is recognised as a line field when only the line schema has that id and name. Violation targets: `Lines[].X`
+    with its index, or a bare name written by a line rule (its source line) when the line type has it — the engine does not
+    prefix line paths.
+  - **Narrowing (⚑RX14 as approved in ⚑LZ28):** `Explanation.ForField(field)`, `ForField(lineField, line)`,
+    `ForOutput(RuleOutput)`, `ForObject()`, `ForPath(in FieldPath)`. A narrowed explanation keeps the field's limit / options
+    lines, violations and approvals on it, and the not-applied lines whose rule's static affects contain it (each with its
+    checklist); no adjustments. `ForObject()` keeps Applied, Initial, Final and the not-applied rules that adjust the amount.
+    New `Explanation.Field`, `IsLineField`, `LineIndex`, `Value` (the situation value or the computed output). Lines carry
+    internal `Target` / `TargetLine` / `Affects` / `AdjustsAmount` for the match (internal: no public surface before RX-P4
+    decides the reason model).
+  - **Lazy Full (⚑RX15):** `Decision.Explain` uses an internal `ExplainTrace()`: the requested trace when Full, else one
+    re-evaluation with `TraceLevel.Full` on the same compiled set (Debug-asserted same fingerprint), kept in the existing
+    `Extras` slot (field set once with `Interlocked.CompareExchange`; `_extras` lost `readonly`, the decision object did not
+    grow). `Decision.Trace` still returns only the requested trace. Checklists read the cached Full trace when present
+    (`KnownTrace`). `Explain` therefore always has the not-applied list and "also limited by", whatever the evaluation's trace
+    level; no existing test expectation changed.
+  - **Tests:** Rules 113 (+8 `PerFieldTests`: generated and table affects incl. outputs and a line field; `Affects` true via a
+    not-applied rule with no limit in the decision, false for unrelated fields, allocation-free; `ForField` = first-line limit
+    + not-applied 12x with its failing check + card-band table, nothing for `Payment`; `ForOutput(InstallmentValue)` = the
+    table row's `LimitMin`, "also limited by" the guardrail on an Off decision, the output's value; `ForObject` receipt; a line
+    field per line, without a line, and by `ForPath("Lines[].Quantity", 1)`; lazy Full computed once, same fingerprint and
+    entry count as an explicit Full evaluation, a Full decision not re-evaluated; new fixture rule set `why.order.lines`),
+    Dynamic 28 (+3 `DynamicAffectsTests`), Generator 34 (+4: affects from fields, outputs, line fields and a conditional;
+    YFR0026 for a helper and a local with in-source locations; `[Rule(Affects)]` with an output; YFR0027), Data 19.
+  - **Benchmark:** `TraceLevelBenchmarks` gains "Off + Explain (Full on demand)", "Full + Explain" and "Affects (one field)"
+    (benchmark project now references YFex.Localization for the catalog). In-process, 15 iterations, 5 warm-up: Off 3.08 µs / 3 032 B, Applied 3.82 µs / 8 937 B, Full 4.65 µs / 12 361 B — the evaluation path did not change (RX-P2: Off 3.09–3.46 µs, 3.03 KB); Off + Explain (Full on demand) 18.6 µs / 60.9 KB against Full + Explain 15.4 µs / 57.8 KB, so opening "why" on an Off decision costs about one Off evaluation more than evaluating Full up front; `Affects` 3.7 ns, 0 B. The allocation test is unchanged and green.
+  - **Dependents:** Cqrs (11 + 3 + 17 + 26 with 1 skipped + 12 Approvals), Messaging (Rules.Admin.Tests 29, Messaging.Tests 192 with 2 skipped, Rpc 87; the solution's `Rpc.AotSample` fails restore on NU1902 MessagePack, unrelated), Offline.Tests 144 and Offline.Rules builds (NU1510 off, as before), Jobs 176 + Hub.Worker 20 + AOT smoke (published win-x64, no IL warnings, "AOT smoke OK"), `_ignore/SaleScenario` runs to phase 11.
+  - **Left / follow-ups:** none for RX-P3. The scan does not follow helper methods (by design: YFR0026 asks for
+    `[Rule(Affects)]`). `ExplanationLine` exposes no affects publicly; RX-P4 decides what the reason model carries. Next RX-P4,
+    which waits on ⚑WH1 (core `Reasons`).
+- **2026-11-22 — RX-P4 decisions** (the user asked for code examples of each recommendation first): ⚑RX17 as recommended,
+  with the per-call catalog and culture of §3.9 item 5 (not the WH1 sketch's catalog on the view model); `WhyKind` /
+  `WhyCheck` are **enums**, not a union or a closed `WhyItem` hierarchy (asked by the user: the kinds are labels over the same
+  fields, a renderer draws every kind the same way, new producers reuse the kinds, the JSON stays flat; same choice as ⚑RX8);
+  breadcrumbs are a neutral core `WhyStep(WhyKey, Text)` and Rules keeps its typed `ExplanationPath` and maps it (core never
+  names stages or rows); ⚑RX25 (generated `IWhySource`) and ⚑RX27 (source-generated JSON in core, now) approved. New ⚑RX35,
+  found while reading the code for ⚑RX23: State setters return early for an `Equals` value, so a new decision with the same
+  fingerprint was dropped and the view model kept the old decision (its "why" could name a rule that no longer sets the
+  limit). Approved fix: the State same-value hook below.
+- **2026-11-22 — RX-P4 built** (⚑RX17, RX23, RX25, RX27, RX35; core, YFex.Rules, YFex.State, YFex.Validation; uncommitted):
+  - **Core `YFex.Reasons`** (`WhyReport.cs`, `WhyJson.cs`): `WhyKind` (Info, Applied, NotApplied, Limit, Options, Warning,
+    Denied, NeedsApproval), `WhyCheck` (Passed, Failed, NotChecked, WouldPass, WouldFail, Unknown), `WhyStep`, `WhyCondition`
+    (Text, State, Actual, Missing), `WhyLink` (Text, `WhyKey` Target), `WhyItem` (Title, Kind + Detail, Description, Amount,
+    Field, Stage, Reference, Path, Conditions, Links, Key), `WhyReport` (Title, Items + Field, Value, Initial, Final, computed
+    `Worst` for one icon per field), `IWhySource.TryGetWhy(in FieldPath, IMessageCatalog, CultureInfo, out WhyReport)` +
+    `WhyChanged`. Texts only; every identity a `WhyKey`. `WhyJson.Serialize` / `Write` / `Deserialize` / `TypeInfo` over a
+    source-generated context (camelCase names, enum names as strings, defaults left out, `Worst` not written).
+  - **Rules:** `Explanation.ToWhy()` (items: violations, approvals, limits / options, applied, not applied; amounts signed
+    with new `RuleText.WhyDecrease` / `WhyIncrease`; `Reference` = `RuleText.WhyReference` "code · v{n} · tier"; values,
+    initial and final through `RuleText.WhyValue` so a masked catalog masks them; checklist conditions with
+    `RuleConditions.FormatActual` / `FormatMissing` (new public helpers); links keyed by the other rule or the group; item key =
+    the innermost path segment; field paths as view-model paths, `Lines[1].Quantity`). `Decision.TryGetWhy(in FieldPath, …)`:
+    `FieldPath.Empty` → the whole decision; a field nothing affects → false (no "?"). Four new keys in `texts.json` /
+    `texts.pt.json`.
+  - **State (⚑RX35):** for a reference-type `[Observable]` with default equality (not `string`, no `[EqualityComparer]`) the
+    setter is `if (ReferenceEquals) return; if (Equals) { __OnSameValue_X(in value, ref field); return; }` and declares
+    `partial void __OnSameValue_X(in T value, ref T field)`; unimplemented, the compiler removes the call, so other view
+    models behave as before (test: the old instance is kept). The dead `ReferenceType` arm of the equality switch was removed.
+  - **Validation generator (⚑RX25, RX23):** a view model with a `[ConstraintsFrom]` member also implements `IWhySource`
+    (`TryGetWhy` asks each decision member in order; explicit `WhyChanged` event). `__ApplyDecision_X` raises `WhyChanged("")`;
+    `__OnSameValue_X` (emitted only when State declares it, same rule) stores the newer decision and raises `WhyChanged("")`
+    only — constraints, violations and `PropertyChanged` stay quiet.
+  - **Tests:** core 17 Reasons tests (+3 `WhyReportTests`: worst kind, JSON round trip, missing collections), State +3
+    `SameValueHookTests`, Rules 121 (+8 `WhyModelTests`: field report with limit, key, reference, path schemes and the 12x
+    checklist with actual and missing; receipt with signed amounts and initial / final; a line field path; `TryGetWhy`
+    true / false / whole; masked AI JSON never carries the CPF; the generated `SaleVm` answers per culture without a catalog
+    and with no decision; same-situation recompute keeps the newer decision, raises `WhyChanged`, no `Policy` change; a
+    `[ConstraintsFrom]` with its own `[EqualityComparer]` builds and answers).
+  - **Verification:** core 333 + Authorization 106 + 12 (the core solution's restore misses a `YFex.System.Tests` project, unrelated), State 65 + 387 + Validation.Generator 50, Validation 67, Rules 121 / 28 / 34 / 19, Mvvm and Persistence build (Persistence 5 + 9 + 34 + 18), NavigatR 6 + 193 of 196 (3 `StringRouteTests` fail the same way with the State change removed: pre-existing route parsing), UI builds (Drawing 75, SourceGenerator 18, Avalonia 437 of 438: `GeometryEditorTests.Renderer_FallsBackWhenThemeBrushesAreTransparent`, a theme brush colour in a repo with other uncommitted work; not investigated), Cqrs, Messaging, Offline, Jobs as in RX-P3, `_ignore/SaleScenario`, Jobs AOT smoke OK.
+  - **Left / follow-ups:** a derived view model that adds its own `[ConstraintsFrom]` re-implements `IWhySource` and does not
+    ask the base class's decisions (no virtual chain yet; rare, noted). The State emitter's `Custom` equality calls
+    `.Default` although `[EqualityComparer]` documents "Default or Instance" (`ReferenceEqualityComparer` has only
+    `.Instance`) — pre-existing, not changed. Next RX-P5 (what if).
+- **2026-11-22 — RX-P5 decisions** (shown to the user with code first): ⚑RX18 copy + re-evaluate (not "assume the rule
+  applies"), ⚑RX19 nearest satisfying value, new ⚑RX36 (no what-if on derived fields: §3.7 had assumed `Total` could be
+  changed in a copy) and new ⚑RX37 (typed request, report key, `IWhySource.TryWhatIf`), all as recommended.
+- **2026-11-22 — RX-P5 built** (⚑RX18, RX19, RX36, RX37; core, YFex.Rules, YFex.Validation; uncommitted; continued in a
+  side session after the original session handed it over):
+  - **`ISituation.TryWith`** (static virtual, default false): the situation generator emits it after `Deserialize`, through the
+    same constructor of the non-derived fields; scalars and `IRawValue` types through `RawValueConvert.TryGet`, enums through
+    `TryGetEnum`, wrappers rebuilt around their inner value, nullable fields accept None; a line index sets that line's field
+    with the line type's `TryWith` and `ImmutableArray.SetItem`; derived and lines fields, values that do not convert and
+    missing lines → false. A first emission left CS8600 warnings for text wrappers and `string?` fields (fixed: `string?` reads,
+    nullable locals).
+  - **Requests:** `WhatIfChange`, `WhatIfRequest`, `WhatIfResult<TS>` (`Decisions/WhatIf.cs`). `RuleConditions.WhatIf`, built with
+    the checklist: one change per Failed / WouldFail check; = / ≥ / ≤ → the literal, > / < → ± one step (integers 1, decimals
+    and amounts 10^−d of the rule set's `Rounding.Decimals`: R$ 49,99 for `< R$ 50`), true / false conditions → the boolean;
+    table cells: Is / value → the value, In → its first value, Not → none, band → its From, else below its exclusive To. Null when
+    a failing check has no field, is on a `[Derived]` or lines field, compares with ≠ or is an expression (⚑RX36).
+  - **Decision:** `TryWhatIf(in request, out after)` (copy, then `Evaluator.Evaluate` on the same compiled set, trace Off);
+    `WhatIf(in request, field, catalog, culture)` → summary `RuleText.WhatIfSummary` with the changes (`rules.whatif.change`
+    "{field} = {0}", joined by `rules.whatif.and`) and the field's result after (`rules.whatif.max/min/range/options`, a
+    violation's text, else `rules.whatif.final`), `rules.whatif.no-change` when before and after read the same: "Com Pagamento =
+    CreditCard e Categoria = Gold: até 12". `TryGetWhatIf(WhyKey)` reads `whatif:{code}[#row][@line]` and rebuilds the request
+    from this decision's checklist; `TryWhatIf(WhyKey, in FieldPath, catalog, culture, out WhyReport)` = the changed decision's
+    field report titled with the summary. Eight new keys, en + pt.
+  - **Core:** `WhyItem.WhatIf` (`WhyKey`, empty when none); `IWhySource.TryWhatIf`. `Explanation.ToWhy` sets the key on items
+    whose checklist has a request (`WhyScheme.WhatIfKey` / `TryReadWhatIf`). No hand-written `IWhySource` existed to update.
+  - **Validation generator:** `IWhySource.TryWhatIf` asks each `[ConstraintsFrom]` decision in order.
+  - **Tests:** Rules 132 (+11 `WhatIfTests` with the rule set `sale.whatif`: `TryWith` on a field, an enum, a line field, a
+    derived field followed by the copy, and refusals; hand-written `HSale` → false; Payment and Tier set together; > 6 → 7;
+    line `UnitPrice < R$ 50` → R$ 49,99 on line 0; ≠, applied rules, the derived 12x and its band table → none; counterfactual
+    with the original untouched; pt and en summaries; "sem mudança"; key round trip and JSON `whatIf`; line key `@0`;
+    report by key; the generated `SaleVm` simulates Boleto: "Com Pagamento = Boleto: até 1"), Generator 35 (+1: `TryWith` for
+    every shape, no warnings, no case for lines or derived).
+  - **Verification:** same as RX-P4 apart from the new tests: core 333 + Authorization 106 + 12, State 65 + 387 + Validation.Generator 50, Validation 67, Rules 132 / 28 / 35 / 19, Mvvm builds, Persistence 34 + 5 + 9 + 18, NavigatR 6 + 193 of 196 (the 3 pre-existing `StringRouteTests`), UI Drawing 75 + SourceGenerator 18 + Avalonia 437 of 438 (the same `GeometryEditorTests` failure), Cqrs, Messaging (Rules.Admin 29, Messaging 192, Rpc 87; `Rpc.AotSample` NU1902), Offline 144 (NU1510 noise), Jobs 176 + 20, `_ignore/SaleScenario` to phase 11, Jobs AOT smoke OK.
+  - **Left / follow-ups:** none for RX-P5. Next RX-P6 (rule as applied): ⚑RX20–RX22 and RX31 are pending; show the user code
+    for each recommendation before building.
+- **2026-11-22 — RX-P6 decisions** (shown to the user with code first): ⚑RX20–RX22, RX31 and the new ⚑RX38 (`ToAuditDecision`
+  in YFex.Cqrs) / ⚑RX39 (audit encoding) approved as recommended, with one caveat: **no data is in use or stored yet, so
+  nothing keeps compatibility with old layouts** (⚑RX39 therefore extends `0x12` instead of adding a `0x13` section). ⚑RX22 is
+  still built for its runtime case (a device that pruned a data version), not for legacy data.
+- **2026-11-22 — RX-P6 built** (YFex.Rules, YFex.Rules.Admin, YFex.Cqrs, YFex.Audit; uncommitted):
+  - **Rules — view:** `AppliedRuleView` (title, description, kind CodeRule / TableRow / RuntimeRule, stage / group titles, tier
+    label, version label "v1 · dados v42 · publicado em … por ana", row label, conditions, values, note, publisher,
+    `DataAvailable`, `CodeChanged`, `Notice`) + `AppliedRuleValue`; `AppliedRules.Describe(decision | compiled set, ref, catalog,
+    culture[, published])` (`Tracing/AppliedRules.cs`). Built from the **compiled set the decision ran on**, not from one store
+    record as §3.6 sketched (a code rule's parameters can come from several tiers): parameter values in force or defaults
+    (`RuleParameter.RawOf`), a row's output cells (new generated `IDecisionTable.GetOutput`, `TableInstance.OutputOf`),
+    conditions through a situation-free checklist (`Checklist.Static` + `RuleConditions.FormatCondition`, so bands and In lists
+    read as in the explanation). ⚑RX22: when the set holds another data version than the ref's, data texts are dropped and
+    `Notice` = `rules.applied.unavailable` ("disponível online"); a ref with another code `Version` → `CodeChanged` +
+    `rules.applied.code-changed`. Shared labels moved to `RuleLabels` (Explanation delegates to it).
+  - **Rules — host:** `IRuleSetHost.DescribeAppliedAsync(store, ref, tierPath?, date?, catalog, culture)`: the record of the
+    ref's data version, the data ≤ that version, compiled on the given path / date or the record's; null when nothing has the code.
+  - **Rules — refs and replay (⚑RX21, RX31, RX33):** `DecisionRuleRef(RuleRef, DecisionRuleRole, Field, Value)` and
+    `Decision.RuleRefs()` (adjustments, limit min / max / options winners, violation and approval sources);
+    `StoredDecision(Situation bytes, RulesetVersion, Fingerprint){Rules}` + `Decision.ToStored()`; `DecisionReplay.LoadDataAsync`
+    (versions ≤ the stored data version; undecodable records skipped) / `Evaluate` / `ReplayAsync` → `DecisionReplayResult`
+    (`Matches` = same fingerprint and code version); fallback `StoredDecisions.ToWhy(set, refs, field, catalog, culture)` →
+    `WhyReport` opening with an Info item `rules.applied.from-record`. Seven new keys, en + pt.
+  - **Rules.Admin (⚑RX20):** `RuleAdmin.Queries.DescribeAppliedRule(RuleSet, Code, Version, Tier, DataVersion, RowId, Culture,
+    TierPath?, EffectiveDate?)` + `For(RuleSetRef, RuleRef, culture?, tierPath?, date?)` → `AppliedRulePayload` (MemoryPack wire
+    form, `From` / `ToView`). **Culture is a query field** (not the call's `CurrentUICulture` as §9.8 sketched) because the
+    query is cacheable. `DescribeAppliedRuleHandler` (catalog from DI, else the rule engine's own texts);
+    `RuleAdminOptions.AppliedRulePermission` (null = any signed-in user), `RuleAdminAppliedRuleRequirement`, new catalog
+    permission `rules.applied.view` (`RuleAdminPermissions.AppliedView`).
+  - **Cqrs (⚑RX38):** references `YFex.Audit.Public`; `RuleAuditing.ToAuditDecision(decision, flagged)` and
+    `AuditDecision.ToRuleRefs()`.
+  - **Audit (⚑RX21, RX39):** `AuditDecision.CodeVersion` + `Rules` (`AuditDecisionRule`, `AuditRuleRole`), value equality over
+    the list; written inside `0x12`.
+  - **Tests:** Rules 142 (+10 `AppliedRuleTests`: code rule with a tenant rate, code default, table row of version 1 after
+    version 2 from the store, the same view from the decision, unavailable version, older code version, rule refs incl.
+    approvals, replay to the fingerprint after a later publish, fallback after a `CodeVersion` change, generated outputs),
+    Dynamic 29 (+1: spec messages and conditions), Data 19, Generator 35; Rules.Admin 33 (+4: view, NotFound, open while
+    `ViewPermission` locks raw data, `AppliedView` enforced); Audit 28 (+1 golden bytes of the decision section).
+  - **Verification:** rules.slnx, audit.slnx, cqrs.slnx and messaging.slnx build and pass (Rules.Admin 33, Messaging 192,
+    Rpc 87, Approvals 12; `Rpc.AotSample` NU1902 as before). Downstream: Mvvm builds; NavigatR 6 + 193 of 196 (the 3
+    pre-existing `StringRouteTests`); Jobs 176 + 20; Capabilities 34 + 10 + 5; Offline 144, Orchestration 40 and EventSourcing
+    31 pass when built with NU1510 / NU1902 not as errors (the same NuGet noise as before; no compile error).
+  - **Left / follow-ups:** no Cqrs test hosts a rule set, so `ToAuditDecision` is covered through `RuleRefs` and the Audit
+    round trip only. A runtime rule whose data version is gone returns null (NotFound), not an "unavailable" view.
+    Next RX-P7 (server and thin clients, ⚑RX30, RX32).
+- **2026-11-23 — RX-P7 decisions** (shown to the user with code first): ⚑RX30 and RX32 approved as recommended, with three
+  findings recorded as new decisions and approved: ⚑RX40 (nothing set `CurrentUICulture` from `CallContext.Culture`; the RPC
+  call context now does; explain / what-if queries carry `Culture` as a field because they are cacheable), ⚑RX41 (rejection
+  reasons masked, explain answers full), ⚑RX42 (every view model with the Cqrs `ApplyServer` overloads keeps server reasons,
+  not only `[ConstraintsFrom]` ones). Both queries return `WhyReport`; §9.7's `WhatIfView` is dropped.
+- **2026-11-23 — RX-P7 built** (core, YFex.Rules, YFex.Cqrs, YFex.Messaging.Rpc, YFex.Validation generator; uncommitted):
+  - **Core:** `Reasons/WhyReportSet` (struct over `ImmutableArray<WhyReport>`; `TryGet(FieldPath)` by formatted path,
+    `FieldPath.Empty` = the whole-decision report; `MapFields(state, map)` rewrites report and item paths, unparsable paths kept).
+  - **Rules:** `RejectionReasons` None / Fields / Full and `EnforceOptions.Reasons`; `Decision.WhyFor(reasons, catalog, culture)`:
+    one report per distinct violation / approval path that `TryGetWhy` answers, plus the whole decision for Full;
+    `SituationPathMap.Map(WhyReportSet)`.
+  - **Cqrs:** `ValidationProblem.Reasons`, `ApprovalRequired.Reasons`, `Error.Reasons`; the union keeps the reasons as their
+    array in the payload slot (no box). `Error.Validation(result, reasons)`, `Error.ApprovalRequired(…, reasons)`. The rules
+    stage builds reasons only on rejection, with `MessageCatalog.Masked` of the DI catalog (else the engine's own texts
+    masked: a foreign `IMessageCatalog` cannot mask), in `CurrentUICulture`, through `Options.Paths`. Cqrs now references
+    the YFex.Localization runtime (layer below it) for `MessageCatalog`. `ExplainQueries.cs`: `IExplainQuery` (Field,
+    Culture), `IWhatIfQuery` (+ WhatIf key), `ExplainFieldHandler` / `WhatIfHandler` reading the query's decision from
+    `DecisionContext` (unmasked, ⚑RX41; a field nothing explains → a report without items; a foreign key → NotFound),
+    `services.AddExplainQuery<TQuery, TS>()` / `AddWhatIfQuery`.
+  - **Messaging.Rpc:** `CallContext.Enter` sets `CultureInfo.CurrentUICulture` from `Culture` and restores it (unknown names
+    ignored). Wire **v9**: `ValidationProblem` and `ApprovalRequired` end with their reports; `WhyReportFormatter` for query
+    results (registered with the others; `Register<WhyReport>()` for `Result<WhyReport>`). No compatibility branch beyond the
+    existing version gate (nothing deployed).
+  - **Validation generator (⚑RX42):** `IWhySource` also when the view model has Cqrs `ApplyServer` overloads;
+    `__vServerReasons` answered first by `TryGetWhy`; `__ApplyServerError` stores `error.Reasons` mapped contract → VM paths
+    (`__MapServerReasons<TContract>` through the generated `__PathMap_n`); `__ApplyServerOk` and `__ApplyDecision_X` clear them;
+    `WhyChanged("")` on each change.
+  - **Tests:** core 20 Reasons (+3 `WhyReportSetTests`); Rules 146 (+4 `RejectionReasonsTests`: Fields / None, Full, approval
+    field, path map); Rpc 92 (+5 `ReasonsWireTests`: validation and approval reasons lossless by JSON, empty when absent, a
+    report as `Result<WhyReport>`, call culture set and restored); Messaging 200 (+8 `ServerReasonsTests` on the checkout
+    fixture: None, Fields in pt and en, path map, Full, approval reasons, explain query incl. an unexplained field, what-if
+    from a report key and a forged key refused, the generated `CheckoutVm` keeps reasons after a rejection and drops them on
+    success).
+  - **Verification:** core 336; Rules 146 / 29 / 35 / 19; Validation 67; State 387 + 65 + Validation.Generator 50; Cqrs 3 / 11 /
+    17 / 26; Messaging 200, Rpc 92, Rules.Admin 33, Approvals 12; downstream Offline 144, Jobs 176 + 20, Capabilities 34 + 10 + 5,
+    Orchestration 40, EventSourcing 31, NavigatR 6 + 193 of 196 (the 3 pre-existing `StringRouteTests`), Mvvm and the UI
+    solution build (NU1902 / NU1510 not as errors, as before).
+  - **Left / follow-ups:** masking of rejection reasons (⚑RX41) is a one-line catalog choice; no Messaging test has a
+    `[Sensitive]` situation field, so it is covered by the Rules masked-catalog tests only. A thin client's "Simular" on a
+    server reason needs the app (or a later UI helper) to send `IWhatIfQuery`; the generated `TryWhatIf` only runs local
+    decisions. RX-P7 was the last RX phase; open: ⚑RX28, RX29, RX33.

@@ -311,6 +311,18 @@ naming conventions only:
    partial void __OnBatchValidated();
    ```
 
+   and, for a reference-type member compared by its own `Equals` (no `[EqualityComparer]`, not `string`), a hook for an
+   `Equals`-but-new instance, which raises no change (validation/14 ⚑RX35):
+
+   ```csharp
+   if (ReferenceEquals(_policy, value)) return;
+   if (_policy is not null && _policy.Equals(value)) { __OnSameValue_Policy(in value, ref _policy); return; }
+   partial void __OnSameValue_Policy(in Decision<SaleSituation>? value, ref Decision<SaleSituation>? field);
+   ```
+
+   YFex.Validation.Generator implements it for `[ConstraintsFrom]` decisions: it stores the newer decision (same outcome,
+   newer sources) and raises `IWhySource.WhyChanged`; it also emits `IWhySource` (⚑RX25) next to `IValidationSource`.
+
    `StateObject.OnUpdateCompleted()` runs when the outermost `BeginUpdate()` scope ends, before the batched
    notifications. Unimplemented partial void methods are **removed by the compiler** → zero cost for VMs without
    validation. The old `Validate_X` emission is deleted.

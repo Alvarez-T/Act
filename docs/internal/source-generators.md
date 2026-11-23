@@ -75,7 +75,7 @@ readonly struct EquatableArray<T> : IEquatable<EquatableArray<T>>, IEnumerable<T
 | Candidate | `PropertyDeclarationSyntax` or `VariableDeclaratorSyntax` | Pass/fail |
 | Transform | Semantic analysis: partial check, StateObject inheritance, type, equality strategy | `ObservablePropertyRawModel` |
 | Group | Merge by (Namespace, ClassName) | `ObservableClassModel` |
-| Emit | Per-class partial | Static descriptors, property setters, DispatchPending, MVVM cache, activation, validation hooks (`__OnValidate_X(in value)` call + `partial void` declaration per writable property; `OnUpdateCompleted` override → `partial void __OnBatchValidated()`) — implemented by YFex.Validation.Generator (D22) |
+| Emit | Per-class partial | Static descriptors, property setters, DispatchPending, MVVM cache, activation, validation hooks (`__OnValidate_X(in value)` call + `partial void` declaration per writable property; `OnUpdateCompleted` override → `partial void __OnBatchValidated()`; for reference-type properties with default equality, `partial void __OnSameValue_X(in value, ref field)` called when an `Equals`-but-new instance arrives, no change raised — validation/14 ⚑RX35) — implemented by YFex.Validation.Generator (D22) |
 
 **Key decisions in Transform:**
 
