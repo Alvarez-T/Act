@@ -150,6 +150,12 @@ acceptance tests.
   `presence_at` claim. **✅ Built 2026-10-29** ahead of its producer (authentication AN-P7 / installations I6), tested with a fake claim. **Acceptance:** fresh presence allows; missing, old or
   unparseable presence denies with the typed reason; visibility unchanged; AOT 0 warnings.
 
+- **Reasons for denials (request from validation/14 ⚑RX29, approved 2026-11-23; not built):** `Denial.ToWhy(IMessageCatalog, CultureInfo)`
+  → core `YFex.Reasons.WhyReport` (kind `Denied`; items for the missing permission's title, the policy, step-up / presence
+  requirements, the unavailable module via `ExplainUnavailable`), so a "why" control explains a disabled command with the same
+  model Rules uses. No wire change: `Forbidden` already carries the `Denial`, the client builds the report. **Acceptance:** each
+  `DenialKind` gives a report with a stable `WhyKey` (`permission:{id}`, `policy:{name}`); texts from the catalog in en + pt.
+
 ## Documentation updates (end of each phase)
 
 `YFex.Authorization/README.md`; `YFex/CLAUDE.md` (solution map + Common Tasks rows "Caller identity", "Require permissions");

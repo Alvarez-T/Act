@@ -6,7 +6,7 @@
 > `YFex.Rules.Dynamic` (JSON rules with arithmetic + built-in/app/contract functions) and the AI schema export (validatable types,
 > situations, rule sets, rule specs; YFex.Capabilities `ParametersSchema`). Open: Phase 6A Fiscal (deferred by the user), then
 > Phase 5 (Avalonia) last (needs a reusable table/grid design). **Proposed 2026-11-19:** explanations for the UI "why"
-> component, ⚑RX1–RX42 ([14](14-explanations-for-ui.md)); RX-P0–RX-P7 built (RX-P7 server reasons and thin-client explain / what-if: 2026-11-23); open ⚑RX28, RX29, RX33.
+> component, ⚑RX1–RX42 ([14](14-explanations-for-ui.md)); RX-P0–RX-P7 built (RX-P7 server reasons and thin-client explain / what-if: 2026-11-23); every ⚑RX decided (RX28 tier value names built 2026-11-23).
 > **Audience:** AI sessions that will implement it. Read this file first, then only the files your
 > phase needs (see [13-phases-and-acceptance.md](13-phases-and-acceptance.md)).
 > **Normative vs sketch:** type names, member names and signatures in code blocks are **normative**

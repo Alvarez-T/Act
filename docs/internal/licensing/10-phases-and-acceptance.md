@@ -45,6 +45,7 @@
 | YFex.Time | none: `GetTrustedNow()` + `IsUsableForSecurity` are enough | ✅ built |
 | YFex.Capabilities | optional "show unavailable as upsell" | open question |
 | YFex.Tenancy | optional scope kinds for `ScopeLimit` per kind | open question (03 §1.1) |
+| YFex.Authorization (from validation/14 ⚑RX29, 2026-11-23) | an unavailable feature explains itself in the "why" model: the `IPermissionAvailability.TryExplain` text ("Módulo Fiscal não licenciado") becomes an item of Authorization's `Denial.ToWhy` report; Licensing supplies the text keys | requested (with Authorization's `Denial.ToWhy`) |
 
 ## 3. Dependencies
 

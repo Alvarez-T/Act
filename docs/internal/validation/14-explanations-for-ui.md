@@ -520,7 +520,7 @@ d.ShouldNotApply(SaleRules.Rules.Card12x);         // test helpers (§9.11)
   found by `RuleRef` from the decision).
 - Cost: one static property per rule, built once with the definition.
 
-## 4. Decisions (⚑ pending unless marked; RX30–RX33 are in §9.12)
+## 4. Decisions (all decided 2026-11-23; RX30–RX33 and RX40–RX42 are in §9.12)
 
 | ⚑ | Topic | Proposal (recommended first) | Rejected alternatives | § |
 |---|---|---|---|---|
@@ -551,8 +551,8 @@ d.ShouldNotApply(SaleRules.Rules.Card12x);         // test helpers (§9.11)
 | RX25 ✅ | Validation generator (⚑WH3) (approved 2026-11-22) | emit `IWhySource` per `[ConstraintsFrom]` property calling `Decision.TryGetWhy`; rule-sourced violations in the bag link to their why through `ViolationOrigin` | hand-written per screen | 3.9 |
 | RX26 ✅ | Personal data in explanations (**realigned 2026-11-21 with ⚑LZ25** and the classification-on-the-type rule) | situation fields whose **type** is `[Sensitive]` (YFex.Privacy): `Actual` shown in the UI (as ⚑LZ25 decided for message arguments), masked when the explanation goes to logs, the AI JSON (⚑RX27), audit exports and server-attached reasons (⚑RX30) | mask in the UI by default with a per-screen opt-in (the 2026-11-19 proposal; contradicts ⚑LZ25); always clear everywhere (leaks in logs and AI) | 3.3 |
 | RX27 ✅ | AI and Capabilities (approved 2026-11-22: a source-generated `WhyJson` in core now, formatted with the masked catalog) | `WhyReport` JSON (source-generated) so YFex.Capabilities / YFex.Automation agents can answer "why" with the same data as the UI; `RuleSetDescription` stays for the rule set itself | separate AI-only explanation format | 3.9 |
-| RX28 | Tier value labels | tier label = catalog field name + the raw situation value; apps that want "Loja Centro" add the names to their message source (gathered before evaluation, Principle A) | Rules calls YFex.Tenancy to resolve scope names (I/O inside a pure library) | 3.2 |
-| RX29 | Reasons beyond Rules (⚑WH9) and across the wire | Cqrs `RulesStage` can attach a `WhyReport` to a Denied result for remote clients (needs string keys, §3.9); Authorization (`AuthorizationContext.ExplainUnavailable`, `DenialKind`) and Licensing produce `WhyReport` in their own phases | Rules explains permissions too (wrong owner) | 2, 3.9 |
+| RX28 ✅ | Tier value labels (approved 2026-11-23, built) | tier label = the app's name for the tier value when its catalog has the key `{situation}.{tier}={value}` (`sale.Store=12` → "Loja Centro"; the app builds that message source from its own data, e.g. YFex.Tenancy at startup), else the tier field's title + the raw value ("Loja 12") | Rules calls YFex.Tenancy to resolve scope names (I/O inside a pure library); raw value only (no friendly names) | 3.2 |
+| RX29 ✅ | Reasons beyond Rules (⚑WH9) and across the wire (approved 2026-11-23) | the Cqrs part is ⚑RX30 (built in RX-P7); Authorization produces `Denial.ToWhy(catalog, culture)` and Licensing supplies the unavailable-module text through `IPermissionAvailability.TryExplain` — recorded as requests in authorization-consolidation/09 Phase 7 and licensing/10 §2.3; no wire change (`Forbidden` carries the `Denial`) | Rules explains permissions too (wrong owner) | 2, 3.9 |
 | RX36 ✅ | What if on derived fields (found 2026-11-22; approved) | no what-if when a failing condition is on a `[Derived]` situation field, compares with ≠, is an expression or has no field: `RuleConditions.WhatIf` is null, the checklist keeps the distance ("faltam R$ 60,00") | change the derived value in the copy (impossible: the engine reads the computed property, so §3.7's 2026-11-19 text was wrong); assume the rule applies for those (a hybrid: answers that other rules on the same field would contradict) | 3.7 |
 | RX37 ✅ | Shape and reach of a what-if (2026-11-22; approved) | typed `WhatIfChange(SituationFieldRef Field, bool IsLineField, int Line, RawValue Value)` and `WhatIfRequest(RuleRef Rule, int Line, ImmutableArray<WhatIfChange>)` (no `ushort` tuples, §11 C4); `RuleConditions.WhatIf`; core `WhyItem.WhatIf` key (`whatif:{code}[#row][@line]`); `Decision.TryGetWhatIf(WhyKey)` rebuilds the request (thin clients send only the key, ⚑RX32); core `IWhySource.TryWhatIf(key, path, catalog, culture, out report)`, generated for `[ConstraintsFrom]` | Rules API only, each screen handling a `SimulateRequested` event itself (§9.2 sketch) | 3.7, 3.9 |
 | RX38 ✅ | Home of `ToAuditDecision` (found 2026-11-22, RX-P6) | in **YFex.Cqrs** (already references Rules; the command pipeline is where `AuditScope.Current` exists); Cqrs gains a reference to `YFex.Audit.Public` (core + Actors only) | Rules references `YFex.Audit.Public` (a pure engine learns about audit); each app writes the mapping (every app repeats it, and limit sources get forgotten) | 3.6, 9.5 |
@@ -579,7 +579,7 @@ d.ShouldNotApply(SaleRules.Rules.Card12x);         // test helpers (§9.11)
 | YFex.Privacy | **fits** | mask actual values of `[Sensitive]` types in logs, AI and exported explanations (UI shows them, ⚑LZ25) | RX26 |
 | YFex.Authorization | **fits (producer)** | approval permissions on limits come from Authorization `Permission`; it can produce reasons for unavailable commands | RX1, RX29 |
 | YFex.Licensing | fits (producer) | unavailable features through the Authorization availability hook | RX29 |
-| YFex.Tenancy | not a fit (by design) | tier labels come from situation values and the app's catalog, never from a Tenancy call | RX28 |
+| YFex.Tenancy | not a fit (by design) | tier labels come from situation values and the app's catalog (value names under `{situation}.{tier}={value}`, built by the app, possibly from Tenancy), never from a Tenancy call inside Rules | RX28 |
 | YFex.Capabilities, YFex.Automation | **fits** | AI "why" answers from the same `WhyReport` JSON | RX27 |
 | YFex.Time | not a fit | effective dates already come from the situation | — |
 | YFex.Logging | not a fit | explanations are user data, not logs; diagnostics probes unchanged | — |
@@ -890,9 +890,9 @@ public sealed class CloseSaleHandler(ISaleStore store) : IRuledCommandHandler<Sa
         var sale = SaleAggregate.Create(cmd.Value, d.Totals);
         sale.RecordAdjustments(d.Adjustments);                      // unchanged (06 §2): code, version, tier, data version, row
 
-        // optional (⚑RX33): which rule or row set each limit the customer saw
-        foreach (ref readonly var l in d.Limits)
-            if (!l.MaxSource.IsNone) sale.RecordLimit(l.Field, l.Max, d.RefOf(l.MaxSource));
+        // optional (⚑RX33 ✅): which rule or row set each limit the customer saw — already in the stored refs, no RecordLimit
+        var stored = d.ToStored();                                  // Rules: adjustments + LimitMin/LimitMax/Options winners + sources
+        sale.RecordRuleRefs(stored.Rules);                          // the app's own column; replay (9.9) recovers them without it
 
         using var bytes = new ArrayPoolBufferWriter<byte>();
         Situation.WriteTo(d.Situation, bytes);
@@ -1094,7 +1094,7 @@ d.WhatIf(d.Conditions(SaleRules.Rules.Card12x)!.WhatIf!.Value, SaleSituation.Fie
 | RX30 ✅ | Reasons on server rejections (approved 2026-11-23; with RX40–RX42) | `EnforceOptions.Reasons` (None default / Fields / Full); `ValidationProblem` and `ApprovalRequired` gain an optional `Reasons` (`WhyReportSet`: field → report); catalog from DI, culture from `CurrentUICulture` set by the RPC middleware from `CallContext.Culture`; generated `ApplyServer` keeps them for `IWhySource` until the next local decision | the client re-evaluates to explain (impossible for thin clients, wrong when the server's data differs); always attach (cost on every rejection) | 9.4, 9.6, 9.10 |
 | RX31 ✅ | Explaining stored decisions (approved 2026-11-22) | `DecisionReplay` (load data ≤ the stored data version, then pure evaluation, fingerprint check) with a fallback to persisted adjustments + limit refs | store the explanation text with the document (culture-bound, bulky, stale after catalog fixes); replay only (fails after code changes) | 9.9 |
 | RX32 ✅ | Thin-client explain / what-if (approved 2026-11-23; both queries return `WhyReport`, no `WhatIfView`) | app-declared typed queries (`ICarriesSituation`, the module's own authorization, cacheable) + generic handlers `ExplainFieldHandler` / `WhatIfHandler` in YFex.Cqrs; what-if only as a key from the report | one generic `RuleAdmin.Queries.Explain(RuleSet, byte[] situation)` (untyped, bypasses the module's authorization); what-if with arbitrary values from the client | 9.7 |
-| RX33 | Limit sources on the document | optional (`RecordLimit`), the app decides; replay (RX31) recovers them anyway | always persist them with the adjustments (most apps don't need it) | 9.5 |
+| RX33 ✅ | Limit sources on the document (approved 2026-11-23; nothing to build) | optional: `Decision.ToStored().Rules` (RX-P6) already carries the limit winners (`LimitMin` / `LimitMax` / `Options`) next to the adjustments; the app stores them or not, and replay (RX31) recovers them anyway; no `RecordLimit` API | always persist them with the adjustments (most apps don't need it); a separate `RecordLimit` helper (duplicates `StoredDecision.Rules`) | 9.5 |
 | RX40 ✅ | Culture of server reasons (found 2026-11-23 at RX-P7 start: `CallContext.Culture` exists, but nothing sets `CurrentUICulture` from it) | rejections: YFex.Messaging.Rpc sets `CultureInfo.CurrentUICulture` for the call from `CallContext.Culture` (one place, every handler benefits), the rules stage reads it; explain / what-if queries: `Culture` is a **query field** (cacheable, as `DescribeAppliedRule` in RX-P6) | the stage reads `CallContext` (Cqrs must not reference Messaging); culture in `EnforceOptions` (one culture per command) | 9.4, 9.7 |
 | RX41 ✅ | Masking of server reasons (found 2026-11-23: ⚑RX26 says "server-attached reasons" are masked, but a thin client's explain answer is UI) | rejection reasons (`EnforceOptions.Reasons`) use `catalog.Masked` (they also reach sync-failure logs and queues); explain / what-if query answers are full (the UI asked, under the module's own authorization, ⚑LZ25) | mask both (thin client shows "***" where the rich client shows the CPF); mask neither (rejections leak into logs) | 9.6, 9.7 |
 | RX42 ✅ | Which view models keep server reasons (found 2026-11-23: a thin-client VM has no `[ConstraintsFrom]`, so no `IWhySource`) | the Validation generator emits `IWhySource` + `__serverReasons` for every VM with Cqrs `ApplyServer` overloads, not only `[ConstraintsFrom]`; answers from server reasons first, until the next local decision | only `[ConstraintsFrom]` VMs (thin clients get no "?" from a rejection); a hand-written source per screen | 9.6 |
@@ -1702,4 +1702,12 @@ Outside this document, fixed the same day: the localization README (§3.6, §5, 
   - **Left / follow-ups:** masking of rejection reasons (⚑RX41) is a one-line catalog choice; no Messaging test has a
     `[Sensitive]` situation field, so it is covered by the Rules masked-catalog tests only. A thin client's "Simular" on a
     server reason needs the app (or a later UI helper) to send `IWhatIfQuery`; the generated `TryWhatIf` only runs local
-    decisions. RX-P7 was the last RX phase; open: ⚑RX28, RX29, RX33.
+    decisions. RX-P7 was the last RX phase; open: ⚑RX28, RX29, RX33 (decided the same day, next entry).
+- **2026-11-23 — ⚑RX28, RX29, RX33 decided** (shown with code first; approved as recommended). Every ⚑RX decision is now settled.
+  - **RX28 built (YFex.Rules):** `RuleLabels.TierLabel` first formats the key `{situation}.{tier}={value}` (value text invariant;
+    a known key is one that does not render as itself) and falls back to the tier field's title + value. Test
+    `AppliedRuleTests.Tier_label_uses_the_app_name_of_the_tier_value_when_the_catalog_has_one` ("Rede Centro" / "Empresa t1");
+    Rules 147 / 29 / 35 / 19.
+  - **RX29:** nothing more in Rules; requests recorded in authorization-consolidation/09 Phase 7 (`Denial.ToWhy`) and
+    licensing/10 §2.3 (unavailable-module text through `IPermissionAvailability.TryExplain`).
+  - **RX33:** nothing to build; §9.5 now stores `d.ToStored().Rules` instead of the sketched `RecordLimit`.
