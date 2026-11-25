@@ -1,6 +1,6 @@
 # YFex.State — finish what the attributes promise — Plan
 
-> **Status:** PROPOSED 2026-11-19. Docs only, no code. Decisions ⚑ST1–⚑ST52 (§6): decided ⚑ST2, ⚑ST49, ⚑ST50, ⚑ST51, ⚑ST52 (2026-11-19) and every ST-P1 decision — ⚑ST3–ST8, ⚑ST9 (child objects), ⚑ST10, ⚑ST31, ⚑ST32, ⚑ST34, ⚑ST39 (2026-11-25); ST-P0 built and committed (`b9d9218`); **ST-P1 built 2026-11-25 (uncommitted)**; the rest pending, answered phase by phase. View integration (02 §9,
+> **Status:** PROPOSED 2026-11-19. Docs only, no code. Decisions ⚑ST1–⚑ST52 (§6): decided ⚑ST2, ⚑ST49, ⚑ST50, ⚑ST51, ⚑ST52 (2026-11-19) and every ST-P1 decision — ⚑ST3–ST8, ⚑ST9 (child objects), ⚑ST10, ⚑ST31, ⚑ST32, ⚑ST34, ⚑ST39 (2026-11-25); ST-P0 built and committed (`b9d9218`); **ST-P1 built and committed 2026-11-25** (State `0be711f`, Mvvm `f27526b`, UI `cf3f1f0`); the rest pending, answered phase by phase. View integration (02 §9,
 > ⚑ST42–ST48) added the same day at the user's request: views should bind generated state directly, with YFex.UI types.
 > **Repo:** `C:\Dev\YFex\YFex.State` (`state.slnx`). Existing internals: [state-internals](../state-internals.md),
 > [state-history-internals](../state-history-internals.md); public guide [state](../../public/state.md).
