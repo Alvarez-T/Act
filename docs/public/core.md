@@ -59,6 +59,24 @@ decimal reduced = 1000m.ReduceBy(rate);      // 525m (1000 - 475)
 decimal original = 1475m.ReverseIncrease(rate); // 1000m — what was it before the increase?
 ```
 
+### TrendValue: a value against an earlier one
+
+`TrendValue` compares a current value with a previous one ("sales vs last month") and avoids the divide-by-zero every
+hand-written version forgets: `Relative` is null when the previous value is 0.
+
+```csharp
+var sales = TrendValue.Of(current: 84_210m, previous: 74_920m);
+sales.Absolute;          // 9290
+sales.Relative;          // 12.40 % (Percentual?, null when previous is 0)
+sales.Direction;         // TrendDirection.Up
+$"{sales}";              // "+12.4 %"; "A0" formats the absolute change ("+9,290")
+TrendValue.TryOf(thisMonth, lastMonth, out var revenue);   // Money: false when the currencies differ
+sales.WithFlatBelow(Percentual.FromPercentage(0.5m));      // changes under 0.5 % read as Flat
+```
+
+It logs previous and current (`ILogValue`), serializes as `{"previous":…,"current":…}`, and is shown by `YTrend` in
+YFex.UI (which binds the relative change as a number).
+
 ### Enum Code Mapping
 
 ```csharp
