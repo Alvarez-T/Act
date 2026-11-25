@@ -1,6 +1,9 @@
 # YFex.State — finish what the attributes promise — Plan
 
-> **Status:** PROPOSED 2026-11-19. Docs only, no code. Decisions ⚑ST1–⚑ST52 (§6): decided ⚑ST2, ⚑ST49, ⚑ST50, ⚑ST51, ⚑ST52 (2026-11-19) and every ST-P1 decision — ⚑ST3–ST8, ⚑ST9 (child objects), ⚑ST10, ⚑ST31, ⚑ST32, ⚑ST34, ⚑ST39 (2026-11-25); ST-P0 built and committed (`b9d9218`); **ST-P1 built and committed 2026-11-25** (State `0be711f`, Mvvm `f27526b`, UI `cf3f1f0`); the rest pending, answered phase by phase. View integration (02 §9,
+> **Status:** PROPOSED 2026-11-19. Docs only, no code. Decisions ⚑ST1–⚑ST52 (§6): decided ⚑ST2, ⚑ST49, ⚑ST50, ⚑ST51, ⚑ST52 (2026-11-19) and every ST-P1 decision — ⚑ST3–ST8, ⚑ST9 (child objects), ⚑ST10, ⚑ST31, ⚑ST32, ⚑ST34, ⚑ST39 (2026-11-25); every ST-P2
+decision — ⚑ST11, ⚑ST12, ⚑ST13 (removed), ⚑ST35, ⚑ST53 (2026-11-25); ST-P0 built and committed (`b9d9218`); **ST-P1 built and
+committed 2026-11-25** (State `0be711f`, Mvvm `f27526b`, UI `cf3f1f0`); **ST-P2 built 2026-11-25 (uncommitted)**; the rest
+pending, answered phase by phase. View integration (02 §9,
 > ⚑ST42–ST48) added the same day at the user's request: views should bind generated state directly, with YFex.UI types.
 > **Repo:** `C:\Dev\YFex\YFex.State` (`state.slnx`). Existing internals: [state-internals](../state-internals.md),
 > [state-history-internals](../state-history-internals.md); public guide [state](../../public/state.md).
@@ -136,9 +139,9 @@ Pending unless marked decided. "Rec." = recommended option.
 | ST8 | Validation as a source | **decided 2026-11-25 (user): `Validation.…` in a getter subscribes to `ValidationChanged`** | `DependsOn = ["Validation"]` by hand | 02 §2.2 |
 | ST9 | Child objects and lists | **child `StateObject` part decided 2026-11-25 (user): child path sources** (`Address.City`: subscribe to the child, filter by name, move on reassignment), `[Propagate]` obsolete. **Lists part pending (ST-P4):** list structure always, items with `[ObserveItems]` | build `[Propagate]` as re-raising child names on the parent | 02 §1.4 |
 | ST10 | Timer and clock | **decided 2026-11-25 (user): keep what ST-P0 built** — one `StateTimer` (restartable, owner thread, no alloc per restart) on `StateObject.TimeProvider` (virtual, default `TimeProvider.System`) | static ambient clock; keep `DebounceState` + `Task.Delay` | 02 §1.3 |
-| ST11 | Reactions on inactive objects | run always; `Deactivate` cancels pending/in-flight; `ActiveOnly = true` option | only while active (the guide) — breaks never-activated child models and tests | 02 §3.3 |
-| ST12 | Reaction timing | after the notification; once at the end of a batch | before notification; per set inside a batch | 02 §3.3 |
-| ST13 | `RunOnMainThread` | obsolete (one-owner-thread rule) | build a marshal | 02 §3.3 |
+| ST11 | Reactions on inactive objects | **decided 2026-11-25 (user): run always; `Deactivate` cancels pending/in-flight; `ActiveOnly = true` option** | only while active (the guide) — breaks never-activated child models and tests | 02 §3.3 |
+| ST12 | Reaction timing | **decided 2026-11-25 (user): after the notification; once at the end of a batch** | before notification; per set inside a batch | 02 §3.3 |
+| ST13 | `RunOnMainThread` | **decided 2026-11-25 (user): removed** — no code used it (only a shape test); setters run on the owner thread and async continuations return to it. (Proposed: obsolete) | obsolete; build a marshal | 02 §3.3 |
 | ST14 | Commands as `ICommand` | generated class implements `System.Windows.Input.ICommand` (BCL) | keep `MvvmCommandAdapter` wrappers; generate a second `XxxUiCommand` | 02 §4.1 |
 | ST15 | Command parameters | one value parameter (+ optional `CancellationToken`), new `IAsyncStateCommand<T>` | none (today, B9) | 02 §4.2 |
 | ST16 | Command failures | `Error` on the command, `OnCommandFaulted` hook, Diagnostics probe; `[ErrorBucket]` copies to a property | only `[ErrorBucket]` | 02 §4.3 |
@@ -160,7 +163,7 @@ Pending unless marked decided. "Rec." = recommended option.
 | ST32 | Property `[Debounce]` reach | **decided 2026-11-25 (user), State's side of forms ⚑FM59:** the value and its own `PropertyChanged` change on every key; the property's validation, `[Computed]` dependents, gates and reactions wait for the pause; when error messages show is Validation's `ShowErrors.AfterPause`. No control-side delay (FM59: per binding and per platform, and a command would see stale text) | validation only (today); delay in the control | 02 §2.2 |
 | ST33 | Retries in commands | none in State; the method uses YFex.Resilience | `[Retry]` on commands through a Resilience pipeline | §2 |
 | ST34 | Tests and docs | **decided 2026-11-25 (user): Microsoft `FakeTimeProvider` (test-only package; not `YFex.Time.Testing`, which wraps it and would pull YFex.Time into State's tests); behaviour tests per attribute; guide examples compiled in a sample** | real-time waits; shape tests | 03 gates |
-| ST35 | Throttle semantics | leading + trailing (the last change always runs) | leading only (drops the last value) | 02 §3.3 |
+| ST35 | Throttle semantics | **decided 2026-11-25 (user): leading + trailing (the last change always runs)** | leading only (drops the last value) | 02 §3.3 |
 | ST36 | `[Poll]` vs YFex.Jobs | State keeps `[Poll]` (per object, activation, owner thread) | route polls through Jobs | §4 |
 | ST37 | NavigatR leave guard | reads `ITrackable.IsModified` when the page model implements it (opt-out per page) | each page writes its own concern | §5 |
 | ST38 | Validation timing | Validation's generated debounce and `ValidationBag` pause move onto `StateTimer` | keep its own `Task.Delay` timers | §5 |
@@ -177,6 +180,7 @@ Pending unless marked decided. "Rec." = recommended option.
 | ST49 | Severity of the diagnostics that start being reported (YFEX0101, 0102, 0601) | **agreed 2026-11-19:** **error**, as declared (today the same code already fails with an unrelated compiler error, or silently does nothing) | warning for one release | 01 B7 |
 | ST50 | `StateCollection` and item property changes (B5) | **built in ST-P0 (user "ok" 2026-11-19):** **ignore them**: XAML items notify through their own `INotifyPropertyChanged`; only structural changes become collection events. Item changes are for the *model* (`[ObserveItems]`), not the view. Note: no project outside YFex.State uses `StateList`/`StateCollection` today | raise `Replace` for that index (rebuilds the item's container) | 01 B5 |
 | ST51 | `DebounceState` fix before `StateTimer` exists | **decided 2026-11-19 (user): build `StateTimer` in ST-P0** and fix B1 with it (Blazor's render coalescing moves onto it; `DebounceState` removed). This pulls the clock question ⚑ST10 into ST-P0 | minimal fix now, `StateTimer` in ST-P1 (recommended first) | 01 B1 |
+| ST53 | `[Busy]`/`[ErrorBucket]` in ST-P2 (found 2026-11-25: the ST-P2 acceptance recipe uses them, planned for ST-P3) | **decided 2026-11-25 (user): the reaction side in ST-P2** — `[Busy(name)]`/`[ErrorBucket(name)]` constructors, both on `[ReactsTo]` methods, `OnReactionFaulted`, the Diagnostics probe, YFEX0622/0623 (shared with commands); the command side stays in ST-P3 (⚑ST16, ⚑ST18) | keep ST-P2 as planned and trim the recipe to `[ReactsTo]` + `[Debounce]` | 02 §3 |
 | ST52 | Names of `StateList<T>` and `StateCollection<T>` (user asked 2026-11-19) | **decided + built 2026-11-19 (user): merge** them: `StateList<T>` also implements `INotifyCollectionChanged` + non-generic `IList` (event args built only when someone listens; no marshaling needed under the one-owner-thread rule), `StateCollection<T>` and `ToStateCollection()` are removed; keep the name `StateList<T>` (same family as `StateObject`, no churn) | keep two types, renamed: `ObservableList<T>` + `BindableList<T>` (reads like `[Observable]`, but `ObservableList` suggests XAML-bindable like `ObservableCollection`, which it is not), or `StateList<T>` + `StateListAdapter<T>` (says what it is); merged under the name `ObservableList<T>` | 01 §2.2 B4/B5 |
 
 ## 7. Phase summary
@@ -185,7 +189,7 @@ Pending unless marked decided. "Rec." = recommended option.
 |---|---|---|
 | **ST-P0** | `StateTimer` + `TimeProvider`, defects B1–B5, B7, B13 (no new attributes) | correct behaviour of what is built |
 | **ST-P1** ✅ built 2026-11-25 | dependents dispatch, class model, `[Computed]`, property debounce reach, `PropertyBitmap128`, `ClockLocator` | forms FM59 remainder, gallery shell, validation 12 |
-| **ST-P2** | `[ReactsTo]`, method `[Debounce]`/`[Throttle]`, reaction faults | search-as-you-type without hand code |
+| **ST-P2** ✅ built 2026-11-25 | `[ReactsTo]`, method `[Debounce]`/`[Throttle]`, reaction faults, `[Busy]`/`[ErrorBucket]` on reactions (⚑ST53) | search-as-you-type without hand code |
 | **ST-P3** | commands: `ICommand`, parameters, `Error`, `[ErrorBucket]`, `[Gate]`, `[Busy]`, concurrency/`[Queue]`, `[Cooldown]` | search ⚑SK41, gallery wrappers |
 | **ST-P4** | `[Poll]`, `[ObserveItems]`, list sources | dashboards, order totals |
 | **ST-P5** | `[Trackable]` + `ITrackable`, `[ResetTo]`, `[Epoch]` | forms FM17, NavigatR leave guard |

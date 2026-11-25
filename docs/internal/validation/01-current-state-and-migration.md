@@ -102,7 +102,8 @@ private async global::System.Threading.Tasks.Task Validate_Name_AsyncCore(string
 }
 ```
 
-> Marshal the bag update to the UI thread the same way `[ReactsTo(RunOnMainThread = true)]` does.
+> Marshal the bag update to the UI thread. (`[ReactsTo(RunOnMainThread = true)]`, named here before, was removed in State
+> ST-P2, ⚑ST13: reactions run on the owner thread and async continuations return to it.)
 
 ### Phase 0 tests (add generator emission tests — none exist today)
 

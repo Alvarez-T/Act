@@ -261,11 +261,22 @@ private async void __RunSearch()          // async void only here: every excepti
 - **Active only? (⚑ST11):** reactions run whether or not the object is active (objects that are never activated — child models,
   tests — must still work); `Deactivate` cancels pending and in-flight async reactions. `[ReactsTo(…, ActiveOnly = true)]`
   skips changes while inactive.
-- **`RunOnMainThread` (⚑ST13):** obsolete. Setters already run on the owner thread (one-owner-thread rule); async continuations
-  return to it.
+- **`RunOnMainThread` (⚑ST13):** removed (no user). Setters already run on the owner thread (one-owner-thread rule); async
+  continuations return to it.
+- **Order (built):** a trigger's `[Computed]` dependents are raised first (their own reactions run inside that), then the
+  trigger's reactions. Batched changes are raised in ID order, then each pending reaction runs once.
+- **`CancelPrevious` (built):** cancels the running run's token; whatever it ends with afterwards (a result write the method
+  makes itself, an exception) is not reported. Without a token parameter only the reporting is skipped. Without
+  `CancelPrevious`, overlapping runs share one token source that only `Deactivate` cancels.
+- **`[Busy]` / `[ErrorBucket]` (⚑ST53, built for reactions):** a counter per busy property (overlapping runs keep it true until
+  the last ends); the bucket is cleared when a run starts and set on a fault. Targets: YFEX0622 (writable `bool`
+  `[Observable]`), YFEX0623 (writable `[Observable]` that holds an `Exception`).
 - **Throttle (⚑ST35):** leading and trailing edge — the first change runs at once, changes during the window are folded into one
   last run at its end (the last value is never lost). `Debounce` and `Throttle` on the same method → YFEX0222.
-- **Faults:** `protected virtual void OnReactionFaulted(string reaction, Exception ex)` plus a `YFex.Diagnostics` probe (⚑ST16).
+- **Faults:** `protected virtual void OnReactionFaulted(string reaction, Exception ex)` plus a `YFex.Diagnostics` probe (⚑ST16):
+  every run is an operation (`ReactionProbe.Describe("Ns.Class.Method", assembly)`, kind `UiAction`, level `Debug`), so work it
+  starts nests under it and a fault is recorded with its exception. Sync faults are caught too: a setter never throws a
+  reaction's exception.
 
 ### 3.4 Cons
 

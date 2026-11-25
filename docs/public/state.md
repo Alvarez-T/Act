@@ -2,11 +2,12 @@
 
 **Libraries:** YFex.State, YFex.State.Mvvm, YFex.State.Collections, YFex.State.Blazor, YFex.State.Testing
 
-> **Build status (2026-11-25).** Generated today: `[Observable]`, `[Computed]` (ST-P1), `[StateCommand]`, `[EqualityComparer]`,
-> `[NotifyOnTaskCompletion]`, `[IgnoreActivation]`; `[Debounce]` on a property/class delays its validation (YFex.Validation)
-> and its `[Computed]` dependents; `[Persist]` is read by YFex.Persistence (snapshot on demand). Every other attribute in this
-> guide is **being implemented** (phases ST-P2–ST-P7 of the [State completion plan](../internal/state/README.md)) and has no
-> effect yet.
+> **Build status (2026-11-25).** Generated today: `[Observable]`, `[Computed]` (ST-P1), `[ReactsTo]` with method `[Debounce]`/
+> `[Throttle]`, `[Busy]` and `[ErrorBucket]` on reactions (ST-P2), `[StateCommand]`, `[EqualityComparer]`,
+> `[NotifyOnTaskCompletion]`, `[IgnoreActivation]`; `[Debounce]` on a property/class delays its validation (YFex.Validation),
+> its `[Computed]` dependents and its reactions; `[Persist]` is read by YFex.Persistence (snapshot on demand). `[Busy]`,
+> `[ErrorBucket]`, `[Debounce]` and `[Throttle]` on **commands**, and every other attribute in this guide, are **being
+> implemented** (phases ST-P3–ST-P7 of the [State completion plan](../internal/state/README.md)) and have no effect yet.
 
 ---
 
@@ -44,8 +45,8 @@ YFex.State is a source-generator-driven reactive state management library for .N
   [StateCommand]                  → IAsyncStateCommand property           → lock-free concurrency
   async Task SaveAsync(ct)          with status tracking                    gate, status enum
 
-  [ReactsTo(nameof(X))]           → subscription wiring in                → method called when
-  void OnXChanged()                 OnActivated/OnDeactivated               X changes
+  [ReactsTo(nameof(X))]           → a case in the generated               → method called after
+  void OnXChanged()                 OnDependencyChanged switch              X changes
 ```
 
 ### Object Graph & Notification Flow
@@ -74,7 +75,7 @@ Notifications flow **outward** from the object that changed. Handlers (`IChanged
 new()  →  Activate()  →  [live: mutations, notifications, polls]  →  Deactivate()  →  Dispose()
               │                                                            │
               ├── cascades to child StateObject properties                 ├── stops [Poll] timers
-              ├── starts [Poll] timers                                     ├── cancels [ReactsTo] async ops
+              ├── starts [Poll] timers                                     ├── cancels [ReactsTo] runs     
               ├── triggers [LoadOnInit] loads                              └── cascades to children
               └── fires OnActivated() hook                                     (children first, then parent)
 ```
@@ -519,29 +520,43 @@ async Task<List<Item>> SearchAsync(CancellationToken ct)
 
 #### `[ReactsTo]`
 
-Subscribes a method to one or more property changes. Wired during activation, unwired during deactivation.
+Calls a method when one of the named `[Observable]` or `[Computed]` properties (own or inherited) changes.
 
 ```csharp
-[ReactsTo(nameof(SearchQuery), RunOnMainThread = true, CancelPrevious = true)]
-async Task OnSearchQueryChanged()
+[ReactsTo(nameof(SearchQuery), CancelPrevious = true)]
+async Task OnSearchQueryChanged(CancellationToken ct)
 {
-    Results = await _search.SearchAsync(SearchQuery);
+    Results = await _search.SearchAsync(SearchQuery, ct);   // the continuation is back on the owner thread
 }
+
+[ReactsTo(nameof(Quantity))]
+void OnQuantity(int oldValue, int newValue) => Log.QuantityChanged(oldValue, newValue);
 ```
 
 | Parameter | Default | Effect |
 |---|---|---|
-| `PropertyNames` | (required, positional) | Which properties trigger this reaction |
-| `RunOnMainThread` | `false` | Marshal the callback to `SynchronizationContext.Current` |
-| `CancelPrevious` | `false` | Cancel any in-flight previous invocation before starting a new one |
+| `PropertyNames` | (required, positional) | Which properties trigger this reaction (`nameof(...)`) |
+| `CancelPrevious` | `false` | Async: a new run cancels the running one; its fault, if any, is ignored. Without it, runs may overlap |
+| `ActiveOnly` | `false` | Changes made while the object is not active do not run the method |
 
-> **Note:** `[ReactsTo]` supports `AllowMultiple = true`. A single method can react to different sets of properties with different options.
+| Rule | Behaviour |
+|---|---|
+| Accepted shapes | `void M()`, `void M(T oldValue, T newValue)` (one own writable `[Observable]`), `Task`/`ValueTask M()`, `Task`/`ValueTask M(CancellationToken)`. Anything else is error YFEX0221; an unknown name is YFEX0220 |
+| When it runs | on the owner thread, right after the trigger's change was raised (after the trigger's `[Computed]` dependents). Inside `BeginUpdate()`, once when the outermost batch ends, after the batched notifications. `M(oldValue, newValue)` then gets the first old value of the batch |
+| `[Debounce]` on the trigger | the reaction waits for the property's pause, like its validation and `[Computed]` dependents |
+| Activation | runs whether or not the object is active (child models and tests that are never activated still work). `Deactivate()` drops pending runs (batch, debounce, throttle) and cancels running ones (their token, no fault) |
+| Faults | caught, never thrown into the setter: `[ErrorBucket]` property, `protected virtual OnReactionFaulted(string reaction, Exception)`, and the `YFex.Diagnostics` probe (each run is an operation of kind `UiAction`, `Debug`) |
+| Loops | a reaction that writes a property it reacts to runs again: warning YFEX0223 |
+
+> **Note:** `[ReactsTo]` supports `AllowMultiple = true`: each attribute adds triggers; `CancelPrevious`/`ActiveOnly` on any of
+> them applies to the method. `RunOnMainThread` was removed: setters run on the owner thread and async continuations return to
+> it (one-owner-thread rule).
 
 #### `[Debounce]` / `[Throttle]`
 
 On an `[Observable]` property (or a class, for all of its properties): the value and its own change are immediate; the
-property's validation and its `[Computed]` dependents wait for the pause (built). On a `[ReactsTo]` or `[StateCommand]` method
-(ST-P2/ST-P3, not built yet):
+property's validation, its `[Computed]` dependents and its reactions wait for the pause. On a `[ReactsTo]` method (on
+`[StateCommand]` methods: ST-P3, not built yet):
 
 ```csharp
 [ReactsTo(nameof(SearchQuery))]
@@ -555,8 +570,11 @@ void OnScrollPositionChanged() { /* ... */ }
 
 | Attribute | Parameter | Behavior |
 |---|---|---|
-| `[Debounce(ms)]` | `Milliseconds` | Resets the timer on each trigger. Fires once after `ms` of silence. |
-| `[Throttle(ms)]` | `Milliseconds` | Fires immediately, then suppresses for `ms`. |
+| `[Debounce(ms)]` | `Milliseconds` (default 500) | Resets the timer on each trigger. Fires once after `ms` of silence, with the latest values. |
+| `[Throttle(ms)]` | `Milliseconds` | Leading and trailing: fires immediately; changes during the next `ms` fold into one more run when the window ends, so the last value is never lost. |
+
+Both use the object's `TimeProvider` (a `FakeTimeProvider` in tests) and allocate nothing per trigger. Both on one method is
+error YFEX0222.
 
 #### `[Poll]`
 
@@ -577,7 +595,9 @@ async Task RefreshDataAsync(CancellationToken ct)
 
 #### `[Busy]`
 
-Sets a named `bool` property to `true` during method execution.
+Sets a named `bool` `[Observable]` property to `true` while the method runs, back to `false` when the last overlapping run
+ends. Built on `[ReactsTo]` methods; on commands in ST-P3. A target that is not a writable `bool` `[Observable]` is error
+YFEX0622.
 
 ```csharp
 [Observable] public partial bool IsLoading { get; set; }
@@ -620,7 +640,8 @@ async Task SyncAsync(CancellationToken ct) { /* ... */ }
 
 #### `[ErrorBucket]`
 
-Captures exceptions into a named property instead of throwing. Useful for displaying errors in the UI.
+Captures exceptions into a named `Exception?` `[Observable]` property instead of throwing, and clears it when the next run
+starts. Built on `[ReactsTo]` methods; on commands in ST-P3. A target that cannot hold an `Exception` is error YFEX0623.
 
 ```csharp
 [Observable] public partial Exception? LastError { get; set; }
@@ -886,21 +907,21 @@ public partial class SearchViewModel : MvvmStateObject
     [Debounce(300)]
     [Busy(nameof(IsSearching))]
     [ErrorBucket(nameof(SearchError))]
-    async Task OnQueryChangedAsync()
+    async Task OnQueryChangedAsync(CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(Query))
         {
             Results = new();
             return;
         }
-        Results = await _search.SearchAsync(Query);
+        Results = await _search.SearchAsync(Query, ct);
     }
 }
 ```
 
 This stacks four behaviors declaratively:
 - **Debounce:** waits 300ms after the user stops typing.
-- **CancelPrevious:** if a previous search is still running, cancel it.
+- **CancelPrevious:** if a previous search is still running, cancel its token; whatever it throws afterwards is ignored.
 - **Busy:** sets `IsSearching = true` for the duration.
 - **ErrorBucket:** any exception goes to `SearchError` instead of crashing.
 
@@ -1158,8 +1179,8 @@ If you omit `DependsOn`, the computed property never re-evaluates automatically.
 | Attribute | Parameters | Default |
 |---|---|---|
 | `[StateCommand]` | `IncludeCancelCommand: bool`, `CancelCommandName: string?`, `TargetProperty: string?` | `false`, `null`, `null` |
-| `[ReactsTo]` | `PropertyNames: string[]`, `RunOnMainThread: bool`, `CancelPrevious: bool` | (required), `false`, `false` |
-| `[Debounce]` | `Milliseconds: int` | (required) |
+| `[ReactsTo]` | `PropertyNames: string[]`, `CancelPrevious: bool`, `ActiveOnly: bool` | (required), `false`, `false` |
+| `[Debounce]` | `Milliseconds: int` | `500` |
 | `[Throttle]` | `Milliseconds: int` | (required) |
 | `[Poll]` | `IntervalMs: int`, `ActiveOnly: bool` | (required), `true` |
 | `[Busy]` | `PropertyName: string?` | `null` |
