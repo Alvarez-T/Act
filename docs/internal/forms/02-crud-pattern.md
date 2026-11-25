@@ -33,6 +33,11 @@ Every CRUD screen is the same four parts. The base classes in `YFex.Mvvm` (stubs
    detail position: Right | Bottom | Dialog | Page   (one property, saved per user)
 ```
 
+> **Moved (2026-11-23, user):** where and how the detail opens (left/top/right/bottom/center; docked, flyout, sheet, modal,
+> page, pop out), detail-only fields, tabs and the action commands now belong to the data grid plan:
+> [YFex.UI data-and-logic/01-detail-presenter](../../../../YFex.UI/docs/plans/data-and-logic/01-detail-presenter.md)
+> (⚑DG1–DG13; ⚑DG10 records the move). This section keeps only the CRUD view-model flow.
+
 ### 2.1 View model (illustrative, *proposed* API)
 
 ```csharp

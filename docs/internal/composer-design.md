@@ -710,7 +710,7 @@ together so the projection and grid are built once.
 | | Dynamic messages: latest version wins (open deviation) | Versioned texts per decision. Composer texts have the same need, so solve it once |
 | **YFex.Validation** | No generated member *access/construction* by id | `[RecordAccess]` → `IRecordAccess<T>` (Read/TryCreate, shared `FieldIds`) (C3) |
 | **YFex.Cqrs** | No dispatch by capability key | Invoker table emitted by YFex.Cqrs.SourceGenerator (C3) |
-| **YFex.UI** | No reusable table/grid design (blocks Rules Phase 5) | Design it once; Composer grid + Rules table editor + designer use it |
+| **YFex.UI** | No reusable table/grid design (blocks Rules Phase 5) | Design it once; Composer grid + Rules table editor + designer use it. **Designed 2026-11-23** (all ⚑DG decided): [YFex.UI data-and-logic plans](../../../YFex.UI/docs/plans/data-and-logic/README.md). Per ⚑LB4 ✅ (user, 2026-11-23) Composer reuses `YDataGrid`, `YConditionBuilder`, `YExpressionEditor` and `YFlowDiagram`, and its stored description names these controls instead of its own editors |
 | **YFex.Capabilities** | Registry built once at startup | Overlay registry (`IDynamicCapabilitySource` + atomic swap) so enacted screens appear in search/AI |
 | | No composition opt-in | `CapabilityFlags.Composable`, `.Composable()`; kinds `ComposedScreen`, `ComposedFlow` |
 | **YFex.Authorization** | Compile-time permission catalog | Runtime-registered permissions in a reserved namespace (`composer.screen.<key>.open`). Rules.Admin's configurable `RuleEnactPermission` (C5) shows the minimal version |

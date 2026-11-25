@@ -196,6 +196,14 @@ Recommended option first. Integration and placement decisions first (⚑SK1–�
 | SK53 | Determinism and tests | session cache by model id + version + normalized query; tests with no model and a fixed fake | uncached calls; tests on a real model | 05 §3.7 |
 | SK54 | Jev / Microsoft-Decision-1.1 | optional remote providers behind one HTTP adapter for the shared `state + questions` shape (⚑IF26); background and "ask" only; per tenant after PT-BR calibration (⚑IF29) | adopt one as Search's engine; vendor SDKs | 05 §1–§2 |
 
+### 5.1 Requests from the YFex.UI data-and-logic plan (2026-11-23, pending there)
+
+| Request | Breaking | Asked by |
+|---|---|---|
+| `MatchScore` carries match ranges (start, length) per field, for highlighting | no | ⚑DG18 ([02-data-grid §6](../../../../YFex.UI/docs/plans/data-and-logic/02-data-grid.md)) |
+| an in-memory `ISearchProvider` over a list with field selectors (grid search, client mode) | no | ⚑DG18 |
+| the ranker (`FuzzyScorer` + frecency) usable by the UI suggestion engine; global search box uses `YSuggestBox` | no | ⚑LB8, ⚑LB11 ([03-logic-builder §4](../../../../YFex.UI/docs/plans/data-and-logic/03-logic-builder.md)) |
+
 ## 6. Phases (proposed)
 
 Each step builds; tests and AOT smoke at the end of each phase, per the working method.

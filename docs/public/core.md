@@ -424,12 +424,18 @@ var page = PagedList<Order>.Create(orders, page: 1, pageSize: 20);
 page.HasNextPage;   // bool
 page.TotalPages;    // int
 
-// Observable variant with async loading, navigation, and loading state
-var collection = new ObservablePagedCollection<Order>(fetchPage);
-await collection.LoadAsync();
-await collection.NextPageAsync();
-collection.IsLoading;    // bool — bind to a spinner
-collection.PageSummary;  // "2 / 5 (47 items)" — bind to a label
+// A page a handler already fetched
+var page = PagedList<Order>.From(rows, totalCount: 1284, page: 3, pageSize: 50);
+
+// Observable list a data grid pages through (YDataGrid LoadMode="Incremental" or "Paged")
+var orders = new ObservablePagedCollection<Order>((request, ct) =>
+    queries.Send(new Order.List(request.View, request.Page, request.PageSize), ct), pageSize: 50);
+await orders.LoadAsync();                  // page 1 (or the grid asks on its own)
+await orders.NextPageAsync();              // replaces the rows with page 2
+await orders.LoadMoreAsync();              // appends the next page instead
+await orders.SetViewAsync(new ViewSpec { Sort = [new("Date", SortDirection.Descending)], Search = "curitiba" });
+await orders.SetViewAsync(orders.View with { Filters = [new FilterSpec("City", FilterOperator.Equals) { Value = "Curitiba" }] });
+orders.IsLoading; orders.Error;            // a stale request is cancelled; RetryAsync() repeats a failed one
 ```
 
 ---

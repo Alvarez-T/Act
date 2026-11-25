@@ -2,7 +2,30 @@
 
 namespace YFex.Primitives.Collections;
 
-public class PagedList<T> : IEnumerable<T>, IAsyncEnumerable<T>
+/// <summary>
+/// A page of a list seen without its row type, so a control (a data grid, a pager) can read the counts and the rows of any
+/// <see cref="PagedList{T}"/>.
+/// </summary>
+public interface IPagedList : IEnumerable
+{
+    /// <summary>The rows of this page.</summary>
+    IList Rows { get; }
+
+    /// <summary>1-based number of this page.</summary>
+    int CurrentPage { get; }
+
+    int PageSize { get; }
+
+    /// <summary>Rows in the whole list (every page).</summary>
+    int TotalCount { get; }
+
+    int TotalPages { get; }
+
+    bool HasNextPage { get; }
+}
+
+/// <summary>One page of a list, with the counts of the whole list.</summary>
+public class PagedList<T> : IEnumerable<T>, IAsyncEnumerable<T>, IPagedList
 {
     public List<T> Items { get; }
     public int CurrentPage { get; }
@@ -11,6 +34,8 @@ public class PagedList<T> : IEnumerable<T>, IAsyncEnumerable<T>
     public int TotalPages => (int)Math.Ceiling(TotalCount / (double)PageSize);
     public bool HasNextPage => CurrentPage < TotalPages;
     public bool HasPreviousPage => CurrentPage > 1;
+
+    IList IPagedList.Rows => Items;
 
     private PagedList(List<T> items, int totalCount, int currentPage, int pageSize)
     {
@@ -58,6 +83,13 @@ public class PagedList<T> : IEnumerable<T>, IAsyncEnumerable<T>
             page,
             pageSize);
     }
+
+    /// <summary>
+    /// A page whose rows were already fetched (a query handler, a server reply): <paramref name="items"/> are the rows of
+    /// page <paramref name="page"/> (1-based) and <paramref name="totalCount"/> counts every page.
+    /// </summary>
+    public static PagedList<T> From(IEnumerable<T> items, int totalCount, int page, int pageSize)
+        => new(items as List<T> ?? [.. items], totalCount, page, pageSize);
 
     // -------------------------
     // In-memory / plain list

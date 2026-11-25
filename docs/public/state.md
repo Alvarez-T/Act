@@ -1063,6 +1063,28 @@ vm.Details = new DetailsViewModel();
 vm.Details.Activate(); // manual activation
 ```
 
+### Lending a Child to Another Host (`Lend`, `TileLoan`)
+
+A page view model owns child tiles, and its `Activate()`/`Deactivate()` cascade reaches them. When a tile is shown
+somewhere else for a while (a detail popped out into its own page), lend it: the parent's cascade and the parent's
+property setter skip a lent child, and the loan's holder runs it as its own host is shown and hidden.
+
+```csharp
+TileLoan loan = page.Detail.Lend(owner: page); // page.Deactivate() no longer reaches Detail
+loan.Activate();                               // the other host became visible
+loan.Deactivate();                             // it was hidden
+loan.Return();                                 // back: Detail takes page.IsActive again
+
+// Hand it over for good: the holder owns it; the parent may put a new tile in the property without touching it.
+var given = page.Detail.Lend(owner: page);
+given.HandOver();
+page.Detail = new OrderDetail(orders);
+given.Dispose();                               // later: deactivates and disposes the handed-over tile
+```
+
+`StateList<T>` skips lent items the same way. `YFex.Mvvm`'s `MasterDetailViewModel<TTile>` uses this to pop a detail
+tile out (YFex.UI detail-presenter plan §6.2, ⚑DG82).
+
 ### Equality Suppression Surprises
 
 ```csharp

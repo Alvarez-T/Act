@@ -223,6 +223,26 @@ if (!Navigator.OpenInNewContext(new OrderRoute(42)))
 
 `OpenInNewContext` asks the history's pane (`INavigation.OnOpenRequested`); this history does not change. A docking host answers by creating a new pane whose own session starts at the route (YFex.Avalonia: `YPageHost.OpenRequested` bubbles to it). False when no pane took it.
 
+### Show a page the caller already has (`ShowAsync`, `HostedPage`)
+
+```csharp
+// a detail popped out of a grid: no registered route, the object is the page
+await tabSession.ShowAsync(new HostedPage(detail, "Order 42")
+{
+    Key = ("detail", order),             // the same key again moves to the open page
+    Ownership = PageOwnership.Borrowed,  // never disposed; IHostedPage.OnReleased tells the lender
+    LinkedTo = ordersSession,            // the owner: its visible page when this one opened
+    CloseWithOwner = true,               // closes when that page is released; in its close question
+});
+```
+
+The pane receives the object itself (`PerformNavigation`), back and forward work as for a route, there is no
+authorization gate (the page that made it passed one) and the pool never releases it (it cannot be rebuilt). An owner
+page with linked pages open is kept alive too. The optional `IHostedPage` on the object hears `OnShownAsync`,
+`OnHiddenAsync`, `OnReleased` and answers `CheckLeave()`. Links work across histories only: in its owner's own history a
+hosted page sits after the owner, so whatever removes the owner removes it too. `Navigator.ShowHostedAsync(page, owner)`
+is the engine call; YFex.Avalonia `YPageHost.ShowAsync` and `YPageDockHost.OpenHosted` start a history with one.
+
 ### Full Lifecycle Table
 
 Everything runs on the navigator's thread (the synchronization context the history was created on); data loaders run in the background.
