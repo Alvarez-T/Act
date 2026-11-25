@@ -53,12 +53,18 @@ protected override void OnDependencyChanged(uint id)
 
 **Alternative (rejected):** emit the calls inside each setter. Fails for dependents in derived classes and in other assemblies.
 
+*As built (ST-P1):* dependents are raised with `NotifyDerived` (= `NotifyChanged` without the owner-thread check: debounce
+timers and validation events raise derived values, they write nothing). The batch drain calls `DispatchPending(uint propertyId)`
+once per pending ID instead of passing the bitmap, so generated code no longer depends on the bitmap's width.
+
 ### 1.2 IDs for computed and generated properties (⚑ST7)
 
 `[Computed]`, `[Epoch]` counters, `IsModified` and `IsBusy` notify like properties, so they take IDs after the class's
 `[Observable]` ones. `ParentPropertyCount` counts all of them in ancestors. The 64-ID ceiling (B6) is removed by a wider
 bitmap (`PropertyBitmap128`, two `ulong`s, still no allocation), chosen by the generator when a hierarchy passes 64; no error in
-the meantime (user, ⚑ST7). When it lands (ST-P0 or ST-P1) is open.
+the meantime (user, ⚑ST7). It lands first in ST-P1, before `[Computed]` adds IDs (⚑ST7, 2026-11-25).
+*As built:* `PropertyBitmap128` keeps IDs 0–127 inline and IDs from 128 up in words allocated once per object, so there is no
+limit at all and no generator choice; tested with 140 properties.
 
 ### 1.3 One timer for everything time-based (⚑ST10)
 
@@ -88,8 +94,10 @@ The clock is the BCL `TimeProvider`, read from the owner:
 protected internal virtual TimeProvider TimeProvider => TimeProvider.System;
 ```
 
-Not `ITrustedClock` (YFex.Time): UI pauses make no security decision. Tests use
-`Microsoft.Extensions.Time.Testing.FakeTimeProvider` (⚑ST34) — no real-time waits.
+Not `ITrustedClock` (YFex.Time): UI pauses make no security decision. In apps the base `ViewModel` reads the clock from an
+internal `ClockLocator` in `YFex.UI.Public` that the platform sets from DI's `TimeProvider` — YFex.Time's `TrustedTimeProvider`
+when the app calls `AddYFexTime()` (⚑ST39). Tests use `Microsoft.Extensions.Time.Testing.FakeTimeProvider` (⚑ST34) — no
+real-time waits.
 
 ### 1.4 Child sources (⚑ST9)
 
@@ -178,8 +186,11 @@ The generator walks the getter with the semantic model:
 | `Validation.…` | the validation source (⚑ST8) |
 | a method call on `this`, a static, a field that is not observable | nothing found → warning YFEX0212 unless `DependsOn` names it |
 
-`DependsOn` **adds** to what is found (it never hides an inferred one). Cycles → error YFEX0210. A setter or a block body that
-writes state → error YFEX0213.
+`DependsOn` **adds** to what is found (it never hides an inferred one); it accepts `"Validation"` and one child level
+(`"Address.City"`); an unknown name → error YFEX0215. Cycles → error YFEX0210. A getter that writes state → error YFEX0213. A
+setter, `partial`, `static` or an auto-property → error YFEX0216. A deeper chain through a child that raises changes
+(`Address.Country.Name`) → warning YFEX0211. YFEX0212 covers instance method calls, non-readonly fields and settable
+non-observable properties of the class; any `DependsOn` silences it (the author has said what it depends on).
 
 ### 2.4 Cons
 
@@ -510,7 +521,8 @@ Fluent markup gets the same: `YButton().Bind(vm?.SaveCommand)` (unchanged, now w
 | ID | Severity | When |
 |---|---|---|
 | YFEX0101, 0102, 0601 | Error | now reported (B7) |
-| YFEX0210–0214 | Error/Warning | computed: cycle, deep chain, method call, writes state, list items without `[ObserveItems]` |
+| YFEX0210–0213, 0215, 0216 | Error/Warning | computed: cycle, deep chain, hidden dependency, writes state, unknown `DependsOn`, wrong shape (built ST-P1) |
+| YFEX0214 | Warning | computed: list items without `[ObserveItems]` (ST-P4) |
 | YFEX0220–0223 | Error/Warning | reaction: unknown property, bad signature, debounce + throttle, writes its own trigger |
 | YFEX0240 | Error | `[ResetTo]` value does not convert |
 | YFEX0620–0623 | Error | command: >1 value parameter, gate not bool, busy target not bool `[Observable]`, error bucket not `Exception?` |

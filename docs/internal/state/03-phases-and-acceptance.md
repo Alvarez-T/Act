@@ -14,7 +14,7 @@ starts only when its decisions (README §6) are answered.
 | Performance | `benchmark/`: `[Observable]` setter without dependents ≤ +2 ns vs `14a6b65`; 0 B allocated per set, per debounced keystroke and per batch |
 | Consumers | YFex.UI gallery, YFex.Mvvm, YFex.NavigatR, YFex.Validation, YFex.Persistence build against the phase |
 
-## ST-P0 — Truth and fixes (no new attributes) — built 2026-11-19 (uncommitted), except the wider bitmap (⚑ST7 timing open) and ST52 names
+## ST-P0 — Truth and fixes (no new attributes) — built 2026-11-19, committed `b9d9218` (the wider bitmap moved to ST-P1, ⚑ST7)
 
 | Item | Done when |
 |---|---|
@@ -22,21 +22,22 @@ starts only when its decisions (README §6) are answered.
 | B2/B3 `StateList` holds its relay strongly, unsubscribes removed/replaced items, indexer attaches/activates | tests survive `GC.Collect()`; removed item's change not relayed |
 | B4/B5 `StateCollection` removal args carry the removed item (`OldItem` in the list's notification); item property changes no longer become `Reset` | WPF-style strict listener test |
 | B13 generated commands notify `IsExecuting` with `Status` | binding test on `SaveCommand.IsExecuting` |
-| B6: no error (⚑ST7, user); the wider bitmap lands here if ⚑ST7's timing question is answered "ST-P0" | test with 70 properties |
+| B6: no error (⚑ST7, user); the wider bitmap is the first item of ST-P1 (⚑ST7, 2026-11-25) | — |
 | B7 YFEX0101/0102/0601 reported | compile tests |
 | public guide: build-status banner (no per-attribute warnings, ⚑ST2), `MvvmCommandAdapter` and Blazor statements corrected, `TimeProvider` documented; the non-compiling examples are rewritten with their phases | review |
 
-## ST-P1 — Dependency core and `[Computed]`
+## ST-P1 — Dependency core and `[Computed]` — built 2026-11-25 (uncommitted)
 
 | Item | Done when |
 |---|---|
-| `StateObject.OnDependencyChanged`, `TimeProvider`, `StateTimer` (02 §1.1, §1.3) | unit tests, benchmark gate |
+| **first:** `PropertyBitmap128`, chosen by the generator when a hierarchy passes 64 IDs (⚑ST7) | test with 70 properties; `BigForm` spike still correct |
+| `StateObject.OnDependencyChanged` (02 §1.1; `TimeProvider` + `StateTimer` exist since ST-P0, ⚑ST10) | unit tests, benchmark gate |
 | `StateClassModel` pipeline (02 §1.5) | existing generator snapshots unchanged except added members |
 | `[Computed]`: inference, `DependsOn`, chains, cycles, base-class deps, batch = one notification, MVVM args | tests incl. derived class computed over base property |
 | validation source (⚑ST8), property `[Debounce]` reaches computed values (⚑ST32) | fake-clock tests |
 | child path dependency on a child `StateObject` (`Address.City`) | test with reassigned child |
-| `PropertyBitmap128` | test with 70 properties |
 | gallery `GalleryShellViewModel` `PaneTabs`/`WindowTabs` become `[Computed]` | gallery builds, behaviour unchanged |
+| clock in apps (⚑ST39): internal `ClockLocator` in `YFex.UI.Public`, set by `YFexAvaloniaServices.Register` from DI's `TimeProvider`; base `ViewModel` overrides `TimeProvider` from it | test: `AddYFexTime()` app → view model's `TimeProvider` is the `TrustedTimeProvider`; `Set(fake)` drives a debounce in a Mvvm test |
 
 ## ST-P2 — Reactions
 
@@ -84,8 +85,8 @@ texts) and a page with a running command and unsaved changes shows its progress 
 
 | Phase | Decisions to answer first |
 |---|---|
-| ST-P0 | built. Decided: ⚑ST2, ⚑ST49, ⚑ST50, ⚑ST51, ⚑ST52; ⚑ST10 built with the recommendation (confirm in ST-P1) |
-| ST-P1 | ⚑ST3–ST8, ⚑ST9 (child `StateObject` part), ⚑ST10, ⚑ST31, ⚑ST32, ⚑ST34, ⚑ST39 |
+| ST-P0 | built. Decided: ⚑ST2, ⚑ST49, ⚑ST50, ⚑ST51, ⚑ST52 |
+| ST-P1 | **all decided 2026-11-25:** ⚑ST3–ST8, ⚑ST9 (child `StateObject` part), ⚑ST10, ⚑ST31, ⚑ST32, ⚑ST34, ⚑ST39 — ready to build |
 | ST-P2 | ⚑ST11–ST13, ⚑ST35 |
 | ST-P3 | ⚑ST14–ST21, ⚑ST33, ⚑ST42, ⚑ST47 |
 | ST-P4 | ⚑ST9 (lists), ⚑ST22, ⚑ST36, ⚑ST40 |
@@ -117,3 +118,5 @@ P2, P3 and P5 are independent of each other after P1.
 | 2026-11-19 | User: ⚑ST2 no warnings; ⚑ST50 ok; ⚑ST52 (names of `StateList`/`StateCollection`) added, recommendation: merge into `StateList<T>` |
 | 2026-11-19 | **ST-P0 built (uncommitted).** `Timing/StateTimer` (restartable one-shot on `TimeProvider`, owner-context post, stale-call guard, no alloc per restart) + `StateObject.TimeProvider` (⚑ST10 recommended option); `DebounceState` + its tests removed (B1); Blazor `StateComponent` coalesces on `StateTimer` (first change schedules, later ones join; `RenderWindow` 8 ms). `StateList`: relay held strongly by the list, items keep only a weak link (B2); remove/clear/replace unsubscribe and (de)activate (B3); removal carries `OldItem` when someone listens. `StateCollection`: Remove event carries the removed item (B4), item property changes ignored (B5, ⚑ST50). Commands notify `IsExecuting` with `Status` (B13). `PlacementDiagnostics`: YFEX0101/0102/0601 reported as errors at the member (B7, ⚑ST49); YFEX0102 message and YFEX0110 help link fixed. Smoke app: `PublishAot` + Scenario 10 (StateTimer). Tests: `StateTimerTests` (7), `StateListRelayTests` (8), `IsExecutingNotificationTests` (2), `StatePlacementDiagnosticTests` (4), allocation test for restarts. Gates: State 382/382 Release, 383/383 Debug; History 65/65; generator 54/54; Native AOT win-x64 0 IL/AOT warnings, smoke passes; consumers build: Validation, Persistence, NavigatR, Mvvm, YFex.UI; Authorization solution fails at restore with NU1510 in YFex.Installations/YFex.Networking (unrelated package-pruning warnings as errors), its `ViewModelGateTests` pass 3/3. Not verified: Blazor rendering (no Blazor test project); Linux. |
 | 2026-11-19 | **⚑ST52 built (user: merge).** `StateList<T>` is now `IList<T>`, `IList`, `INotifyCollectionChanged` and `INotifyPropertyChanged` (`Count`, `Item[]`); event args only while a view listens (0 B per insert/remove without listeners, tested); `Insert` supported; removal/replace events carry the right items. `StateCollection<T>`, `StateListExtensions.ToStateCollection()` and their 13 tests removed (no user outside YFex.State); `StateListBindingTests` (12) added. Gates: State 381/381, History 65/65, generator 54/54; Mvvm and YFex.UI build. |
+| 2026-11-25 | **ST-P1 decisions answered (user).** Recommended options for ⚑ST3, ST4, ST5, ST6, ST8, ST9 (child objects), ST31, ST34 (Microsoft `FakeTimeProvider`, not `YFex.Time.Testing`); ⚑ST7: wider bitmap first in ST-P1; ⚑ST10: keep ST-P0's `StateTimer` + `StateObject.TimeProvider`; ⚑ST32: as forms ⚑FM59 (value immediate, dependents and validation after the pause, messages after `AfterPause`); ⚑ST39 revised: internal `ClockLocator` in `YFex.UI.Public` set by the platform from DI (YFex.Time's clock when `AddYFexTime()` is used), read by the base `ViewModel` — a locator inside Mvvm could not be set, since the platforms do not reference Mvvm. |
+| 2026-11-25 | **ST-P1 built (uncommitted).** Runtime: `PropertyBitmap128` (0–127 inline, 128+ in words allocated once per object: no limit, ⚑ST7); `NotifyChanged` → `NotifyDerived` → virtual `OnDependencyChanged(uint)` (⚑ST6); batch drain calls `DispatchPending(uint propertyId)` per pending ID (breaking for hand-written overrides: only a test helper had one); `AttachChildSources()` (first `Subscribe`, `Activate`), `OnChildChanged(uint, in ChangedNotification)` and `Internal/ChildSource` (⚑ST9 child objects). Generator: `[Computed]` pipeline (`ComputedParser`: getter walk with the semantic model, field-backed names by fallback, child paths one level, `Validation` source, `DependsOn` adds incl. `"Address.City"`), `StateIds` (IDs from symbols for base properties; `ParentPropertyCount` now counts `[Computed]` too), one `StateClassModel` per class from the `[Observable]` + `[Computed]` pipelines (⚑ST31; commands join in ST-P3 with gates), `DependentsEmitter` (switch, per-source `StateTimer` for `[Debounce]` sources ⚑ST32, child sources, `OnValidationCreated` subscription ⚑ST8), MVVM args caches cover computed IDs; diagnostics YFEX0210–0213, 0215, 0216 (0214 is ST-P4). Clock (⚑ST39): internal `ClockLocator` in `YFex.UI.Public`, set by `YFexAvaloniaServices.Register` from DI's `TimeProvider`; `YFex.Mvvm.ViewModel` overrides `TimeProvider => ClockLocator.Current`. Gallery: `PaneTabs`/`WindowTabs` are `[Computed]` (⚑ST41 part). Tests: `ComputedTests` (14: chains, batch once, derived over base, Validation source, debounce with fake clock, DependsOn, child path incl. reassignment and first subscriber, field-backed source, generic class, 0 B per set, restart allocation), `WideModelTests` (3: 140 properties, bitmap words, 0 B), `ComputedDiagnosticTests` (9), YFex.Avalonia `ViewModelClockTests` (2). Gates: State 413/413 Release, 414/414 Debug; History 65/65; generator 59/59; AOT win-x64 0 IL/AOT warnings, smoke Scenario 11 passes; Validation, Persistence, NavigatR, Mvvm, FormsSpike build; YFex.Avalonia.Tests (Debug) 770/771 — the one failure, `GeometryEditorTests.Renderer_FallsBackWhenThemeBrushesAreTransparent` (accent fallback colour), is in the geometry renderer, which ST-P1 does not touch; not confirmed against a clean tree. Not run: the setter benchmark (the repo's `benchmark/` has no project; allocation gates pass); Linux; Blazor. YFex.UI Release build was blocked by a running gallery (PID 39452) holding its output, so YFex.UI was built and tested in Debug. |

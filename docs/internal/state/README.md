@@ -1,6 +1,6 @@
 # YFex.State — finish what the attributes promise — Plan
 
-> **Status:** PROPOSED 2026-11-19. Docs only, no code. Decisions ⚑ST1–⚑ST52 (§6): decided ⚑ST2, ⚑ST49, ⚑ST50, ⚑ST51, ⚑ST52 and part of ⚑ST7; ST-P0 built (uncommitted) (2026-11-19); the rest pending, answered phase by phase. View integration (02 §9,
+> **Status:** PROPOSED 2026-11-19. Docs only, no code. Decisions ⚑ST1–⚑ST52 (§6): decided ⚑ST2, ⚑ST49, ⚑ST50, ⚑ST51, ⚑ST52 (2026-11-19) and every ST-P1 decision — ⚑ST3–ST8, ⚑ST9 (child objects), ⚑ST10, ⚑ST31, ⚑ST32, ⚑ST34, ⚑ST39 (2026-11-25); ST-P0 built and committed (`b9d9218`); **ST-P1 built 2026-11-25 (uncommitted)**; the rest pending, answered phase by phase. View integration (02 §9,
 > ⚑ST42–ST48) added the same day at the user's request: views should bind generated state directly, with YFex.UI types.
 > **Repo:** `C:\Dev\YFex\YFex.State` (`state.slnx`). Existing internals: [state-internals](../state-internals.md),
 > [state-history-internals](../state-history-internals.md); public guide [state](../../public/state.md).
@@ -81,7 +81,7 @@ Every library in the [infrastructure map](../../agent/infrastructure-map.md):
 | YFex.Cqrs | not a fit | `[StateCommand]` is a UI command; Mvvm calls Cqrs; `ServerOutcome` already in State |
 | YFex.Messaging | not a fit | `[ReactsTo]` is inside one object; bus subscriptions belong to Mvvm |
 | YFex.NavigatR | used; **fits** | drives Activate/Deactivate (polls, reactions); owns page loading; leave guard could read `ITrackable` | ⚑ST29, ⚑ST37 |
-| YFex.Mvvm | used | `PageViewModel` supplies the `TimeProvider` from DI | ⚑ST39 |
+| YFex.Mvvm | used | the base `ViewModel` reads the app's clock from an internal `ClockLocator` (in `YFex.UI.Public`) | ⚑ST39 |
 | YFex.UI | consumer; **fits, lacks a feature** | gallery drops `XxxUiCommand` wrappers and hand-set computed fields; controls that show command/busy/error/dirty state from the core contracts (`YButton` feedback, `YLoadState`, `Busy.Source`, page host state) | ⚑ST41, ⚑ST43–ST46, ⚑ST48 |
 | YFex.Authentication | not a fit | |
 | YFex.Authorization | used | `[RequirePermission]` uses the existing `__OnCanExecute_X` hook; `[Gate]` composes with it, no change | ⚑ST17 |
@@ -90,7 +90,7 @@ Every library in the [infrastructure map](../../agent/infrastructure-map.md):
 | YFex.Privacy | not a fit | `[Trackable]` keeps originals in memory only; masking of logged values is Logging's with Privacy (L16) |
 | YFex.Logging | **better placement** | `[LogChanges]` → `[StateLog]`; State emits the probe | ⚑ST28 |
 | YFex.Actors, YFex.Audit | not a fit | UI state is not audited; "who changed it" is Logging 12's refinement |
-| YFex.Time | not a fit | timers use the BCL `TimeProvider`; no security decision depends on a UI pause | ⚑ST10 |
+| YFex.Time | used indirectly | State and Mvvm take the BCL `TimeProvider`, no reference; `AddYFexTime()` makes the app's `TimeProvider` its `TrustedTimeProvider`, which reaches view models through `ClockLocator` (⚑ST39). No `ITrustedClock` use: no security decision depends on a UI pause. `YFex.Time.Testing` is not used by State tests (it wraps the same `FakeTimeProvider`, ⚑ST34) | ⚑ST10, ⚑ST39 |
 | YFex.Networking | **fits, optional** | polls could pause while the network is down | ⚑ST40 |
 | YFex.Installations, YFex.Offline | not a fit | offline queuing is shown through `ServerOutcome.Queued` |
 | YFex.Resilience | **fits, kept outside** | retry/timeout inside a command method; State adds no retry | ⚑ST33 |
@@ -112,7 +112,8 @@ Every library in the [infrastructure map](../../agent/infrastructure-map.md):
 | YFex.Persistence | own the `[Persist]` attribute (`YFex.State.PersistAttribute` → `YFex.Persistence`); optional debounced auto-save | **yes** (namespace) | ⚑ST27 | ST-P6 |
 | YFex.Logging | `[StateLog]` + `YFex.Diagnostics.StateChanges` (designed, logging ⚑L16, phase G) | no | ⚑ST28 | ST-P6 |
 | YFex.NavigatR | leave guard raises a concern when the page model is `ITrackable` and modified | no (optional) | ⚑ST37 | after ST-P5 |
-| YFex.Mvvm | `PageViewModel` overrides `TimeProvider` from DI | no | ⚑ST39 | ST-P1 |
+| YFex.UI (`YFex.UI.Public` + platforms) | new **internal** `ClockLocator` next to `MessageCatalogLocator` (`Set`/`Reset`/`Current`, default `TimeProvider.System`; visible only through the existing `InternalsVisibleTo` to Mvvm and the platforms); `YFexAvaloniaServices.Register` (then Uno, Blazor) sets it from DI's `TimeProvider` | no | ⚑ST39 | ST-P1 |
+| YFex.Mvvm | base `ViewModel` (every view model, not only pages) overrides `TimeProvider => ClockLocator.Current` | no | ⚑ST39 | ST-P1 |
 | YFex.UI | gallery: bind generated commands directly; `[Computed]` for shell tab placement | no | ⚑ST41 | ST-P1, ST-P3 |
 | YFex.UI (Avalonia, then Uno/Blazor) | `YButton`/command-bar/menu feedback from `ICommandState`; `YLoadState`; `Busy.Source` attached; `YPageHost`/`YPageHeader`/tab header page state; fluent `.Busy()`, `.Source()`; gallery page + StressKit | no (new; button feedback changes visuals, ⚑ST43) | ⚑ST43–ST46, ⚑ST48 | ST-P7 |
 | YFex.State (new package `YFex.State.Public`) | `ICommandState`, `IBusyState`, `IErrorState`, `ITrackable`, `CommandStatus` (moved assembly, same namespace, type-forwarded); YFex.UI platform projects reference it like `YFex.NavigatR.Public` (YFex.UI rule 4 gets the same exception) | no | ⚑ST42 | ST-P3 |
@@ -121,20 +122,20 @@ Every library in the [infrastructure map](../../agent/infrastructure-map.md):
 
 ## 6. Decisions
 
-All pending. "Rec." = recommended option.
+Pending unless marked decided. "Rec." = recommended option.
 
 | # | Question | Rec. | Alternatives | Where |
 |---|---|---|---|---|
 | ST1 | Build everything the guide lists? | **every function, but some through their owner** (§2 Out) and some attributes merged (`[RequiresAll]`→`[Gate]`, `[Propagate]`→child sources, `[Snapshot]`→`[Trackable]`) | build all 26 attributes literally in State; remove the unbuilt ones; adopt CommunityToolkit.Mvvm | 02 §7 |
 | ST2 | Until built | **decided 2026-11-19 (user): no warnings** — every attribute is going to be implemented. (Proposed: warning YFEX0190 per unbuilt attribute + a status column)| warning YFEX0190 (rejected); `[Obsolete]` | 02 §8 |
-| ST3 | `[Computed]` shape | normal get-only property, the getter is the formula | `partial` property + compute method (the guide's form is not valid C#) | 02 §2.1 |
-| ST4 | Finding dependencies | inferred from the getter; `DependsOn` adds; warnings for method calls / deep chains | `DependsOn` required (the guide's gotcha) | 02 §2.3 |
-| ST5 | Computed caching | notify only (getter runs on read) | cached value + compare (`Cached = true`, needs partial + method) | 02 §2.4 |
-| ST6 | Where dependents run | one virtual `StateObject.OnDependencyChanged(uint)`, generated switch per class, chained | calls inside each setter (breaks derived/other-assembly dependents) | 02 §1.1 |
-| ST7 | IDs and bitmap | **user 2026-11-19: no YFEX0103 error, since a larger limit is planned.** Computed and generated properties take IDs; a wider bitmap removes the limit. Open: when the wider bitmap lands — ST-P1 (plan) or ST-P0 (recommended now: `YFex.Avalonia.FormsSpike/BigForm.cs` already has 60 `[Observable]`, and without the error a 65-field model is silently wrong until it lands) | diagnostic only; `InlineArray` of any width | 02 §1.2 |
-| ST8 | Validation as a source | `Validation.…` in a getter subscribes to `ValidationChanged` | `DependsOn = ["Validation"]` by hand | 02 §2.2 |
-| ST9 | Child objects and lists | child sources: path dependencies on child `StateObject`s, list structure always, items with `[ObserveItems]`; `[Propagate]` obsolete | build `[Propagate]` as re-raising child names on the parent | 02 §1.4 |
-| ST10 | Timer and clock | **built in ST-P0 with the recommended option (needed by ⚑ST51), pending confirmation:** one `StateTimer` (restartable, owner thread, no alloc per restart) on `StateObject.TimeProvider` (virtual, default `TimeProvider.System`) | static ambient clock; keep `DebounceState` + `Task.Delay` | 02 §1.3 |
+| ST3 | `[Computed]` shape | **decided 2026-11-25 (user): normal get-only property, the getter is the formula** | `partial` property + compute method (the guide's form is not valid C#) | 02 §2.1 |
+| ST4 | Finding dependencies | **decided 2026-11-25 (user): inferred from the getter; `DependsOn` adds; warnings for method calls / deep chains** | `DependsOn` required (the guide's gotcha) | 02 §2.3 |
+| ST5 | Computed caching | **decided 2026-11-25 (user): notify only (getter runs on read)** | cached value + compare (`Cached = true`, needs partial + method) | 02 §2.4 |
+| ST6 | Where dependents run | **decided 2026-11-25 (user): one virtual `StateObject.OnDependencyChanged(uint)`, generated switch per class, chained** | calls inside each setter (breaks derived/other-assembly dependents) | 02 §1.1 |
+| ST7 | IDs and bitmap | **decided: no YFEX0103 error (user 2026-11-19); the wider bitmap (`PropertyBitmap128`, chosen when a hierarchy passes 64 IDs) is the first item of ST-P1, before `[Computed]` adds IDs (user 2026-11-25).** Computed and generated properties take IDs | diagnostic only; `InlineArray` of any width | 02 §1.2 |
+| ST8 | Validation as a source | **decided 2026-11-25 (user): `Validation.…` in a getter subscribes to `ValidationChanged`** | `DependsOn = ["Validation"]` by hand | 02 §2.2 |
+| ST9 | Child objects and lists | **child `StateObject` part decided 2026-11-25 (user): child path sources** (`Address.City`: subscribe to the child, filter by name, move on reassignment), `[Propagate]` obsolete. **Lists part pending (ST-P4):** list structure always, items with `[ObserveItems]` | build `[Propagate]` as re-raising child names on the parent | 02 §1.4 |
+| ST10 | Timer and clock | **decided 2026-11-25 (user): keep what ST-P0 built** — one `StateTimer` (restartable, owner thread, no alloc per restart) on `StateObject.TimeProvider` (virtual, default `TimeProvider.System`) | static ambient clock; keep `DebounceState` + `Task.Delay` | 02 §1.3 |
 | ST11 | Reactions on inactive objects | run always; `Deactivate` cancels pending/in-flight; `ActiveOnly = true` option | only while active (the guide) — breaks never-activated child models and tests | 02 §3.3 |
 | ST12 | Reaction timing | after the notification; once at the end of a batch | before notification; per set inside a batch | 02 §3.3 |
 | ST13 | `RunOnMainThread` | obsolete (one-owner-thread rule) | build a marshal | 02 §3.3 |
@@ -155,15 +156,15 @@ All pending. "Rec." = recommended option.
 | ST28 | `[LogChanges]` | obsolete alias of Logging's `[StateLog(UserInput)]`; State emits the probe (logging 12 §2) | build its own `[LoggerMessage]` output | 02 §7 |
 | ST29 | `[LoadOnInit]` | remove; NavigatR `OnLoaded` / data loaders; `OnActivated` elsewhere | build "call `LoadXAsync` on first Activate" | 02 §7 |
 | ST30 | `[ValidateWith]`/`[ValidateAsync]` | remove in ST-P6 (validation ⚑P1's "one release") | keep longer | 02 §7 |
-| ST31 | Generator structure | one `StateClassModel` per class from several attribute pipelines; shared helpers (atlas F20) | keep separate emitters and pass data through partial hooks | 02 §1.5 |
-| ST32 | Property `[Debounce]` reach | delays the property's dependents (computed, reactions, gates) as well as its checks; value and own `PropertyChanged` stay immediate (FM59) | validation only (today) | 02 §2.2 |
+| ST31 | Generator structure | **decided 2026-11-25 (user): one `StateClassModel` per class from several attribute pipelines; shared helpers (atlas F20)** | keep separate emitters and pass data through partial hooks | 02 §1.5 |
+| ST32 | Property `[Debounce]` reach | **decided 2026-11-25 (user), State's side of forms ⚑FM59:** the value and its own `PropertyChanged` change on every key; the property's validation, `[Computed]` dependents, gates and reactions wait for the pause; when error messages show is Validation's `ShowErrors.AfterPause`. No control-side delay (FM59: per binding and per platform, and a command would see stale text) | validation only (today); delay in the control | 02 §2.2 |
 | ST33 | Retries in commands | none in State; the method uses YFex.Resilience | `[Retry]` on commands through a Resilience pipeline | §2 |
-| ST34 | Tests and docs | `FakeTimeProvider` (test-only package); behaviour tests per attribute; guide examples compiled in a sample | real-time waits; shape tests | 03 gates |
+| ST34 | Tests and docs | **decided 2026-11-25 (user): Microsoft `FakeTimeProvider` (test-only package; not `YFex.Time.Testing`, which wraps it and would pull YFex.Time into State's tests); behaviour tests per attribute; guide examples compiled in a sample** | real-time waits; shape tests | 03 gates |
 | ST35 | Throttle semantics | leading + trailing (the last change always runs) | leading only (drops the last value) | 02 §3.3 |
 | ST36 | `[Poll]` vs YFex.Jobs | State keeps `[Poll]` (per object, activation, owner thread) | route polls through Jobs | §4 |
 | ST37 | NavigatR leave guard | reads `ITrackable.IsModified` when the page model implements it (opt-out per page) | each page writes its own concern | §5 |
 | ST38 | Validation timing | Validation's generated debounce and `ValidationBag` pause move onto `StateTimer` | keep its own `Task.Delay` timers | §5 |
-| ST39 | Clock in apps | Mvvm `PageViewModel` takes `TimeProvider` from DI | every model uses `TimeProvider.System` | §5 |
+| ST39 | Clock in apps | **decided 2026-11-25 (user): an internal static `ClockLocator` in `YFex.UI.Public`** (pattern of `MessageCatalogLocator`; never public — visible to Mvvm and the platforms through `InternalsVisibleTo`). The platform sets it at startup from DI's `TimeProvider` — YFex.Time's `TrustedTimeProvider` when the app calls `AddYFexTime()`; the base `ViewModel` (all view models) overrides `TimeProvider => ClockLocator.Current`; default `TimeProvider.System`; tests `Set(fake)`/`Reset()`. A locator inside Mvvm was rejected: the platforms that read DI do not reference Mvvm, so nothing could set it | `PageViewModel` takes `TimeProvider` by constructor injection (first proposal); every model uses `TimeProvider.System` | §5 |
 | ST40 | Polls and network state | not now; later an optional `[Poll(PauseOffline = true)]` over YFex.Networking conditions | build now | §4 |
 | ST41 | Consumer clean-up | YFex.UI gallery drops `XxxUiCommand` wrappers (after ST-P3) and hand-set computed fields (after ST-P1) | leave them | §5 |
 | ST42 | Where the view-state contracts live | **revised 2026-11-19: a new leaf `YFex.State.Public`** (references core only) that YFex.Avalonia/Uno/Blazor reference, as they reference `YFex.NavigatR.Public`: the owner keeps its contracts, the map's ".Public when another library needs the contracts without the engine" rule fits exactly, and types keep their namespaces (`YFex.State.Commands.CommandStatus` moves assembly with `[TypeForwardedTo]`, no source break) | **YFex core** (first proposal: no new package, but the contracts are State's, not cross-cutting, and need a new core namespace); **`YFex.UI.Public`** (holds UI *services* that platforms implement and Mvvm consumes — the opposite direction; State, a lower layer, would depend on the UI repo, the kind of repo cycle atlas F29 reports) | 02 §9.2 |
@@ -183,7 +184,7 @@ All pending. "Rec." = recommended option.
 | Phase | Content | Unblocks |
 |---|---|---|
 | **ST-P0** | `StateTimer` + `TimeProvider`, defects B1–B5, B7, B13 (no new attributes) | correct behaviour of what is built |
-| **ST-P1** | dependents dispatch, `TimeProvider` + `StateTimer`, class model, `[Computed]`, property debounce reach, `PropertyBitmap128` | forms FM59 remainder, gallery shell, validation 12 |
+| **ST-P1** ✅ built 2026-11-25 | dependents dispatch, class model, `[Computed]`, property debounce reach, `PropertyBitmap128`, `ClockLocator` | forms FM59 remainder, gallery shell, validation 12 |
 | **ST-P2** | `[ReactsTo]`, method `[Debounce]`/`[Throttle]`, reaction faults | search-as-you-type without hand code |
 | **ST-P3** | commands: `ICommand`, parameters, `Error`, `[ErrorBucket]`, `[Gate]`, `[Busy]`, concurrency/`[Queue]`, `[Cooldown]` | search ⚑SK41, gallery wrappers |
 | **ST-P4** | `[Poll]`, `[ObserveItems]`, list sources | dashboards, order totals |

@@ -8,7 +8,7 @@ This document covers the internal architecture of `YFex.State` and `YFex.State.G
 
 ## Property ID Allocation
 
-Each `[Observable]` property gets a dense `uint` ID, starting at `ParentPropertyCount` (the count of observable properties in ancestor classes). Properties are sorted alphabetically for deterministic ordering across compilations. IDs index into `PropertyBitmap64` for batch dispatch.
+Each `[Observable]` property gets a dense `uint` ID, starting at `ParentPropertyCount` (the count of observable properties in ancestor classes). Properties are sorted alphabetically for deterministic ordering across compilations. `[Computed]` properties take IDs after the class's own observables (sorted by name), so `ParentPropertyCount` counts both kinds in ancestors; `StateIds` in the generator computes the same numbers from symbols, which is how a derived class names a base property's ID. IDs index into `PropertyBitmap128` for batch dispatch.
 
 > **Why alphabetical sorting?** Without deterministic ordering, incremental generator caching breaks — the emitted code would differ between compilations even when source hasn't changed, causing unnecessary IDE rebuilds.
 
@@ -27,19 +27,25 @@ class Derived : Base
 
 ## Bitmap-Based Batch Dispatch
 
-`PropertyBitmap32` / `PropertyBitmap64` are compact bitfields that track which properties changed during a batch update. The flow:
+`PropertyBitmap128` tracks which properties changed during a batch update. The flow:
 
 ```
 BeginUpdate() → increments _updateDepth
-NotifyChanged(descriptor) → if _updateDepth > 0: set bit in _pendingMask
-ExitUpdate() → decrements _updateDepth; if reaches 0: DispatchPending(_pendingMask)
+NotifyChanged(descriptor) → if _updateDepth > 0: set bit in _pendingMask; then OnDependencyChanged(id)
+ExitUpdate() → decrements _updateDepth; if reaches 0: OnUpdateCompleted(), then while TryPopLowest(out id): DispatchPending(id)
 ```
 
-`DispatchPending(mask)` uses `BitOperations.TrailingZeroCount` to drain set bits in O(set-bits), firing one notification per changed property. The generator emits a per-class override that chains from most-derived to base class.
+`TryPopLowest` uses `BitOperations.TrailingZeroCount`, so draining is O(set bits). The generator emits a per-class `DispatchPending(uint)` override (a switch over its own IDs) that passes other IDs to `base`.
 
 > **Why bitmaps instead of a list?** A 64-bit mask fits 64 properties in a single `ulong`. Checking "did anything change?" is a single zero-test. Draining uses CPU intrinsics (`tzcnt`). No heap allocation, no list iteration, no hash lookups.
 
-> **Warning:** `PropertyBitmap64` supports at most 64 observable properties per class hierarchy. **No diagnostic exists yet**: a 65th ID silently aliases bit 0 in a batch (defect B6, fixed in [state plan](state/README.md) ST-P0). A StateObject with 64+ observable properties should be decomposed.
+> **No property limit (state plan ⚑ST7, ST-P1):** `StateObject` keeps its pending set in `PropertyBitmap128` — IDs 0–127 in two inline words, IDs from 128 up in words allocated once per object on first use. `DispatchPending(uint propertyId)` is called per pending ID (the base pops them lowest first), so generated code no longer depends on the bitmap's width.
+
+### Dependents (`[Computed]`, ST-P1)
+
+`NotifyChanged` raises the change (or marks it pending in a batch) and then calls the virtual `OnDependencyChanged(id)`. Each class with `[Computed]` values overrides it with a switch over the IDs they read (own or inherited) and calls `base` last; each case calls `NotifyDerived(in __desc_X)` for its dependents, which re-enters the switch for chains. In a batch a dependent only sets its bit, so it is raised once at the end. A source with `[Debounce]` restarts a per-source `StateTimer` instead (owner's `TimeProvider`) and raises its dependents from the callback. `NotifyDerived` is `NotifyChanged` without the owner-thread check, because timer and validation callbacks raise derived values without writing state.
+
+Child paths (`Address.City`): a `ChildSource` per root property subscribes the owner to the child (`INotifyChanged`), attached from `AttachChildSources()` (first `Subscribe`, `Activate`) and on every change of the root; the child's changes arrive at the generated `OnChildChanged(id, change)`, which filters by name. Validation as a source: `OnValidationCreated` subscribes to `ValidationChanged`.
 
 ---
 
@@ -183,7 +189,7 @@ ForAttributeWithMetadataName("YFex.State.StateCommandAttribute")
 ### Emitted Code Per Observable Property
 
 1. **Static `ChangedNotification` descriptor** (cached, never re-allocated)
-2. **`DispatchPending` override** — walks bitmap, fires descriptors in ID order
+2. **`DispatchPending(uint)` override** — raises one pending ID (own IDs here, the rest via `base`)
 3. **Property setter** with equality check -> `NotifyChanging` -> field set -> `NotifyChanged`
 4. **MVVM args cache entry** (if `MvvmStateObject`)
 5. **Activation sync** (if property type is `IActivatable`)

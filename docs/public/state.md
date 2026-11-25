@@ -2,10 +2,11 @@
 
 **Libraries:** YFex.State, YFex.State.Mvvm, YFex.State.Collections, YFex.State.Blazor, YFex.State.Testing
 
-> **Build status (2026-11-19).** Generated today: `[Observable]`, `[StateCommand]`, `[EqualityComparer]`,
-> `[NotifyOnTaskCompletion]`, `[IgnoreActivation]`; `[Debounce]` on a property/class delays its validation (YFex.Validation);
-> `[Persist]` is read by YFex.Persistence (snapshot on demand). Every other attribute in this guide is **being implemented**
-> (phases ST-P1–ST-P7 of the [State completion plan](../internal/state/README.md)) and has no effect yet.
+> **Build status (2026-11-25).** Generated today: `[Observable]`, `[Computed]` (ST-P1), `[StateCommand]`, `[EqualityComparer]`,
+> `[NotifyOnTaskCompletion]`, `[IgnoreActivation]`; `[Debounce]` on a property/class delays its validation (YFex.Validation)
+> and its `[Computed]` dependents; `[Persist]` is read by YFex.Persistence (snapshot on demand). Every other attribute in this
+> guide is **being implemented** (phases ST-P2–ST-P7 of the [State completion plan](../internal/state/README.md)) and has no
+> effect yet.
 
 ---
 
@@ -133,9 +134,9 @@ public partial class GreetingViewModel : MvvmStateObject
     [Observable]
     public partial string Name { get; set; }
 
-    // Re-notifies whenever Name changes
-    [Computed(DependsOn = new[] { nameof(Name) })]
-    public partial string Greeting => $"Hello, {Name}!";
+    // Re-notifies whenever Name changes (the generator reads the getter)
+    [Computed]
+    public string Greeting => $"Hello, {Name}!";
 }
 ```
 
@@ -165,8 +166,8 @@ public partial class GreetingViewModel : MvvmStateObject
     [Observable]
     public partial string Name { get; set; }
 
-    [Computed(DependsOn = new[] { nameof(Name) })]
-    public partial string Greeting => $"Hello, {Name}!";
+    [Computed]
+    public string Greeting => $"Hello, {Name}!";
 
     // Generates: public IAsyncStateCommand SaveCommand { get; }
     // with IsExecuting, Status tracking, and lock-free concurrency gate
@@ -239,14 +240,32 @@ public class CaseInsensitiveComparer : IEqualityComparer<string>
 
 #### `[Computed]`
 
-Read-only derived property. Automatically re-notifies when any dependency changes.
+A derived value: a normal get-only property whose getter is the formula. The generator adds only its change notification.
 
 ```csharp
-[Computed(DependsOn = new[] { nameof(FirstName), nameof(LastName) })]
-public partial string FullName => $"{FirstName} {LastName}";
+[Observable] public partial int Quantity { get; set; }
+[Observable] public partial decimal UnitPrice { get; set; }
+[Observable, Debounce(300)] public partial decimal Discount { get; set; }
+[Observable] public partial Address? Address { get; set; }
+
+[Computed] public decimal Subtotal => Quantity * UnitPrice - Discount;      // what it reads is found in the getter
+[Computed] public bool IsFree => Subtotal == 0;                              // computed over computed
+[Computed] public bool CanSave => !Validation.HasErrors && Quantity > 0;     // validation changes count too
+[Computed] public string City => Address?.City ?? "";                        // one level into a child StateObject
+[Computed(DependsOn = [nameof(UnitPrice)])] public string PriceText => Format(UnitPrice);   // a method call: say it
 ```
 
-The generator wires up internal subscriptions so that when `FirstName` or `LastName` fires a change notification, `FullName`'s `PropertyChanged` fires too.
+| Rule | Behaviour |
+|---|---|
+| What it depends on | `[Observable]` and `[Computed]` members of the class and its base classes read in the getter (field-backed ones by their property name), `Validation`, and one property of a child `StateObject` (`Address.City`; a new `Address` counts too). `DependsOn` **adds** names (`"Validation"`, `"Address.City"` allowed); it never hides one. |
+| When it is raised | right after the change it depends on; inside `BeginUpdate()` once at the end of the batch. A source with `[Debounce]` raises its dependents after the pause, while the source's own change stays immediate. |
+| Value | never cached: the getter runs on every read, so reading it is always current. A dependency change raises it even if the result did not change. |
+| Derived classes | a `[Computed]` in a derived class may read base-class properties (also from another assembly). |
+| Not seen | method calls, plain fields and settable non-observable properties (warning YFEX0212, silenced by `DependsOn`); changes two levels into children (`Address.Country.Name`, warning YFEX0211); items of a `StateList` (ST-P4). |
+| Errors | cycle (YFEX0210), a getter that writes state (YFEX0213), an unknown `DependsOn` name (YFEX0215), a setter, `partial`, `static` or auto-property (YFEX0216). |
+
+> **Child objects:** the parent subscribes to the child it reads through, so a child that outlives the parent (a shared object)
+> keeps the parent alive until the parent's property is cleared or reassigned.
 
 #### `[NotifyOnTaskCompletion]`
 
@@ -520,7 +539,9 @@ async Task OnSearchQueryChanged()
 
 #### `[Debounce]` / `[Throttle]`
 
-Apply to any `[ReactsTo]` or `[StateCommand]` method.
+On an `[Observable]` property (or a class, for all of its properties): the value and its own change are immediate; the
+property's validation and its `[Computed]` dependents wait for the pause (built). On a `[ReactsTo]` or `[StateCommand]` method
+(ST-P2/ST-P3, not built yet):
 
 ```csharp
 [ReactsTo(nameof(SearchQuery))]
