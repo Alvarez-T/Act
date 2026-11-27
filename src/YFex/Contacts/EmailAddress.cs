@@ -33,7 +33,8 @@ public readonly struct EmailAddress :
     ISpanParsable<EmailAddress>,
     ICanonicalValue<EmailAddress>,
     ILogValue<EmailAddress>,
-    IClassifiedData<EmailAddress>
+    IClassifiedData<EmailAddress>,
+    IValueObject
 {
     /// <summary>Longest address accepted (RFC 5321 path limit minus the brackets).</summary>
     public const int MaxLength = 254;
