@@ -39,7 +39,8 @@ public readonly struct PhoneNumber :
     ICanonicalValue<PhoneNumber>,
     ILogValue<PhoneNumber>,
     IClassifiedData<PhoneNumber>,
-    IExtractable<PhoneNumber>
+    IExtractable<PhoneNumber>,
+    IValueObject
 {
     /// <summary>Most digits of an E.164 number (country code included).</summary>
     public const int MaxDigits = 15;

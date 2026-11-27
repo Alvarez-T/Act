@@ -202,6 +202,41 @@ public static class Masks
         return true;
     }
 
+    /// <summary>
+    /// Applies a <see cref="SensitiveAttribute.Mask"/> spec read at run time (forms ⚑FM63: a raw <c>[Sensitive]</c> property
+    /// such as a <c>string</c>, which has no generated mask of its own): a preset <c>{hidden}</c>, <c>{email}</c>,
+    /// <c>{initials}</c>, <c>{ip}</c>, <c>{last:N}</c>, <c>{first:N}</c>, else positional pattern(s); null or empty =
+    /// <see cref="DefaultPreset"/> of <paramref name="sensitivity"/>. A spec that does not parse fails closed (<see cref="Hidden"/>).
+    /// </summary>
+    public static bool TryWriteSpec(ReadOnlySpan<char> source, string? mask, DataSensitivity sensitivity, Span<char> destination, out int written)
+    {
+        if (sensitivity == DataSensitivity.Secret) return TryWriteHidden(destination, out written);
+        if (string.IsNullOrEmpty(mask))
+        {
+            var preset = DefaultPreset(sensitivity, out var count);
+            return TryWritePreset(source, preset, count, destination, out written);
+        }
+        ReadOnlySpan<char> spec = mask;
+        if (spec[0] != '{') return TryWritePattern(source, spec, destination, out written);
+        if (spec[^1] != '}') return TryWriteHidden(destination, out written);
+        spec = spec[1..^1];
+        var colon = spec.IndexOf(':');
+        var name = colon < 0 ? spec : spec[..colon];
+        var n = 0;
+        if (colon >= 0 && (!int.TryParse(spec[(colon + 1)..], System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out n) || n <= 0))
+            return TryWriteHidden(destination, out written);
+        return name switch
+        {
+            "email" => TryWriteEmail(source, destination, out written),
+            "initials" => TryWriteInitials(source, destination, out written),
+            "ip" => TryWriteIpAddress(source, destination, out written),
+            "last" when n > 0 => TryWriteLast(source, n, destination, out written),
+            "first" when n > 0 => TryWriteFirst(source, n, destination, out written),
+            _ => TryWriteHidden(destination, out written),
+        };
+    }
+
     private static bool LiteralsMatch(ReadOnlySpan<char> source, ReadOnlySpan<char> pattern)
     {
         for (int i = 0; i < pattern.Length; i++)

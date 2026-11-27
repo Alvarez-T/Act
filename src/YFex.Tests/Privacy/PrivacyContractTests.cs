@@ -224,4 +224,22 @@ public sealed class LogWriterPrivacyTests
         writer.WriteMaskedText(0, "hunter2", DataSensitivity.Secret);
         Single(writer.Written).Omission.Should().Be(LogOmission.Erased);
     }
+
+    [Fact]
+    public void A_mask_spec_read_at_run_time_masks_a_raw_value_and_fails_closed()
+    {
+        static string Mask(string source, string? spec, DataSensitivity sensitivity)
+        {
+            Span<char> buffer = stackalloc char[64];
+            Masks.TryWriteSpec(source, spec, sensitivity, buffer, out var written).Should().BeTrue();
+            return new string(buffer[..written]);
+        }
+
+        Mask("ana.lima@example.com", "{email}", DataSensitivity.Personal).Should().Be("a***@example.com");
+        Mask("1234567890", "{last:4}", DataSensitivity.Financial).Should().Be("****7890");
+        Mask("123.456.789-09", "***.###.###-**", DataSensitivity.PersonalIdentifier).Should().Be("***.456.789-**");
+        Mask("123456", null, DataSensitivity.PersonalIdentifier).Should().Be("****56", "no spec: the sensitivity's default");
+        Mask("abc", "{nope}", DataSensitivity.Personal).Should().Be(Masks.Hidden, "an unknown spec fails closed");
+        Mask("hunter2", "{first:3}", DataSensitivity.Secret).Should().Be(Masks.Hidden, "secrets are always hidden");
+    }
 }

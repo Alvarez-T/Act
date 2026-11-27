@@ -50,7 +50,8 @@ public interface IMessageCatalog
     /// <summary>Display name for <paramref name="fieldKey"/>; falls back to the humanized member name
     /// (<c>"SaleVm.ManualDiscount"</c> → <c>"Manual discount"</c>). The key may be a chain separated by <c>'|'</c>
     /// (<c>"SaleVm.Installments|CloseSale.Installments|sale.Installments"</c>, ⚑LZ9): the first key with a title wins;
-    /// with none, the first key is humanized.</summary>
+    /// with none, the first key is humanized. A literal key (<see cref="FieldKeys.Literal"/>, <c>"=Nome do cliente"</c>)
+    /// is its own name (⚑FM61).</summary>
     string FieldName(string fieldKey, CultureInfo culture);
 
     /// <summary>Formats <paramref name="key"/>; a catalog that knows the key's module reads it by index.
