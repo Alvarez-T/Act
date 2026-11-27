@@ -18,7 +18,7 @@
 | `YHeaderControl` (a child plus a description: notch or docked) | `Controls/Headers` | exists | the label for editors that have none (toggle, date picker, custom control) |
 | `YDataGrid` (+ planned pinned rows: new-item row, totals), `YDrag.Reorder` | YFex.Avalonia | exists / planned (C10) | child collections |
 | Validation's Avalonia design (constraint projection, `IConstraintTarget`, `YValidationSummary`, `:invalid`/`:warning`) | [validation/08](../validation/08-ui-avalonia.md) | designed, partly built | Forms *is* the screen-level half of that design (⚑FM33) |
-| Composer `DisplayHints`, `[RecordAccess]` / `IRecordAccess<T>` (C3, decided) | [composer-design](../composer-design.md) | designed, not built | overlap: UI hints and field access (⚑FM29, ⚑FM30) |
+| Composer `DisplayHints`, `[RecordAccess]` / `IRecordAccess<T>` (C3, decided) | [composer-design](../studio/02-new-screens.md) | designed, not built | overlap: UI hints and field access (⚑FM29, ⚑FM30) |
 | `EditorViewModel<TModel>`, `ListViewModel`, `MasterDetailViewModel`, `SelectorViewModel` | `YFex.Mvvm/PageViewModel.cs:176-188` | empty stubs | part 2 ([02](02-crud-pattern.md)) |
 | `Form` branch of YFex.UI (`0b7bc23`, 2026-02, 6,535 lines) | `src/Controls/Panels/{Flex,Form}` | old layout, never merged | §6 below |
 

@@ -135,7 +135,7 @@ Acceptance
 
 ## Phase 6 — Fiscal, Composer, AI (after the first release)
 
-**Load:** 01 §3.1–3.2, 04 §11, 05 §8, `YFex/docs/internal/composer-design.md`.
+**Load:** 01 §3.1–3.2, 04 §11, 05 §8, `YFex/docs/internal/studio/02-new-screens.md` (was `composer-design.md`).
 
 Tasks: `ResultadoValidacao` facade + `IRegraNFe` → `IRule<NFeSituation>` migration; `XsdValidation.ToViolation`;
 `YFex.Rules.Dynamic` (spec, compiler to postfix, interpreter, publish validation) + Composer authoring;
@@ -1142,3 +1142,8 @@ Installations/Offline code.
 Without a signer/verifier nothing changes (same queries, same cache keys). Tests: Rules.Admin.Tests 27 → **30** (`SignedRuleDataTests`:
 sign once + serve, sync refuses a bad version, cache re-verifies after an on-disk edit); `AdminFixture` takes an optional signer.
 
+
+
+## Requests from YFex.Studio (2026-11-27)
+
+- **Extract `YFex.Revisions` from Rules.Admin** (Studio C4/C5 decided 2026-10-01: `IRevisionStore`, `Enactor`, `RevisionEnacted`, `Revert`, `RevisionDiff`, `.Data`, `.Sync`; Rules.Admin renamed Publish → Enact). Timing is open as Studio ⚑C25: Reactions would be the second consumer. Not started; Rules.Admin keeps its own store until then. Plan: [studio 02 §11.1](../studio/02-new-screens.md).

@@ -12,6 +12,21 @@ These rules apply to every project kind, whenever you design a library, a phase 
   - **not a fit**: one line saying why.
 - Consider useful outside libraries too. A third-party package is a decision under the dependency rule of [infrastructure](infrastructure.md).
 
+### The same feature may already exist under another name
+
+Before you add a feature or extend one (an option, a builder verb, a hook, an extension point, a registry or lookup table, a carrier for another library's settings), search every YFex library for something with the same meaning. Search by what it does, not by the name you had in mind: the existing one may be called differently (`Features` vs "extension slot", `Policy` vs "options", `Slot` vs "registry").
+
+- Search with the RoslynMcp tools (`get_names`, `find_implementations`, `get_extension_methods_for`) and grep, and read the owning library's `AGENTS.md` and README.
+- When you find one, compare it with your proposal: does it already cover the case, how do callers write it, does it follow the layer order, is it AOT-safe, who else uses it.
+- **The existing one is as good or better:** use it. If you already built your own, move your code onto the existing one and remove yours. This needs no decision.
+- **Yours is better:** don't keep both. Record a ⚑ decision to replace the existing one (§2), with both versions shown in code and the callers that would move.
+- **The existing one almost fits:** propose the missing piece to its library (§2, "the library lacks the feature") instead of building a second mechanism.
+- Say what you found in your answer, including when you found nothing.
+
+Example: per-message settings of a library above YFex.Cqrs go into Cqrs `MessageFeatures` through an extension verb on the command builder (`builder.Feature(...)` / `GetFeature<T>()`, as YFex.Offline's `.Offline(...)` does). A separate options object on the host was proposed once and is the wrong default.
+
+Example: a per-message option whose effect is generated code (compiled rules, a generated interface on the type) is declarable in the aggregate configuration too, not only as an attribute. The generator reads the builder verb at compile time and writes the code into the `partial` type, as YFex.Validation compiles `b.Command<PublishTable, long>().Validation(v => …)` rules into `PublishTable` (`YFex.Rules.Admin/RuleAdminSetup.cs`). The generator recognizes the verb by a name and a marker type or attribute its own library owns (`.Validation(Action<ValidationBuilder<T>>)`, `.Buildable()` marked `[BuildableVerb]`), never by a method name chosen by a library above it. Only the configuration and the type in different projects needs the attribute (report that case as a diagnostic). "It is compile-time, so it must be an attribute" was wrongly claimed once for what is now `[Readable]` / `[Buildable]` (studio ⚑C42).
+
 ### Owners to check before you write it yourself
 
 Building any of these yourself is a decision for the user, never a default. "(design)" marks an owner that is only designed: a fit with it is still a decision, recorded in both designs. Status and documents per owner are in the map.
@@ -63,7 +78,7 @@ Building any of these yourself is a decision for the user, never a default. "(de
 | an admin API, commands and queries, idempotency, caching of query results | YFex.Cqrs |
 | field and range checks on specs, settings or input | YFex.Validation (`[Validatable]`) |
 | a formula or expression language | YFex.Expressions |
-| screens or logic that end users compose | YFex.Composer (design) |
+| screens or logic that end users compose | YFex.Studio (design; was YFex.Composer) |
 | discoverable actions for search, UI or AI | YFex.Capabilities |
 | a search box, search providers, ranking | YFex.Search |
 

@@ -91,3 +91,10 @@ Retries that are stored and scheduled for a later time (Jobs runs, Jobs Hub reco
 4. **Clean break in Jobs:** the Jobs `RetryPolicy` class is replaced by `YFex.Resilience.RetryPolicy` + `RetryBudget` (settings layers, `JobDescriptor`, `IJobStore`, `[Retry]` source generator). Stored retry records in the old `StoredRetry` shape are not read; the job's default applies.
 
 Jobs references `YFex.Resilience` (base package only, a leaf with just DI abstractions, so there is no cycle; never `YFex.Resilience.Polly`).
+
+
+## Pending requests from other designs (2026-11-27)
+
+| Request | From | State | Blocks |
+|---|---|---|---|
+| **Quota**: a counter per (quota key, Tenancy scope, period) on `ITrustedClock` in the scope's time zone, refusing when exhausted, with a durable shared-store adapter so restarts and several central nodes count once | Notifications ⚑N9 (agreed 2026-11-09); also YFex.Studio ⚑C30 (reaction runs and messages per scope per day) | not designed here, not built | Notifications N1 (WhatsApp/SMS budgets), Studio CR1b |

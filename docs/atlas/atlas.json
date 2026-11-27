@@ -156,7 +156,7 @@
       "group": "foundation",
       "status": "building",
       "progress": 80,
-      "summary": "Expression language extracted from Rules.Dynamic (parser, evaluator, generator). Leaf; Composer is the planned second consumer.",
+      "summary": "Expression language extracted from Rules.Dynamic (parser, evaluator, generator). Leaf; Studio (was Composer) is the planned second consumer.",
       "next": "Verify X.0–X.4 in the real tree (memory says unverified).",
       "docs": [
         "YFex/docs/internal/expressions/phase-x-extraction.md"
@@ -766,15 +766,16 @@
       "docs": []
     },
     {
-      "id": "YFex.Composer",
-      "name": "Composer",
+      "id": "YFex.Studio",
+      "name": "Studio",
       "group": "ui",
-      "status": "idea",
-      "progress": 0,
-      "summary": "Proposal (rev 2, 2026-09-30): compose capabilities, rules and expressions into app-defined behaviour. Working name.",
-      "next": "Evaluate after Expressions is verified.",
+      "status": "building",
+      "progress": 2,
+      "summary": "End users compose screens, change developer pages within declared limits (overlays, copies, eject to CustomLogic) and set up Reactions (event, condition, steps) from the developer-exposed catalog. Renamed from YFex.Composer 2026-11-26 (C33).",
+      "next": "Skeleton only (2026-11-26): repo YFex.Studio, studio.slnx, empty YFex.Studio.Public + YFex.Studio.Reactions, one test; uncommitted. CP0 groundwork in owning repos, then CR1 reactions.",
       "docs": [
-        "YFex/docs/internal/composer-design.md"
+        "YFex/docs/internal/studio/README.md",
+        "YFex.Studio"
       ]
     },
     {
@@ -1030,17 +1031,17 @@
       "note": "package signatures"
     },
     {
-      "from": "YFex.Composer",
+      "from": "YFex.Studio",
       "to": "YFex.Expressions",
       "note": "expression language"
     },
     {
-      "from": "YFex.Composer",
+      "from": "YFex.Studio",
       "to": "YFex.Capabilities",
       "note": "actions"
     },
     {
-      "from": "YFex.Composer",
+      "from": "YFex.Studio",
       "to": "YFex.Rules",
       "note": "rules"
     },

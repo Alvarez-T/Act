@@ -6,7 +6,7 @@
 
 `YFex.Validation` does **not** exist. Its extraction was deferred in
 `YFex.Domain/MIGRATION-NOTES.md` (§0, "Decision Phase E.5") and listed as a dependency in
-`YFex/docs/internal/composer-design.md` §16 ("Composer rules produce neutral validation results").
+`YFex/docs/internal/studio/02-new-screens.md` (was `composer-design.md`) §16 ("Composer rules produce neutral validation results").
 *(That was composer-design rev 1; the gap is marked closed in rev 2 now that YFex.Validation exists.)*
 
 ### 1.1 Validation seed in YFex.State (zero consumers in the whole `C:\Dev\YFex` tree)

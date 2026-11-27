@@ -220,7 +220,7 @@ Mirror rows added 2026-11-18, all pending, each pointing back here.
 | [validation (Rules)](../validation/README.md) | ⚑D39 | IF11 |
 | [offline](../offline/README.md), [hosting](../hosting/README.md) | ⚑O33, ⚑H23 | IF18 |
 | [installations](../installations/README.md), [installer](../installer/README.md), [cryptography](../cryptography/README.md) | ⚑I45, IN9, ⚑K20 | IF17 |
-| [composer](../composer-design.md) | C6 | IF22 |
+| [composer](../studio/README.md) | C6 | IF22 |
 | YFex.UI [avalonia-components-plan](../../../../YFex.UI/docs/plans/avalonia-components-plan.md) | ⚑UI116 | IF35 |
 | YFex.Automation [06-ai-agents](../../../../YFex.Automation/docs/06-ai-agents.md), [07-triggers](../../../../YFex.Automation/docs/07-triggers-hosting-record.md) | pending notes | IF7, IF27 |
 | YFex.DataMining [ARCHITECTURE](../../../../YFex.Data/docs/ARCHITECTURE.md) | pending note | IF6 |

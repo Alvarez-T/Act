@@ -5,7 +5,7 @@
 > **Audience:** the session that implements it. Read this file, then only the source files named in each step.
 > **Normative vs sketch:** type and member names in code blocks are **normative** unless marked `// (sketch)`.
 > Decisions still to confirm are marked **⚑ XD#** (§9); the recommended option is what the steps assume.
-> Sibling docs: `../composer-design.md` (§8.2, §15 Phase X), `../validation/05-decision-tables-and-dynamic-rules.md` §8,
+> Sibling docs: `../studio/02-new-screens.md` (§8.2, §15 Phase X), `../validation/05-decision-tables-and-dynamic-rules.md` §8,
 > `../validation/13-phases-and-acceptance.md` ("Phase 6 implementation log").
 
 ---
@@ -312,7 +312,7 @@ wording of composer-design C1.
 
 ### 11.1 Session start protocol
 
-1. Read this file §11 → §12, then `../composer-design.md` §0.2 (decisions C1–C5) only if you need context on *why*.
+1. Read this file §11 → §12, then `../studio/02-new-screens.md` §0.2 (decisions C1–C5) only if you need context on *why*.
 2. Check the tree: `git -C C:\Dev\YFex\YFex status --short`. **Nothing of Phase X is committed.** The working tree also contains
    **another session's unrelated, in-progress work** (see 11.3) — never stage, revert or "fix" those files.
 3. Build/test in **Release** (`-c Release`). The RoselYn MCP server locks the Debug generator DLLs
@@ -335,7 +335,7 @@ wording of composer-design C1.
 ?? YFex.Rules/tests/YFex.Rules.Dynamic.Tests/GoldenProbe.cs      (equivalence probe; no-op unless YFEX_GOLDEN_OUT is set)
 ?? YFex.Expressions/**                                           (YFex.Expressions, .Generator, .Tests, .Generator.Tests, .Benchmarks)
 ?? docs/internal/expressions/phase-x-extraction.md             (this file)
- M docs/internal/composer-design.md                            (decisions C1–C5, Phase X links)
+  M docs/internal/composer-design.md                           (decisions C1–C5, Phase X links)
 ```
 
 Suggested commit (only when the user asks): stage exactly the paths above, message
@@ -360,7 +360,7 @@ Because of this, X.4 was verified in a **temporary git worktree** (HEAD + only t
 | 3 | **Benchmarks on a quiet machine** (nothing else building): old vs new as in §12.2 (a HEAD worktree with only the benchmark project copied in, vs. the current tree); fill §7's table. | Within §7 limits |
 | 4 | **X.5 — named collections (XD4):** append `ExprKind.Item` (keep the existing order); `ExprJson` read/write `{"item": ["Items", "Qty"]}`; `ExprText` renders `Items.Qty`; binder resolves `ExprSchema.TryGetCollection` + item field; aggregates **infer** their collection from the item reads inside (default collection when only `line`/none); new `ExprDiagnosticCodes.AmbiguousCollection` (an aggregate mixing collections, or none while the schema has several and no default) — Rules maps it to a new `rules.dynamic.ambiguous-collection`. `BoundExpression.CollectionId` already flows to `Op.Agg` (D) and `Op.ItemField` (B). `ExprAuthoring.WriteExpressionDefs` gets an `item` def when a schema has collections. Tests over a two-collection schema. GoldenProbe must stay identical for Rules. | Expressions.Tests green; Rules golden unchanged |
 | 5 | **X.6 (optional, may slip to Composer P2):** text syntax parser (§5). | Round-trip property test |
-| 6 | **X.7 docs:** `../validation/05-decision-tables-and-dynamic-rules.md` §8 (engine now in YFex.Expressions; `[ExprFunctions]`), `../validation/13-phases-and-acceptance.md` (log entry "Phase X" pointing here), `../validation/README.md` layers (Layer 0.5 YFex.Expressions; Rules.Dynamic → Expressions), `../composer-design.md` §4/§8.2 status. | Docs consistent |
+| 6 | **X.7 docs:** `../validation/05-decision-tables-and-dynamic-rules.md` §8 (engine now in YFex.Expressions; `[ExprFunctions]`), `../validation/13-phases-and-acceptance.md` (log entry "Phase X" pointing here), `../validation/README.md` layers (Layer 0.5 YFex.Expressions; Rules.Dynamic → Expressions), `../studio/02-new-screens.md` §4/§8.2 status. | Docs consistent |
 
 ---
 

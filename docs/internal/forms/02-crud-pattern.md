@@ -136,10 +136,10 @@ A page model can still be opened as a dialog (`Presentation = Dialog`, through `
 
 | ⚑ | Question |
 |---|---|
-| FM40 | Base classes in `YFex.Mvvm` (`CrudViewModel<TRow, TModel, TId>` composed of `ListViewModel<TRow>` + `EditorViewModel<TModel>`) vs a separate `YFex.Mvvm.Crud` package |
+| FM40 ✅ | Base classes in `YFex.Mvvm` (`CrudViewModel<TRow, TModel, TId>` composed of `ListViewModel<TRow>` + `EditorViewModel<TModel>`) vs a separate `YFex.Mvvm.Crud` package. **Decided 2026-11-25 (user): in `YFex.Mvvm`.** |
 | FM41 ✅ | **Decided (user 2026-11-18): separate models**, each with its own boundary: `CustomerRow` (list), `CustomerEditModel` (form), `CustomerDetailsModel` (details screen with purchases, appointments, convênio); see 01 §9.1 |
-| FM42 | `YCrudPage` as a templated control in YFex.Avalonia (domain-free, binds to an interface in `YFex.UI.Public`) vs a page template in the app |
-| FM43 | `YTabView` new control vs extend `SwitchPanel` |
+| FM42 ✅ | `YCrudPage` as a templated control in YFex.Avalonia (domain-free, binds to an interface in `YFex.UI.Public`) vs a page template in the app. **Decided 2026-11-25 (user): the control, provided every part can be extended or replaced.** It always has: the page toolbar, the grid with its own toolbar, an add button, master-detail (`YDetailPresenter`), and the detail can extend to another view model's tile (pop out / dock, ⚑DG4–DG5). Parts are slots (`PageCommands`, `GridToolbar`, `Grid`, `Detail`, `Empty`) that add to or replace the default |
+| FM43 ✅ | `YTabView` new control vs extend `SwitchPanel`. **Decided 2026-11-25 (user): `YTabView : TabControl`** (Avalonia's selection, keyboard and automation), tabs drawn with the `YTabStrip` look and tokens, content from templates or a `Route` built on first selection. **Confirmed 2026-11-26 (user):** only the selected page in the visual tree by default; an option to keep pages is planned in [10](10-part3-follow-ups.md) §1 (⚑FM68) |
 | FM44 | Commands as YFex.Capabilities entries (search "novo cliente", AI) and gates from YFex.Authorization |
-| FM45 | Contract → edit model mapping (`CustomerEditModel.From(Customer)`): Validation `[ValidatesAs]` generator, Forms generator, or hand-written |
-| FM46 | Detail placement and column widths per user: State `[Persist]` vs Persistence store directly |
+| FM45 ✅ | Contract → edit model mapping (`CustomerEditModel.From(Customer)`): Validation `[ValidatesAs]` generator, Forms generator, or hand-written. **Decided 2026-11-25 (user): hand-written.** An edit model often joins several DTOs or reshapes properties, so no automapping; the CRUD base only calls the app's `Load` |
+| FM46 ✅ | Detail placement and column widths per user: State `[Persist]` vs Persistence store directly. **Decided 2026-11-25 (user):** the form configuration says what may be remembered (`f.Form().Remember(FormMemory.CollapsedSections \| DetailPlacement \| GridColumns)`, per-section defaults); `YForm`/`YCrudPage` save and load it per user and model through YFex.Persistence with no view-model code; "Restaurar layout padrão" clears it; it is the user layer of ⚑FM62 |

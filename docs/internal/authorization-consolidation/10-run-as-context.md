@@ -6,6 +6,7 @@
 > **Asked by:** YFex.Jobs Plan D2 (`YFex.Jobs/YFex.Jobs.Templates-Development-Plan-D.md` §6.1 run-as, §6.4 command templates).
 > **Kind:** additive request to YFex.Authorization, plus one line in YFex.Messaging.Rpc and a small adapter in YFex.Audit.
 > Plan D §10: Jobs does not work around it.
+> **Also asked by (2026-11-27):** YFex.Studio Reactions ([studio 06](../studio/06-cr1-reactions-plan.md) step R6, Studio ⚑C11/⚑C51): a reaction runs as its author like a user job; Studio does not work around it either (⚑RA12).
 > **Fits:** 09 Phase 7 ("with the features that need them"); the feature is Jobs D2.
 
 ## 1. Problem
@@ -248,3 +249,4 @@ An app with a replicated role store on the terminal may answer from it. ⚑RA6 c
 | RA9 | The "captured at creation" grant (§2.6) | **Open.** Recommended: Authentication issues a delegation grant (audience = the instance key, holder = this Installation, sliding 90 days, revoked by sign-out-everywhere, password reset, user disabled or instance delete); permissions are resolved per run like Directory when reachable, and offline from the grant's snapshot up to a max age (default 24 h) | the grant only proves identity; offline always defers (as ⚑RA6) |
 | RA10 | One `ActorKind` numbering (§2.7) | **Open.** Recommended: Audit's superset (`Anonymous 0 … System 6`, `default` = anonymous); check every persisted/transmitted number first | keep Authorization's numbers and renumber Audit's |
 | RA11 | Core namespace and `HomeScope` type (§2.7) | **Open.** Recommended: namespace `YFex.Actors`; `HomeScope` stays canonical text (core does not reference Tenancy) | `ScopeIdentity` if Tenancy's identity type moves to core too |
+| RA12 | Reactions as a second run-as consumer (YFex.Studio, 2026-11-27) | **Open.** Recommended: no new mechanism. A reaction is a "user job run as its owner" (§2.3): actor = the author (`User`), real actor = `reaction:{key}` with `ActorKind.Job`, relation `Delegation`, Directory source, re-checked at every run, `Unavailable` → defer (⚑RA6). Studio's CR1 run-as step waits for this resolver | a Studio-private snapshot of the author's permissions (rejected: duplicates this design and is not re-checked) | §2.3, §2.6 |

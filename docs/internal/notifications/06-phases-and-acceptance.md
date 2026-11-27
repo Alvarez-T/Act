@@ -70,6 +70,7 @@
 ## Phase N5 — privacy, retention, capabilities, Composer, licensing
 
 - Privacy participant (privacy 07 §4), log retention job (YFex.Jobs), Capabilities source, Composer "notify" step, license gating (⚑N19).
+- **Requested earlier (⚑N31, open, 2026-11-27):** the `SendNotification` command + `notifications.send` capability for YFex.Studio Reactions, proposed as its own step right after N2. WhatsApp itself comes with N1 (`.Meta`, `.Twilio`).
 - **Acceptance:**
   - a subject's export lists their deliveries and contact-book entries;
   - erasure removes their inbox, pending sends and contact-book entries;

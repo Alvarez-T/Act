@@ -28,7 +28,7 @@
 | **YFex.Devices** | built (serial stack) | `YFex.Notifications.Devices`: `ISmsProvider` over a GSM modem (AT commands), receipts/replies polled and forwarded to central | no | N4 |
 | **YFex.CustomLogic** | built | none. A scope that needs its own provider or routing code registers it through CustomLogic; plain provider choice is endpoint data (⚑N18) | no | N1+ |
 | **YFex.Orchestration** | built | none. A saga step sends and `WaitFor<ActionTaken>` with timeout (04 §2.2 scenario 8); Notifications publishes inbound actions as events | no | N3 |
-| **Composer** | proposal | a "notify" step that calls the `notifications.send` capability (gated, Background side effect) | — | N5 |
+| **Composer** | proposal | a "notify" step that calls the `notifications.send` capability (gated, Background side effect); reactions ([composer 04](../studio/04-reactions.md)) resolve recipients through the contact book (⚑C14) and limit runs through the quota of ⚑N9 (⚑C30) | — | N5 |
 | **YFex.Tenancy** | built | none. Scope chain for templates, lists, endpoints, limits. Not a contact source (⚑N17). Possible home of `IScopeTimeZones` (⚑N16) | no | — |
 | **YFex.Cryptography** | built | none. HMAC for webhooks, signed links, protected fields | no | N2 |
 | **YFex.Data** | built | none. `.Data` stores; dispatcher claim with `SKIP LOCKED` row claims (no Jobs lease) | no | N2 |

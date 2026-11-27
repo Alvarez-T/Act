@@ -150,6 +150,8 @@ acceptance tests.
   `presence_at` claim. **✅ Built 2026-10-29** ahead of its producer (authentication AN-P7 / installations I6), tested with a fake claim. **Acceptance:** fresh presence allows; missing, old or
   unparseable presence denies with the typed reason; visibility unchanged; AOT 0 warnings.
 
+- **Run-as resolver ([10](10-run-as-context.md), requested by Jobs D2 and, since 2026-11-27, by YFex.Studio Reactions, ⚑RA12; not built):** the caller for a stored actor through the configured sources. Blocks Jobs D2b and Studio CR1 step R6. **Acceptance:** as in 10 §6, plus a reaction run as its author is refused after the author loses the permission.
+
 - **Reasons for denials (request from validation/14 ⚑RX29, approved 2026-11-23; not built):** `Denial.ToWhy(IMessageCatalog, CultureInfo)`
   → core `YFex.Reasons.WhyReport` (kind `Denied`; items for the missing permission's title, the policy, step-up / presence
   requirements, the unavailable module via `ExplainUnavailable`), so a "why" control explains a disabled command with the same

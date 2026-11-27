@@ -22,7 +22,7 @@ These rules add to [all-projects](all-projects.md).
 
 - Library code is AOT- and trim-clean: zero IL warnings. New projects set `IsAotCompatible` and get an AOT smoke app. JSON uses System.Text.Json source generation; P/Invoke uses `LibraryImport`.
 - Use source generators and precomputed metadata instead of reflection, dynamic dispatch and runtime discovery.
-- Also use a generator wherever it removes repetition or boilerplate and leaves the caller a short, readable declaration. Prefer one attribute or marker on a type over hand-written glue in every consumer.
+- Also use a generator wherever it removes repetition or boilerplate and leaves the caller a short, readable declaration. Prefer one attribute or marker on a type over hand-written glue in every consumer. When the type also has an aggregate configuration, offer the same declaration as a builder verb the generator reads ([ecosystem-fit](ecosystem-fit.md) §1).
 - Generators are separate `netstandard2.0` projects, follow [source-generators](../../internal/source-generators.md), and report misuse as diagnostics, not silence.
 
 ## Dependencies and naming

@@ -1,9 +1,15 @@
-# YFex.Composer — End-User Screen & Logic Composition (Design Proposal)
+# 02 — New screens: end-user screen and logic composition (design proposal)
 
-> Status: **proposal / evaluation — revision 2** (2026-09-30). Working name `YFex.Composer` (placeholder).
-> Sibling docs: `capabilities-design.md`, `custom-logic-design.md`, `authorization-design.md`,
-> **`validation/README.md`** (YFex.Validation + YFex.Rules, Phases 0–4 + 6B/C implemented).
-> Rev 1 (2026-09-29) was written before YFex.Validation/YFex.Rules existed. Rev 2 re-bases Composer on them;
+> Part of the [Studio design family](README.md). **Moved 2026-11-25** from `docs/internal/composer-design.md`
+> (⚑C7); section numbers are unchanged, so older references such as "composer-design §8.5" point here. Decisions
+> C1–C6 stay in §0.2; ⚑C7 onward are in the [README](README.md) §8. Shared pieces now have their own documents:
+> catalog and flows [01](01-catalog-and-flows.md), changing existing pages [03](03-page-design-mode.md), event-triggered
+> flows [04](04-reactions.md), copying a page and eject [05](05-copy-and-eject.md).
+>
+> Status: **proposal / evaluation — revision 2** (2026-09-30). Working name `YFex.Studio` (placeholder).
+> Sibling docs: `../capabilities-design.md`, `../custom-logic-design.md`, `../authorization-design.md`,
+> **`../validation/README.md`** (YFex.Validation + YFex.Rules, Phases 0–4 + 6B/C implemented).
+> Rev 1 (2026-09-29) was written before YFex.Validation/YFex.Rules existed. Rev 2 re-bases Studio on them;
 > see §0.1 for the delta.
 
 ---
@@ -48,12 +54,12 @@ And one new principle that Validation/Rules makes possible:
 |---|---|
 | 5–6 | Value system = core `RawType`/`RawValue`/`IRawValue<T>`; field type = `RawType` + `FieldConstraints` + UI-only `DisplayHints`. `IFieldValue`/`Value` removed. |
 | 6.4 | Unions follow the ecosystem rule from validation/README "Hard constraints" #2: **`[Union]` tagged struct everywhere**, no native `union` keyword (also on cold paths, for consistency). |
-| 7 | Generated shapes: the *descriptive* half exists (`TypeShape`, `TryGetConstraints`, JSON Schema). Composer's generator now only adds **field access + construction + invokers**. |
+| 7 | Generated shapes: the *descriptive* half exists (`TypeShape`, `TryGetConstraints`, JSON Schema). Studio's generator now only adds **field access + construction + invokers**. |
 | 8 | Logic split into **three kinds** (behavior / input checks / business rules). Formula language = extracted **`YFex.Expressions`** (from Rules.Dynamic), not a new language. |
 | 8.1 | Slot store simplified to `RawValue[]` (the engine's currency) instead of typed SoA columns. |
 | 8.6 | New: live **Decisions** in composed screens (limits/options/approvals from rule sets). |
 | 9 | Renderers bind constraints/violations through **`IValidationSource`** (same projection as validation/08 Avalonia). |
-| 11 | Store/lifecycle mirrors **Rules.Admin** (`RulePublisher`, `IRuleStore`, audit diff, device cache), extracted into a shared **`YFex.Revisions`** (verb **Enact**) at Composer P3 (C4/C5). |
+| 11 | Store/lifecycle mirrors **Rules.Admin** (`RulePublisher`, `IRuleStore`, audit diff, device cache), extracted into a shared **`YFex.Revisions`** (verb **Enact**) at Studio P3 (C4/C5). |
 | 12 | AI loop aligned with Rules.Dynamic (`CatalogJson`, `SpecJsonSchema`, `Check`, `Simulate`). |
 | 15–16 | Roadmap re-sequenced. Gap table: two gaps closed, several new ones (expression extraction, runtime situations, record field access, grid). |
 
@@ -61,12 +67,12 @@ And one new principle that Validation/Rules makes possible:
 
 | # | Decision | Date |
 |---|---|---|
-| C1 | **Phase X approved:** extract `YFex.Expressions` from `YFex.Rules.Dynamic`. Rules.Dynamic keeps the rule envelope (`RuleSpec`, directives, group policies, caps, tiers, codec) and depends on Expressions; Composer uses Expressions directly. Function catalogs are layered (deterministic shared core → rule layer → screen-only layer such as `today()`, rejected by the binder inside rules). Plan: [`expressions/phase-x-extraction.md`](expressions/phase-x-extraction.md). **Status:** X.0–X.4 implemented 2026-10-01 (uncommitted); function attributes were hard-renamed to `[ExprFunctions]` with **no alias** (XD2 supersedes the alias wording above). | 2026-10-01 |
+| C1 | **Phase X approved:** extract `YFex.Expressions` from `YFex.Rules.Dynamic`. Rules.Dynamic keeps the rule envelope (`RuleSpec`, directives, group policies, caps, tiers, codec) and depends on Expressions; Studio uses Expressions directly. Function catalogs are layered (deterministic shared core → rule layer → screen-only layer such as `today()`, rejected by the binder inside rules). Plan: [`expressions/phase-x-extraction.md`](../expressions/phase-x-extraction.md). **Status:** X.0–X.4 implemented 2026-10-01 (uncommitted); function attributes were hard-renamed to `[ExprFunctions]` with **no alias** (XD2 supersedes the alias wording above). | 2026-10-01 |
 | C2 | **Promote-to-rule is explicit, never automatic.** The designer offers "enforce everywhere?" only when the preconditions hold (open `RuleGroup.Dynamic` group allowing `deny`, all referenced fields exposed in the situation, user holds the rule permission), shows a what-if first, then enacts through Rules.Admin. Users without rule permission never see the action; their screen checks stay UX-only ("never" fallback). | 2026-10-01 |
-| C3 | **Record read/construct lives in YFex.Validation**, opted in with a **separate `[RecordAccess]` attribute** (not a property on `[Validatable]`, not automatic). The Validation generator emits `IRecordAccess<T>` with the same `FieldIds`/`TypeShape` as validation. A type can have `[RecordAccess]` without any validation rules (query rows). `[RecordAccess(Construct = false)]` = read-only. Dispatch-by-key invokers come from the CQRS generator, not Composer (§7.2). | 2026-10-01 |
-| C4 | The generic runtime-configuration lifecycle library is **`YFex.Revisions`**, and the verb for "put a version in force" is **Enact**. "Publish" is avoided: it clashes with `dotnet publish` and `IDispatcher.PublishAsync`. Vocabulary in §11.1. Extracted from Rules.Admin when Composer reaches P3 (two consumers by then). | 2026-10-01 |
+| C3 | **Record read/construct lives in YFex.Validation**, opted in with a **separate attribute** (`[RecordAccess]`, renamed 2026-11-26 to `[Readable]` / `[Buildable]`) (not a property on `[Validatable]`, not automatic). The Validation generator emits `IBuildableRecord<T>` with the same `FieldIds`/`TypeShape` as validation. A type can have it without any validation rules (query rows). `[Readable]` = read-only. Dispatch-by-key invokers come from the CQRS generator, not Studio (§7.2). | 2026-10-01 |
+| C4 | The generic runtime-configuration lifecycle library is **`YFex.Revisions`**, and the verb for "put a version in force" is **Enact**. "Publish" is avoided: it clashes with `dotnet publish` and `IDispatcher.PublishAsync`. Vocabulary in §11.1. Extracted from Rules.Admin when Studio reaches P3 (two consumers by then). | 2026-10-01 |
 | C5 | **Rules.Admin adopts the Enact vocabulary** during the extraction (hard rename, all in-repo, same reasoning as D28): `PublishTable/PublishParameters/PublishRule` → `EnactTable/EnactParameters/EnactRule`, `RulePublisher` → built on `Enactor`, `RulesetPublished` → `RevisionEnacted` (or `RulesetEnacted` if a rules-specific event is kept), permission `rules.dynamic.publish` → `rules.dynamic.enact`, option `RulePublishPermission` → `RuleEnactPermission`. | 2026-10-01 |
-| C6 | **Pending (2026-11-18):** a composed step may ask a **user-defined question** (yes/no, choice over a data list, score) through [YFex.Inference](inference/README.md) (⚑IF22) and show the answer as a suggestion; the rules-only path must exist; the result can feed a rule as a fact (validation D39), never decide alone | — |
+| C6 | **Pending (2026-11-18):** a composed step may ask a **user-defined question** (yes/no, choice over a data list, score) through [YFex.Inference](../inference/README.md) (⚑IF22) and show the answer as a suggestion; the rules-only path must exist; the result can feed a rule as a fact (validation D39), never decide alone | — |
 
 ---
 
@@ -79,7 +85,7 @@ And one new principle that Validation/Rules makes possible:
   their contracts, constraints, permissions and descriptions.
 - Add **new fields** (extension fields) to existing objects.
 - Act as the **authoring UI for YFex.Rules** (decision tables, parameters, dynamic rules), which
-  validation/13 lists as "Composer authoring UI: later".
+  validation/13 lists as "Studio authoring UI: later".
 - Reuse Authorization, Tenancy, Capabilities, CQRS, Messaging, Jobs, State, NavigatR, Validation,
   Rules, Localization.
 - Zero domain knowledge. AI-ready from day one.
@@ -159,41 +165,41 @@ YFex.Expressions/                 (NEW, extracted — §8.2)
                                       built-ins, postfix compiler/program over IFieldReader, ExprText, text parser (new)
   YFex.Expressions.Generator          [ExprFunctions]/[ExprFunction] (today's [RuleFunctions] generator, moved)
 
-YFex.Composer/                        composer.slnx
+YFex.Studio/                        studio.slnx
 ├── src/
-│   ├── YFex.Composer.Public          IR records ([Union] node sets), ScreenEdit, keys, DisplayHints, diagnostics codes.
+│   ├── YFex.Studio.Public          IR records ([Union] node sets), ScreenEdit, keys, DisplayHints, diagnostics codes.
 │   │                                 → YFex core, YFex.Validation (Violation/RuleCode/FieldConstraints), YFex.Expressions (Expr)
-│   │                                 (no Composer generator: record access = YFex.Validation [RecordAccess] (C3);
+│   │                                 (no Studio generator: record access = YFex.Validation [Readable]/[Buildable] (C3);
 │   │                                  dispatch-by-key invokers = YFex.Cqrs.SourceGenerator)
-│   ├── YFex.Composer.Catalog         Frozen catalog over Capabilities + JsonSchemas + IRecordAccess + rule sets +
+│   ├── YFex.Studio.Catalog         Frozen catalog over Capabilities + JsonSchemas + IReadableRecord + rule sets +
 │   │                                 FunctionCatalog + widgets + jobs. Palette queries (auth/tenant filtered).
-│   ├── YFex.Composer.Runtime         Plan compiler, ScreenState (RawValue slots), dependency graph, behavior evaluation,
+│   ├── YFex.Studio.Runtime         Plan compiler, ScreenState (RawValue slots), dependency graph, behavior evaluation,
 │   │                                 input checks → ViolationWriter, flows, data sources, live decisions,
 │   │                                 RuntimeScreen : StateObject, IValidationSource; NavigatR ComposedScreenRoute.
-│   ├── YFex.Composer.Designer        Headless designer VMs (State + History undo). Also hosts the Rules authoring panels
+│   ├── YFex.Studio.Designer        Headless designer VMs (State + History undo). Also hosts the Rules authoring panels
 │   │                                 (decision tables, parameters, dynamic rules) over Rules.Admin commands.
-│   ├── YFex.Composer.Store           The screen revision kind for YFex.Revisions (validate = plan compile, canonical IR
+│   ├── YFex.Studio.Store           The screen revision kind for YFex.Revisions (validate = plan compile, canonical IR
 │   │                                 JSON, ScreenDiff, preview) + scoped resolution. Until P3: a file store with the
 │   │                                 same contract shapes (§11).
-│   ├── YFex.Composer.Extensions      Extension fields: ExtensionBag, IExtensionStore, CQRS behavior.
-│   ├── YFex.Composer.Rendering       WidgetKind, IWidgetFactory, ISlotBinding contracts (UI-free).
-│   ├── YFex.Composer.Avalonia        Renderer + designer views over YFex.Avalonia (+ its IValidationSource projection).
-│   ├── YFex.Composer.Blazor / .Wpf / .Uno
-│   ├── YFex.Composer.Ai              (P4) MCP tools / AIFunctions over catalog + schemas + check/preview.
-│   └── YFex.Composer.Compiler        (P5) Plan → C# emitter; eject; server Roslyn build + signing.
+│   ├── YFex.Studio.Extensions      Extension fields: ExtensionBag, IExtensionStore, CQRS behavior.
+│   ├── YFex.Studio.Rendering       WidgetKind, IWidgetFactory, ISlotBinding contracts (UI-free).
+│   ├── YFex.Studio.Avalonia        Renderer + designer views over YFex.Avalonia (+ its IValidationSource projection).
+│   ├── YFex.Studio.Blazor / .Wpf / .Uno
+│   ├── YFex.Studio.Ai              (P4) MCP tools / AIFunctions over catalog + schemas + check/preview.
+│   └── YFex.Studio.Compiler        (P5) Plan → C# emitter; eject; server Roslyn build + signing.
 ```
 
 Layering:
 
 ```
 L0    YFex core (RawValue, RawType, IRawValue, FieldPath, OptionSet, Bounds, StableHash64, Localization)
-L0.5  YFex.Validation (+ IRecordAccess, [RecordAccess])    YFex.Expressions (→ core, Validation for Violation diagnostics)
-L1    YFex.Rules (no Expressions dependency)    YFex.State    YFex.Composer.Public    YFex.Revisions (→ core, Validation, Authorization.Public)
+L0.5  YFex.Validation (+ IBuildableRecord, [Buildable])    YFex.Expressions (→ core, Validation for Violation diagnostics)
+L1    YFex.Rules (no Expressions dependency)    YFex.State    YFex.Studio.Public    YFex.Revisions (→ core, Validation, Authorization.Public)
 L1.5  YFex.Rules.Dynamic (→ Rules, Expressions, Persistence)    YFex.Revisions.Data (SQL over YFex.Data)
-L2    YFex.Cqrs    YFex.Composer.Catalog (→ Capabilities, Cqrs, Rules, Authorization.Public, Tenancy)
-L3    YFex.Revisions.Sync (device cache + incremental sync)    YFex.Composer.Runtime / Store / Extensions    YFex.Rules.Admin (→ Revisions)
-L4    YFex.Composer.Designer (→ State.History, Rules.Admin contracts)
-L5    Renderers, Composer.Ai, Composer.Compiler
+L2    YFex.Cqrs    YFex.Studio.Catalog (→ Capabilities, Cqrs, Rules, Authorization.Public, Tenancy)
+L3    YFex.Revisions.Sync (device cache + incremental sync)    YFex.Studio.Runtime / Store / Extensions    YFex.Rules.Admin (→ Revisions)
+L4    YFex.Studio.Designer (→ State.History, Rules.Admin contracts)
+L5    Renderers, Studio.Ai, Studio.Compiler
 ```
 
 ---
@@ -251,11 +257,11 @@ diagnostics are ordinary **`Violation`s with `FieldPath`s into the IR** (e.g.
 public readonly record struct FieldType(
     RawType Type,                 // core: stable key + storage kind + id (Money.RawType, RawType.Int32, app types…)
     FieldConstraints Constraints, // YFex.Validation: required, lengths, min/max/step (RawValue), OptionSet, format code
-    DisplayHints Display);        // Composer-only, UI: widget hint, mask, placeholder, decimals shown, multiline…
+    DisplayHints Display);        // Studio-only, UI: widget hint, mask, placeholder, decimals shown, multiline…
 ```
 
 - **Semantic value types** (Money, Percentual, Quantity, Mass, Length, Cpf, Cnpj, Email, Sku…) are
-  `IRawValue<TSelf>` types (D35). Composer knows them only by `RawType`. The library stays
+  `IRawValue<TSelf>` types (D35). Studio knows them only by `RawType`. The library stays
   domain-free, and any app type a dev adds shows up in the designer automatically (formatter via
   `RawType`, storage via `RawType.Storage`).
 - **Amounts** (`IAmount<TSelf>`, D36) get amount arithmetic in expressions for free (same type
@@ -264,7 +270,7 @@ public readonly record struct FieldType(
   `SituationFieldInfo`).
 - **Bound fields inherit constraints** from the contract (`IValidatable<T>.TryGetConstraints`). The
   user can *tighten* them (screen check) but never loosen them (principle 4; enforced at bind: a
-  screen `Max` above the contract `Max` produces diagnostic `composer.check.looser`).
+  screen `Max` above the contract `Max` produces diagnostic `studio.check.looser`).
 
 ### 6.2 Values at runtime
 
@@ -274,7 +280,7 @@ primitive). Rev 1's `Value` union is **dropped**.
 
 ### 6.3 Unions
 
-All Composer unions (IR nodes, `ScreenEdit`, flow steps, outcomes) use the **`[Union]` tagged
+All Studio unions (IR nodes, `ScreenEdit`, flow steps, outcomes) use the **`[Union]` tagged
 struct** pattern with distinct case types. Native `union` is not used (ecosystem rule; it boxes, and
 consistency beats the cold-path exception rev 1 allowed). Existing `ActionGate` (native, in
 Capabilities) is consumed as-is.
@@ -287,21 +293,21 @@ Capabilities) is consumed as-is.
 
 | Catalog item | Comes from | Status |
 |---|---|---|
-| Objects/models + their fields | `IValidatable<T>.Shape` (`TypeShape`/`MemberShape`: RawType, enum members, nested, element) + **Composer field access** (§7.2) | shape ✅, access ➕ |
+| Objects/models + their fields | `IValidatable<T>.Shape` (`TypeShape`/`MemberShape`: RawType, enum members, nested, element) + **Studio field access** (§7.2) | shape ✅, access ➕ |
 | Commands / queries | CQRS + capability profile `.Composable()`; parameters + **`ParametersSchema`** from Capabilities (built from the shape, no reflection) | schema ✅, opt-in flag ➕ |
 | Field constraints | `IValidatable<T>.TryGetConstraints(path)`, `JsonSchemas.TryGetShape` | ✅ |
 | **Rule sets** | `RuleSetDefinition<TS>`, `SituationSchema`, `DynamicRules.CatalogJson` (open groups, tiers, directive families, caps) | ✅ |
 | **Functions** | `FunctionCatalog` (built-ins + app `[RuleFunctions]` + contracts) → shared with screen expressions after §8.2 | ✅ (moves) |
 | Events / jobs / routes / dialogs | Messaging, YFex.Jobs, NavigatR, UI.Abstractions | ✅ |
 | Value types | `RawType` registry (`RawType.Find(key)`) | ✅ |
-| Widgets | Composer widget registry with capability descriptions | ➕ |
+| Widgets | Studio widget registry with capability descriptions | ➕ |
 
 **Exposure is opt-in** (security boundary), as in rev 1.
 
 ### 7.2 Record access and invokers (C3)
 
 The descriptive half exists (`TypeShape`, constraints, JSON Schema). What's missing is **reading a
-member by id and constructing a record from values** without reflection. Composer needs it (slots →
+member by id and constructing a record from values** without reflection. Studio needs it (slots →
 command, query rows → grid cells), and so do the AI agent (JSON tool args → command; Capabilities
 has `CanInvoke` but no `Invoke` today) and Rules live decisions (screen → situation). So it lives in
 **YFex.Validation**, emitted by the same generator pass with the same `FieldIds`. A constraint for
@@ -318,7 +324,7 @@ public sealed class RecordAccessAttribute : Attribute
     public bool Construct { get; init; } = true;
 }
 
-public interface IRecordAccess<TSelf> where TSelf : IRecordAccess<TSelf>
+public interface IBuildableRecord<TSelf> where TSelf : IBuildableRecord<TSelf>
 {
     static abstract TypeShape Shape { get; }                             // same shape JsonSchemaWriter uses
     static abstract RawValue Read(in TSelf value, FieldId member);       // non-boxing (IRawValue → ToRaw())
@@ -337,13 +343,13 @@ public interface IMemberSource
 Usage:
 
 ```csharp
-[RecordAccess]                         // read + construct
+[Buildable]                            // read + construct
 public partial record CreateOrder(CustomerId Customer, Money Total, string? Notes) : ICommand<OrderId>;
 
-[RecordAccess(Construct = false)]      // read-only grid rows; no validation rules needed
+[Readable]      // read-only grid rows; no validation rules needed
 public partial record OrderRow(OrderId Id, string Customer, Money Total, DateOnly Date);
 
-// Composer: slots → command → contract validation → dispatch
+// Studio: slots → command → contract validation → dispatch
 var src = new SlotSource(state, plan.ArgMap);
 if (CreateOrder.TryCreate(ref src, out var cmd, ref w) && CreateOrder.Validate(in cmd, ref w)) …
 
@@ -358,6 +364,45 @@ Generated body (sketch): `Read` is a `switch` on `FieldId` returning `ToRaw()`/`
 `TryCreate` reads each member with `TryFromRaw`, writes `Violation(FieldPath.Of("Total"), "convert")`
 on failure, and calls the positional constructor or object initializer.
 
+**Status (2026-11-26): built in YFex.Validation, uncommitted.** Deviations from the sketch above, current source wins:
+- Read-only types implement **`IReadableRecord<T>`** (`Shape`, `Read`, `TryRead`); `IBuildableRecord<T> : IReadableRecord<T>` adds
+  `TryCreate`. So `[Readable]` payloads have no `TryCreate` to call, and the Cqrs invoker table constrains
+  on `IBuildableRecord<T>`, Reaction conditions on `IReadableRecord<T>`.
+- Added **`TryRead(in T, ReadOnlySpan<char> path, out RawValue)`** for nested and indexed paths (`Customer.Code`, `Lines[2].Quantity`),
+  which Reaction conditions need; `Read` by `FieldId` covers scalar members only (nested/collection → `None`).
+- `IMemberSource` adds **`TryGetItem(member, i, out RawValue)`** for collections of scalars; `CountItems` returns -1 when absent;
+  `ExitNested()` also closes an item scope.
+- `[Readable]` / `[Buildable]` make the type validatable (empty rules), so `Validate`, `TryGetConstraints`, `FieldIds` and `Shape` are the
+  same generated members; `Shape` is non-null on these types.
+- Wrong-type values add `RuleCodes.Convert` (`"convert"`, arg = expected type key, built-in en/pt texts); a missing
+  non-nullable reference adds `required`. Missing members keep constructor defaults and property initializers. Enums also
+  accept their `[EnumCode]` text.
+- A `ref struct` source passed with a writer from `ViolationWriter.Begin` must be declared `scoped var` (CS8350 otherwise).
+- Diagnostics: YFV0040 (cannot be built), YFV0041 (member without raw form), YFV0042 (info, read-only member without raw form),
+  YFV0043 (read-only nested type inside a buildable one).
+- **Renamed 2026-11-26 (user):** `[RecordAccess]` → `[Buildable]`, `[RecordAccess(Construct = false)]` → `[Readable]`,
+  `IRecordAccess<T>` → `IBuildableRecord<T>`, `IRecordReader<T>` → `IReadableRecord<T>`, helper `RecordAccess` → `Records`.
+  No Construct flag: Buildable includes readable, and a type declared both ways is buildable.
+
+**Pending decisions (2026-11-26, ecosystem-fit §1 check):**
+- ⚑C42 Where `[Readable]` / `[Buildable]` are declared. (A) attribute only, as built; (B) also a Cqrs builder verb
+  (`b.Command<T>().Buildable()`, `b.Event<T>().Readable()`) that the Validation generator reads like
+  `.Validation(...)`; (C) implied by `.AvailableTo(UserBuilt | Ai)`; (D) attribute plus a Cqrs/Capabilities diagnostic when a
+  message open to users or AI lacks it. `IBuildableRecord<T>` is a compile-time contract consumers constrain on, so B and C
+  work only when the configuration and the partial type are in one project, like compiled fluent validation rules;
+  query rows keep the attribute. `MessageFeatures` is runtime-only and cannot carry it. Chosen by the user 2026-11-26: B,
+  generator side built (uncommitted): parameterless verbs named `Readable()` / `Buildable()` marked
+  `[ReadableVerb(nameof(T))]` / `[BuildableVerb(nameof(T))]`; records nested in any readable or buildable type get the
+  same access implicitly; YFV0044 when the type is not partial or not in the configuration's project. The YFex.Cqrs
+  verbs are built too (uncommitted): `.Readable()` / `.Buildable()` on the command and query builders, `.Readable()` on
+  `b.Event<T>()`.
+- ⚑C43 YFex.Rules builds on it: the planned `ISituation.Build<TReader>(ref TReader)` (§16) uses `IMemberSource` /
+  `IBuildableRecord<T>` instead of a second reader; optionally the generated `ISituation.Read` / `TryGetFieldId` delegate to
+  `IReadableRecord<T>` (same meaning: read a field by id, non-boxing).
+- ⚑C44 YFex.Expressions gets `RecordFieldReader<T> : IFieldReader` over `IReadableRecord<T>`, so Reaction conditions run as
+  bound programs by field id instead of parsing paths per evaluation. Needs a reader-side item count and item read on
+  `IReadableRecord<T>` (today only `TryRead(path)` reaches items).
+
 **Dispatch by key** ("capability `sales.order.create` → `CommandAsync<CreateOrder, OrderId>`") is a
 frozen invoker table emitted by **YFex.Cqrs.SourceGenerator**, which already knows every
 command/result pair and emits the static call helpers:
@@ -370,7 +415,26 @@ public interface IMessageInvoker   // generated per composable message, register
 }
 ```
 
-Composer therefore has **no generator of its own** for access or dispatch.
+Studio therefore has **no generator of its own** for access or dispatch.
+
+**Status (2026-11-26): invoker table built in YFex.Cqrs, uncommitted.** Deviations from the sketch above, current source wins:
+- Keyed by **message type** (`MessageInvokerTable.TryGet(Type)` / `TryGet<T>()`), as `CompiledMessagingRegistry` is: Cqrs sits below
+  Capabilities and never names capability keys. The capability key → invoker mapping is a later step in YFex.Capabilities.Cqrs.
+- `InvokeAsync<TSource>(IDispatcher, ref TSource, CancellationToken)` with `TSource : struct, IMemberSource, allows ref struct`; no
+  `ExtensionBag` yet (it does not exist). The source is read from a `scoped` copy (CS8350 rule), so the caller's value is not advanced.
+- Outcome is `MessageOutcome`, a `[Union]` of `Succeeded(RawValue Raw, object? Result, bool FromCache)`, `Queued` and Cqrs `Error`;
+  `Kind` (`MessageOutcomeKind`) sorts it into the ⚑LB38 lanes `Ok`, `Invalid` (conversion violations or stage 1 / rules
+  `ValidationProblem`), `Denied` (unauthenticated, forbidden, step-up, site presence), `NeedsApproval`, `Queued`, `Error`. `Raw` is set
+  when the result type has a raw form (`RawValueConvert`; enums and nullable results read `None` for now).
+- Opt-in is the Validation declaration itself: `[Buildable]` or the configuration verb `.Buildable()` (`[BuildableVerb]`, same
+  project); buildable wins over `[Readable]` / `.Readable()`. Readable-only messages get none (info YFCQRS005), types the table cannot
+  name warn (YFCQRS006: private, abstract, generic, file-local, both command and query). Commands and queries anywhere, not only in
+  containers.
+- The generator emits one `YFexMessageInvokers.All` per assembly in its `RootNamespace` (else the assembly name), overridable with the
+  MSBuild property `YFexMessageInvokersClass`; YFCQRS007 when that namespace is also a type. The invokers are generic runtime classes
+  (`MessageInvoker.Command<T, R>()`…), so the generated code is only the list. Register with `services.AddYFexMessageInvokers(...)`.
+- Tests: `YFex.Cqrs.Tests` (build and dispatch through `CqrsDispatcher`, conversion and stage 1 `Invalid`, stage 2 `Denied`, scripted
+  `Queued` / `NeedsApproval` / `Error`), generator tests in `YFex.Cqrs.SourceGenerator.Test`, AOT smoke `app/YFex.Cqrs.AotSmoke`.
 
 ### 7.3 Palette API
 
@@ -392,7 +456,7 @@ option lists come straight from `FieldConstraints`, and pickers are pre-limited 
 public sealed class ScreenState : IFieldReader            // IFieldReader = the expression engine's input (§8.2)
 {
     private readonly RawValue[] _slots;                    // 32 B each; 200 fields ≈ 6.4 KB
-    private readonly CollectionSlot[] _collections;        // grids/lines: row storage (RawValue rows or typed rows + IRecordAccess)
+    private readonly CollectionSlot[] _collections;        // grids/lines: row storage (RawValue rows or typed rows + IReadableRecord)
     private PropertyBitmap64[] _dirty;                     // reuse YFex.State bitmaps
 
     public RawValue Read(ushort id) => Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(_slots), id); // ids validated at plan compile
@@ -415,7 +479,7 @@ the Phase X plan below):
 |---|---|---|
 | Schema for binding | `Binder<TS>` reads `TS.Schema` (a runtime `SituationSchema` object) | binder takes an **`ExprSchema` instance** (fields: id, name, `RawType`, enum options; named collections). `SituationSchema` adapts/derives from it. |
 | Field reads | `DynProgram<TS>` calls `TS.Read/ReadLine/LineCount` | `Run<TReader>(ref TReader r) where TReader : struct, IFieldReader, allows ref struct`. The JIT specializes per reader, so there's no virtual call and **no perf loss for Rules** (`SituationReader<TS>` wraps `in TS`). |
-| Specials | `$base`, `$effectiveDate`, `$lineIndex` | a pluggable `SpecialVar` table. Rules registers its three; Composer adds `$today`, `$user`, `$row`, `$isNew`. |
+| Specials | `$base`, `$effectiveDate`, `$lineIndex` | a pluggable `SpecialVar` table. Rules registers its three; Studio adds `$today`, `$user`, `$row`, `$isNew`. |
 
 What stays in Rules.Dynamic: `RuleSpec`, `DirectiveSpec`, group policies, caps, tiers, the codec,
 messages, Admin integration.
@@ -428,11 +492,11 @@ What's new in `YFex.Expressions` (benefits both):
 - Function attributes renamed `[ExprFunctions]`/`[ExprFunction]`. The plan recommends a hard rename
   without an alias (⚑ XD2 in the Phase X plan; confirming it updates C1).
 
-Rejected alternatives: (a) a second Composer-only language, since users and AI would face two
-dialects; (b) Composer generating a fake `ISituation` per screen, which can't work because screens
+Rejected alternatives: (a) a second Studio-only language, since users and AI would face two
+dialects; (b) Studio generating a fake `ISituation` per screen, which can't work because screens
 are runtime schemas and `ISituation` is static-abstract.
 
-**Detailed plan:** [`expressions/phase-x-extraction.md`](expressions/phase-x-extraction.md), with the
+**Detailed plan:** [`expressions/phase-x-extraction.md`](../expressions/phase-x-extraction.md), with the
 exact coupling points found in the source (10, not 3: also enum typing, diagnostic codes, `Amounts`,
 operator names, and the function generator), the public API, steps X.0–X.7, the performance guard,
 and decisions XD1–XD7. Note: **YFex.Rules itself does not reference Expressions.** Only Rules.Dynamic
@@ -500,7 +564,7 @@ already simulates from situation bytes).
 
 ### 8.7 Data sources
 
-Unchanged from rev 1. Rows are read through `IRecordAccess<TRow>.Read`, and
+Unchanged from rev 1. Rows are read through `IBuildableRecord<TRow>.Read`, and
 `CacheableQueryResult` provenance becomes a badge.
 
 ---
@@ -517,8 +581,8 @@ slot binding. New:
   validation code.
 - Built-in widgets gain `DecisionPanel`/`RuleBreakdown` and `ApprovalPrompt`.
 - **Shared prerequisite:** the reusable **table/grid design** in YFex.UI. Rules Phase 5 (Avalonia
-  table editor) is blocked on it, and Composer's `Grid` widget and the designer's Rules panel need
-  it too. Build it once, before Composer P2.
+  table editor) is blocked on it, and Studio's `Grid` widget and the designer's Rules panel need
+  it too. Build it once, before Studio P2.
 
 ---
 
@@ -532,10 +596,10 @@ artifacts). Additions:
   (shape validation), 2 (auth), 3–4 (rules) like any other caller, so a malicious or broken screen
   can't skip contract validation or business rules.
 - **Identity over RPC:** the `CallContext` (D29) carries `IAuthContext` + `ScopeIdentity`
-  implicitly, so Composer server handlers (enact, extension store) need no identity parameters.
+  implicitly, so Studio server handlers (enact, extension store) need no identity parameters.
 - **Rule authoring permissions** reuse Rules.Admin's (`rules.dynamic.enact`, per-table enact
   permissions after C5, `IRuleTierGuard`), and **guardrails/caps** (`DynamicRulePolicy` max percent/amount,
-  sealed rules) still bound what an end user can author through Composer.
+  sealed rules) still bound what an end user can author through Studio.
 - **Two kinds of scope, kept distinct on purpose:**
   - *Screen audience/override* is **ambient**: Tenancy `ScopeIdentity` resolved most-specific-first
     (user → company → tenant → global) via `ScopeChain`.
@@ -552,9 +616,9 @@ artifacts). Additions:
 Whenever end users change configuration at runtime, a safe path from "edited" to "in force
 everywhere" is needed: draft → validate → immutable numbered revision → in force (from a date, at a
 scope) → on every device (offline cache + catch-up) → audited → revertible. Rules.Admin has already
-built and tested this for rule data, and Composer screens need exactly the same lifecycle:
+built and tested this for rule data, and Studio screens need exactly the same lifecycle:
 
-| Concern | Rules.Admin (implemented today) | Composer |
+| Concern | Rules.Admin (implemented today) | Studio |
 |---|---|---|
 | Versioned immutable store, optimistic concurrency per stream | `IRuleStore` (`RuleDataKey(Set, Kind, Code, TierPath)`), `InMemoryRuleStore`, `SqlRuleStore` (YFex.Data, 4 dialects) | stream `(ScreenKey, Scope)` |
 | Pipeline | `RulePublisher`: authorize → validate → canonicalize → append → apply → notify | same; validate = plan compile against the catalog |
@@ -566,8 +630,8 @@ built and tested this for rule data, and Composer screens need exactly the same 
 
 ### 11.1 `YFex.Revisions` (C4, C5)
 
-**When:** extracted from Rules.Admin when Composer reaches **P3**. Rules.Admin becomes its first
-consumer and Composer its second. Until then, Composer P0–P2 uses a file store whose contracts copy
+**When:** extracted from Rules.Admin when Studio reaches **P3**. Rules.Admin becomes its first
+consumer and Studio its second. Until then, Studio P0–P2 uses a file store whose contracts copy
 these shapes, so the merge is mechanical.
 
 **Vocabulary** ("publish" avoided: it clashes with `dotnet publish` and `IDispatcher.PublishAsync`):
@@ -575,7 +639,7 @@ these shapes, so the merge is mechanical.
 | Concept | Name |
 |---|---|
 | Immutable numbered version of an artifact | `Revision` (`Version`, `Key`, `EffectiveFrom`, `Payload`, `Actor`, `Note`, `EnactedAt`) |
-| Stream key (scope is opaque text: Rules stores its tier path, Composer a `ScopeIdentity`) | `RevisionKey(Area, Kind, Code, Scope)` |
+| Stream key (scope is opaque text: Rules stores its tier path, Studio a `ScopeIdentity`) | `RevisionKey(Area, Kind, Code, Scope)` |
 | Store (append with base version, load after N, get by version) | `IRevisionStore`, `InMemoryRevisionStore`; SQL in `YFex.Revisions.Data` (today's `SqlRuleStore`) |
 | Per-kind plug-in implemented by each library | `IRevisionKind`: `Validate`, `Canonicalize`, `Diff`, `Apply` (hot swap), optional `Simulate` |
 | Pipeline: authorize → validate → canonicalize → append → apply → notify | `Enactor.EnactAsync(...)` |
@@ -583,11 +647,11 @@ these shapes, so the merge is mechanical.
 | Rollback (old content enacted again as a new revision) | `Revert` |
 | Audit | `RevisionDiff`, `IRevisionAuditSink` (enacted + rejected attempts) |
 | Device side | `IRevisionCache` (over `IKeyValueStore`), `RevisionSync`, in `YFex.Revisions.Sync` |
-| Permission suffix | `*.enact` (`rules.dynamic.enact`, `composer.screen.enact`) |
+| Permission suffix | `*.enact` (`rules.dynamic.enact`, `studio.screen.enact`) |
 
 **What stays in each library:** Rules.Admin keeps the rule kinds (tables, parameters, overrides,
 dynamic rules), tier guards, approvals (`ApproveDecision` — unrelated to enacting) and
-rule-definition queries. Composer.Store keeps the screen kind, plan-compile validation and preview.
+rule-definition queries. Studio.Store keeps the screen kind, plan-compile validation and preview.
 
 **Rules.Admin rename (C5)**, done in the same change (hard replace, all in-repo):
 
@@ -629,11 +693,11 @@ indexed" later. Updates:
 
 ## 12. AI integration (P4)
 
-The Rules work has already established the loop and most schemas. Composer copies the pattern:
+The Rules work has already established the loop and most schemas. Studio copies the pattern:
 
-| Step | Rules (implemented) | Composer |
+| Step | Rules (implemented) | Studio |
 |---|---|---|
-| Discover | `CatalogJson(set)` (fields, functions, open groups, caps) | `composer.catalog` (objects, commands + `ParametersSchema`, rule sets, functions, widgets) |
+| Discover | `CatalogJson(set)` (fields, functions, open groups, caps) | `studio.catalog` (objects, commands + `ParametersSchema`, rule sets, functions, widgets) |
 | Output schema for structured generation | `SpecJsonSchema(set)` specialized to the rule set | `ScreenSpecJsonSchema(catalog subset)` specialized to the chosen object/command (field-name enums, allowed widgets/steps) |
 | Check | `dynamic.Check` → violations with JSON paths | `ScreenEditor.Apply` / plan compile → violations with IR paths |
 | Simulate | `Simulate` over samples | `Preview` over sample records |
@@ -686,15 +750,15 @@ already follows.
 | Phase | Deliverable | Depends on | Exit criterion |
 |---|---|---|---|
 | **X — Expression extraction** | `YFex.Expressions` (+ generator) out of Rules.Dynamic: `ExprSchema`, `IFieldReader` generic program, pluggable specials, named collections; Rules.Dynamic re-pointed | — | All Rules/Rules.Dynamic/generator tests green, unchanged traces; benchmark parity |
-| **P0 — Catalog & access** | `[RecordAccess]` + `IRecordAccess<T>` in YFex.Validation (+ generator tests, AOT smoke), invoker table in YFex.Cqrs.SourceGenerator (C3); `Composer.Public` (IR as `[Union]`s, `ScreenEdit`, `DisplayHints`), `Composer.Catalog` over Capabilities + JsonSchemas + rule sets, `.Composable()` opt-in | X (for function catalog) | Catalog lists commands with constraints + `ParametersSchema`; a command is built from a `RawValue` source and dispatched with no reflection; AOT smoke clean |
+| **P0 — Catalog & access** | `[Readable]` / `[Buildable]` + `IBuildableRecord<T>` in YFex.Validation (+ generator tests, AOT smoke), invoker table in YFex.Cqrs.SourceGenerator (C3); `Studio.Public` (IR as `[Union]`s, `ScreenEdit`, `DisplayHints`), `Studio.Catalog` over Capabilities + JsonSchemas + rule sets, `.Composable()` opt-in | X (for function catalog) | Catalog lists commands with constraints + `ParametersSchema`; a command is built from a `RawValue` source and dispatched with no reflection; AOT smoke clean |
 | **P1 — Forms MVP** | Plan compiler, `ScreenState`, `RuntimeScreen : StateObject, IValidationSource`, flows (Validate/Confirm/Command/Toast/Navigate), scaffold-from-command, Avalonia renderer reusing the validation/08 projection, file store | P0; validation/08 projection (part of Rules Phase 5) | Scaffold → run a form whose required/length/range UX comes from the contract; server violations map back to fields |
 | **P2 — Behavior, data, grids** | Behavior + input checks (`YFex.Expressions` text syntax), data sources, **grids** (shared YFex.UI table design), Blazor renderer, headless designer + Avalonia views | **YFex.UI table/grid design** | Master-detail with computed totals + multiple collections, identical on Avalonia + Blazor |
 | **P3 — Rules & governance** | Live decisions (§8.6, needs `ISituation.Build<TReader>` + non-generic `Evaluate`), Approval/Explain steps, **Rules panel** (dynamic rules, tables, parameters via Rules.Admin; promote-to-rule), scoped definitions, **`YFex.Revisions` extraction + Rules.Admin Enact rename** (C4/C5, §11.1), screen revision kind, extension fields, IR upgraders, device sync, composed screens as capabilities, WPF renderer | P2; Rules.Admin | A tenant authors a screen *and* a dynamic discount rule. The rule is enforced server-side, previewed client-side, and audited; tenant B is unaffected |
 | **P4 — AI** | `ScreenSpecJsonSchema`, MCP tools, generate → check → preview → approve; combined rule + screen proposals | P3 | Natural-language request → validated, previewed, user-approved screen + rule |
 | **P5 — Compiled tier** | Emitter, eject, server build, signing, ALC loader, differential tests (fingerprints) | Benchmarks | Justified by measurements; differential tests green |
-| **P6 — Automations** | Event/schedule-triggered flows (a `composer.flow.run` Jobs template, YFex.Jobs Plan D), compensation via Orchestration | P3 | Scheduled flow runs under tenant scope with audit |
+| **P6 — Automations** | Event/schedule-triggered flows (a `studio.flow.run` Jobs template, YFex.Jobs Plan D), compensation via Orchestration | P3 | Scheduled flow runs under tenant scope with audit. **2026-11-25:** designed in [04-reactions](04-reactions.md) and moved before P1 by the proposed order (⚑C25) |
 
-Rules' remaining Phase 5 (Avalonia) and Composer P1/P2 share their UI prerequisites. Schedule them
+Rules' remaining Phase 5 (Avalonia) and Studio P1/P2 share their UI prerequisites. Schedule them
 together so the projection and grid are built once.
 
 ---
@@ -707,17 +771,17 @@ together so the projection and grid are built once.
 | ~~YFex.Capabilities~~ | ~~`ParameterDoc.Type` not serializable~~ | ✅ **Closed**: `ParametersSchema` + shape-based `ParameterDoc` (Phase 6 C4) |
 | **YFex.Rules.Dynamic** | Expression engine bound to `ISituation<TS>`; one lines collection; no text syntax | Extract **`YFex.Expressions`** (Phase X, §8.2) |
 | **YFex.Rules** | No runtime construction of a situation; no non-generic evaluation | `static abstract TS Build<TReader>(ref TReader)` on `ISituation<TS>` (generated); `IRuleSetHost.Evaluate(bytes)` → `DecisionSummary` |
-| | Dynamic messages: latest version wins (open deviation) | Versioned texts per decision. Composer texts have the same need, so solve it once |
-| **YFex.Validation** | No generated member *access/construction* by id | `[RecordAccess]` → `IRecordAccess<T>` (Read/TryCreate, shared `FieldIds`) (C3) |
+| | Dynamic messages: latest version wins (open deviation) | Versioned texts per decision. Studio texts have the same need, so solve it once |
+| **YFex.Validation** | No generated member *access/construction* by id | `[Readable]` / `[Buildable]` → `IReadableRecord<T>` / `IBuildableRecord<T>` (Read/TryCreate, shared `FieldIds`) (C3) |
 | **YFex.Cqrs** | No dispatch by capability key | Invoker table emitted by YFex.Cqrs.SourceGenerator (C3) |
-| **YFex.UI** | No reusable table/grid design (blocks Rules Phase 5) | Design it once; Composer grid + Rules table editor + designer use it. **Designed 2026-11-23** (all ⚑DG decided): [YFex.UI data-and-logic plans](../../../YFex.UI/docs/plans/data-and-logic/README.md). Per ⚑LB4 ✅ (user, 2026-11-23) Composer reuses `YDataGrid`, `YConditionBuilder`, `YExpressionEditor` and `YFlowDiagram`, and its stored description names these controls instead of its own editors. **2026-11-25, ⚑LB31–LB40 (LB31, LB32, LB34, LB36 decided by the user; LB33, LB35, LB37–LB40 pending) in [07-logic-flows](../../../YFex.UI/docs/plans/data-and-logic/07-logic-flows.md)):** action flows (§8.5) are edited by `YFlowBuilder` over a neutral `FlowModel`; Composer would own the `ActionSet` ↔ `FlowModel` adapter, an `ILogicCatalog` built over Capabilities (commands, queries, events, jobs, routes), the locked `Confirm`/`Approval` steps and flow test runs |
+| **YFex.UI** | No reusable table/grid design (blocks Rules Phase 5) | Design it once; Studio grid + Rules table editor + designer use it. **Designed 2026-11-23** (all ⚑DG decided): [YFex.UI data-and-logic plans](../../../../YFex.UI/docs/plans/data-and-logic/README.md). Per ⚑LB4 ✅ (user, 2026-11-23) Studio reuses `YDataGrid`, `YConditionBuilder`, `YExpressionEditor` and `YFlowDiagram`, and its stored description names these controls instead of its own editors. **2026-11-25, ⚑LB31–LB40 (LB31, LB32, LB34, LB36 decided by the user; LB33, LB35, LB37–LB40 pending) in [07-logic-flows](../../../../YFex.UI/docs/plans/data-and-logic/07-logic-flows.md)):** action flows (§8.5) are edited by `YFlowBuilder` over a neutral `FlowModel`; Studio would own the `ActionSet` ↔ `FlowModel` adapter, an `ILogicCatalog` built over Capabilities (commands, queries, events, jobs, routes), the locked `Confirm`/`Approval` steps and flow test runs |
 | **YFex.Capabilities** | Registry built once at startup | Overlay registry (`IDynamicCapabilitySource` + atomic swap) so enacted screens appear in search/AI |
 | | No composition opt-in | `CapabilityFlags.Composable`, `.Composable()`; kinds `ComposedScreen`, `ComposedFlow` |
-| **YFex.Authorization** | Compile-time permission catalog | Runtime-registered permissions in a reserved namespace (`composer.screen.<key>.open`). Rules.Admin's configurable `RuleEnactPermission` (C5) shows the minimal version |
-| **YFex.Tenancy** | Scoped most-specific lookup still lives in `CustomLogicRegistry` (Rules doc 04 §9 also asked for `ScopedTable<TKey,TEntry>`; not found in source; the `ScopedTableBuilder` in YFex.Data.Tenancy is RLS, a different concern) | Extract the generic scoped lookup into Tenancy; CustomLogic + Composer use it |
-| **Rules.Admin / Rules.Data** (+ Composer) | Revision lifecycle is rules-specific; "publish" naming clashes | Extract **`YFex.Revisions`** (+ `.Data`, `.Sync`) at Composer P3 and rename Publish → Enact (C4/C5, §11.1) |
+| **YFex.Authorization** | Compile-time permission catalog | Runtime-registered permissions in a reserved namespace (`studio.screen.<key>.open`). Rules.Admin's configurable `RuleEnactPermission` (C5) shows the minimal version |
+| **YFex.Tenancy** | Scoped most-specific lookup still lives in `CustomLogicRegistry` (Rules doc 04 §9 also asked for `ScopedTable<TKey,TEntry>`; not found in source; the `ScopedTableBuilder` in YFex.Data.Tenancy is RLS, a different concern) | Extract the generic scoped lookup into Tenancy; CustomLogic + Studio use it |
+| **Rules.Admin / Rules.Data** (+ Studio) | Revision lifecycle is rules-specific; "publish" naming clashes | Extract **`YFex.Revisions`** (+ `.Data`, `.Sync`) at Studio P3 and rename Publish → Enact (C4/C5, §11.1) |
 | **YFex.Cqrs** | Extension-field carrier | `IExtensible` + pipeline behavior hook (validated with the Validation violation model) |
-| **YFex.Jobs** | ~~Static, generator-registered jobs~~ Plan D templates exist (built 2026-11-03) | Composer registers one template `composer.flow.run` (parameters: flow key + args from the flow's input schema; permission `composer.flow.<key>.run`); admins schedule instances. No one-off `ComposedFlowJob`; AI access via `YFex.Jobs.Capabilities` |
+| **YFex.Jobs** | ~~Static, generator-registered jobs~~ Plan D templates exist (built 2026-11-03) | Studio registers one template `studio.flow.run` (parameters: flow key + args from the flow's input schema; permission `studio.flow.<key>.run`); admins schedule instances. No one-off `ComposedFlowJob`; AI access via `YFex.Jobs.Capabilities` |
 
 ---
 
@@ -738,9 +802,9 @@ together so the projection and grid are built once.
 1. Which platforms must run composed screens? (NativeAOT/iOS → Tier 2 never applies there.)
 2. Is there always a server for enacting/extension fields, or must offline desktop apps author too?
 3. Who are the end users: admins/power users (Rules panel, text formulas) or operators (templates only)?
-4. Should tenant screens override developer screens (Odoo-style seams) in P3, or only add new screens?
+4. Should tenant screens override developer screens (Odoo-style seams) in P3, or only add new screens? **2026-11-25:** proposed yes, through extension points the developer declares (overlays) and per-tenant copies: [03](03-page-design-mode.md), [05](05-copy-and-eject.md), ⚑C15.
 5. ~~Approve Phase X?~~ → **C1: approved.**
-6. ~~Where is record access generated?~~ → **C3: YFex.Validation generator, `[RecordAccess]` opt-in.**
+6. ~~Where is record access generated?~~ → **C3: YFex.Validation generator, `[Readable]` / `[Buildable]` opt-in.**
 7. ~~Shared lifecycle library and its name?~~ → **C4: `YFex.Revisions` + Enact, extracted at P3;
    C5: Rules.Admin renamed to match.**
 8. ~~Promote-to-rule automatic or explicit?~~ → **C2: explicit, with "never" for users without rule

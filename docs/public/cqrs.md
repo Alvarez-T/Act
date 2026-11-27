@@ -442,6 +442,33 @@ public class CustomerConfig : IAggregateConfiguration<Customer>
 }
 ```
 
+`CompiledMessagingRegistry.Events` lists each group by its union type. To list one event by its own type, and let other
+libraries attach settings to it, register it with `b.Event<T>()`:
+
+```csharp
+b.Event<Customer.Events.Created>()
+    .Readable()                                     // generated read access (studio ⚑C42)
+    .ReadablePayload()                              // YFex.Capabilities.Cqrs: reactions may read its payload
+    .AvailableTo(CapabilityUse.UserBuilt);
+```
+
+`.Readable()` and `.Buildable()` on a command or query builder, and `.Readable()` on an event builder, replace `[Readable]` /
+`[Buildable]` on the type: the YFex.Validation generator reads the call at compile time and generates `IReadableRecord<T>` (read)
+or `IBuildableRecord<T>` (read + build; buildable implies readable) into the `partial` type, which must be in the same project as
+the configuration (YFV0044). Records nested in it get access too. At run time the verbs do nothing.
+
+```csharp
+b.Command<CreateOrder, OrderId>().Validation(v => v.Field(c => c.Customer).Required()).Buildable();
+```
+
+### Settings of other libraries (`Feature`)
+
+Command, query and single-event builders carry typed settings of libraries above YFex.Cqrs: `Feature(value)` stores one value
+per type (a later configuration replaces it), `GetFeature<T>()` reads it back while configuring, and the compiled
+`CommandPolicy.Features`, `QueryPolicy.Features` and `EventPolicy.Features` (`MessageFeatures`) carry it to the owning library at
+startup. Those libraries ship extension verbs over it, such as YFex.Offline's `.Offline(...)` and YFex.Capabilities.Cqrs's
+`.AvailableTo(...)`, so callers never call `Feature(...)` themselves.
+
 ### Invalidation -- How It Works
 
 Invalidation connects commands to cached queries. It runs in two directions:

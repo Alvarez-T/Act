@@ -17,6 +17,7 @@
 | hosting 06 §1 (⚑H7) | uses Hosting's `install`/`uninstall` for services; adds Start-menu and uninstall entries, desktop integration of `yfex-tray` |
 | hosting ⚑H6 | installs **`YFex.Security.Service`** as its own elevated service (packet capture needs rights the host must not have) |
 | **user 2026-11-03** | **self-update** of `yfex-host`, `yfex-tray`, app hosts and desktop apps (§4) |
+| studio ⚑C39 (2026-11-26) | per-tenant **build flavors** (`1.4.2+acme.3`, decided 2026-11-26): the release bundle names the flavor per scope; a tenant flavor's packages are served only to that tenant's installations ([studio 05 §7](../studio/05-copy-and-eject.md)) |
 
 ## 2. Products installed
 
