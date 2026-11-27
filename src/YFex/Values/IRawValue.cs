@@ -269,6 +269,9 @@ internal static class RawConverterCache<T>
         var c = Converter;
         if (c is not null) return c;
         if (typeof(T).IsValueType && default(T) is IRawValue probe) probe.RawTypeOf();
-        return Converter;
+        // The probe writes Converter only as a side effect of T's static initializer (RawType.Define). Native AOT inlines
+        // the probe to a static read of a beforefieldinit type and does not treat the class-init call as a write, so a
+        // plain re-read reuses the null loaded above (RawValue.From(0m).As<Money>() threw on first use). Force a fresh read.
+        return Volatile.Read(ref Converter);
     }
 }

@@ -94,6 +94,29 @@ public class RawValueTests
     }
 
     [Fact]
+    public void Enum_FromEnum_does_not_allocate_with_or_without_a_code()
+    {
+        RawValue.FromEnum((Payment)12).ToString().Should().Be("12", "an undefined value still falls back to its number");
+
+        long sink = 0;
+        for (int i = 0; i < 20_000; i++)   // long warm-up: tier-0 JIT allocates
+            sink += RawValue.FromEnum(Payment.Pix).TypeId + RawValue.FromEnum(Payment.Card).TypeId;
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 1000; i++)
+        {
+            sink += RawValue.FromEnum(Payment.Pix).TypeId;    // no [EnumCode]: the member name is cached
+            sink += RawValue.FromEnum(Payment.Card).TypeId;   // [EnumCode("CC")]
+        }
+        long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+        allocated.Should().Be(0);
+        sink.Should().Be(0);
+
+        RawValue.FromEnum(Payment.Pix).TryGet(out string? first);
+        RawValue.FromEnum(Payment.Pix).TryGet(out string? second);
+        first.Should().Be("Pix").And.BeSameAs(second, "one cached string per member");
+    }
+
+    [Fact]
     public void Compare_NumericKindsByValue()
     {
         RawValue.From(5).CompareTo(RawValue.From(5L)).Should().Be(0);

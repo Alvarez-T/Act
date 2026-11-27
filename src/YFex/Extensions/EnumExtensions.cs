@@ -282,6 +282,10 @@ internal static class EnumCache<TEnum> where TEnum : struct, Enum
 
     internal static readonly IReadOnlyDictionary<TEnum, string> CodeMap = _codeByValue;
 
+    // What GetCode returns for every defined member: the [EnumCode], else the member name, computed once so GetCode
+    // does not allocate (Enum.ToString builds a new string per call). Undefined values still fall back to ToString.
+    private static readonly FrozenDictionary<TEnum, string> _codeOrNameByValue = BuildCodeOrName();
+
     // ── Label mapping ────────────────────────────────────────────────────────
 
     private static readonly FrozenDictionary<TEnum, string> _labels = BuildLabels();
@@ -292,7 +296,7 @@ internal static class EnumCache<TEnum> where TEnum : struct, Enum
     // ── Accessors ────────────────────────────────────────────────────────────
 
     internal static string GetCode(TEnum value)
-        => _codeByValue.TryGetValue(value, out var code) ? code : value.ToString();
+        => _codeOrNameByValue.TryGetValue(value, out var code) ? code : value.ToString();
 
     internal static bool HasCode(TEnum value)
         => _codeByValue.ContainsKey(value);
@@ -341,6 +345,14 @@ internal static class EnumCache<TEnum> where TEnum : struct, Enum
             if (!coded) map.TryAdd(value.ToString(), value);   // codes win over names on a clash
         }
         return map.ToFrozenDictionary(comparer);
+    }
+
+    private static FrozenDictionary<TEnum, string> BuildCodeOrName()
+    {
+        var map = new Dictionary<TEnum, string>(Values.Length);
+        foreach (var (value, code) in _codePairs) map.TryAdd(value, code);
+        foreach (var value in Values) map.TryAdd(value, value.ToString());
+        return map.ToFrozenDictionary();
     }
 
     private static (TEnum Value, string Code)[] BuildCodePairs()
