@@ -36,18 +36,32 @@ public enum SensitiveDisplay : byte
 }
 
 /// <summary>
-/// The defaults and the one rule every layer follows (forms ⚑FM63): lists and exports masked, one record masked with a reveal
-/// for permitted users, logs always masked, secrets always hidden. An app may set other defaults per value type (or ignore
-/// <c>[Sensitive]</c> for a type's display entirely, <see cref="SensitiveDisplay.Clear"/>); logs stay masked whatever is set.
+/// The defaults and the rules every layer follows (forms ⚑FM63, changed 2026-11-27 to opt-in; ⚑FM69). On screen a
+/// <c>[Sensitive]</c> value shows <b>in clear by default</b> (<see cref="DisplayContext.Record"/>, <see cref="DisplayContext.List"/>,
+/// <see cref="DisplayContext.Export"/>); an app, a value type, a model or a field turns masking on (<see cref="Masking"/> holds
+/// the usual masked set). Two rules stay whatever is set, because they are YFex.Privacy's protection and not a screen choice:
+/// logs (and traces, AI messages) are never clearer than masked, and secrets are always hidden.
 /// </summary>
 public static class SensitiveDisplays
 {
-    /// <summary>The default for a value of <paramref name="sensitivity"/> shown in <paramref name="context"/>.</summary>
+    /// <summary>The default for a value of <paramref name="sensitivity"/> shown in <paramref name="context"/>: clear on screen,
+    /// masked in logs, hidden for secrets.</summary>
     public static SensitiveDisplay Default(DataSensitivity sensitivity, DisplayContext context)
     {
         if (sensitivity < DataSensitivity.Personal) return SensitiveDisplay.Clear;
         if (sensitivity == DataSensitivity.Secret) return SensitiveDisplay.Hidden;
-        return SensitiveDisplay.Masked;
+        return context == DisplayContext.Log ? SensitiveDisplay.Masked : SensitiveDisplay.Clear;
+    }
+
+    /// <summary>
+    /// The masked set an app opts into (forms <c>MaskSensitive()</c>): lists and exports masked, one record masked (a screen may
+    /// offer a reveal to permitted users), logs masked, secrets hidden. Values below <see cref="DataSensitivity.Personal"/>
+    /// stay clear.
+    /// </summary>
+    public static SensitiveDisplay Masking(DataSensitivity sensitivity, DisplayContext context)
+    {
+        if (sensitivity < DataSensitivity.Personal) return SensitiveDisplay.Clear;
+        return sensitivity == DataSensitivity.Secret ? SensitiveDisplay.Hidden : SensitiveDisplay.Masked;
     }
 
     /// <summary>
